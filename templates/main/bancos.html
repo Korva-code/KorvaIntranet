@@ -1,0 +1,429 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} bancos
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="bancosData" type="application/json">{{ bancos_json | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-bank text-primary me-1"></i> Bancos
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarBanco" placeholder="Buscar código, nombre…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo Banco
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaBancos">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px;">#</th>
+          <th style="width:100px;">Código</th>
+          <th style="min-width:180px;">Nombre</th>
+          <th style="min-width:160px;">N° Cuenta</th>
+          <th style="min-width:160px;">CCI</th>
+          <th style="width:80px; position:relative; white-space:nowrap;">
+            Moneda
+            <button type="button" class="btn-col-filtro" id="btnFiltroMoneda"
+                    onclick="toggleFiltro('moneda', event)" title="Filtrar por moneda">
+              <i class="bi bi-funnel" id="iconFiltroMoneda"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroMoneda" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:80px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado', event)" title="Filtrar por estado">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:75px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyBancos"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="contadorVisible">{{ total }}</strong> bancos
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="articulos-drawer" id="bancoDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Banco</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()" title="Cerrar">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <form id="bancoForm" method="POST" action="{{ url_for('main.banco_nuevo') }}" novalidate>
+    <div class="drawer-body">
+
+      <div class="form-section-label">Datos del Banco</div>
+      <div class="row g-2 mb-3">
+
+        <div class="col-sm-4">
+          <label class="form-label-sm">Código</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="cod_banco" id="f_cod_banco" placeholder="BBVA" maxlength="20" />
+        </div>
+        <div class="col-sm-8">
+          <label class="form-label-sm">Nombre <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-sm"
+                 name="nombre" id="f_nombre" required placeholder="Banco BBVA Perú" />
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label-sm">N° Cuenta</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="nro_cuenta" id="f_nro_cuenta" placeholder="0011-0000-01-00000000" />
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label-sm">CCI</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="cci" id="f_cci" placeholder="011-000-000100000000-00" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Moneda</label>
+          <select class="form-select form-select-sm" name="moneda" id="f_moneda">
+            <option value="SOL">SOL — Soles</option>
+            <option value="USD">USD — Dólares</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Estado</label>
+          <select class="form-select form-select-sm" name="id_estado" id="f_id_estado">
+            <option value="1">Activo</option>
+            <option value="0">Inactivo</option>
+          </select>
+        </div>
+
+      </div>
+    </div><!-- /drawer-body -->
+
+    <div class="drawer-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+        <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm px-3" id="btnGuardar">
+        <i class="bi bi-check-lg me-1"></i>Guardar
+      </button>
+    </div>
+  </form>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm { font-size: .78rem; font-weight: 600; margin-bottom: .2rem; }
+.form-section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #64748b;
+  border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-bottom: .6rem;
+}
+
+/* ── Overlay ────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+  backdrop-filter: blur(2px);
+  z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer deslizante derecha → izquierda ───────────────── */
+.articulos-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 500px;
+  max-width: 96vw;
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  flex-shrink: 0;
+}
+
+/* ── Filtro columna ─── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px; margin-left: 2px;
+  color: #94a3b8; cursor: pointer; font-size: .72rem; vertical-align: middle;
+}
+.btn-col-filtro:hover { color: #3b82f6; }
+.btn-col-filtro.active { color: #3b82f6; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; min-width: 160px; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 0;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px 6px; font-size: .72rem; font-weight: 600; color: #475569;
+  border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+}
+.filtro-action { cursor: pointer; font-size: .68rem; color: #3b82f6; }
+.filtro-action.danger { color: #ef4444; }
+.filtro-opt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px; font-size: .73rem; cursor: pointer;
+}
+.filtro-opt:hover { background: #f8fafc; }
+.filtro-opt input[type=checkbox] { accent-color: #3b82f6; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const BANCOS_DATA = JSON.parse(document.getElementById('bancosData').textContent);
+
+/* ── Estado filtros ──────────────────────────────────────────── */
+const filtros = { moneda: new Set(), estado: new Set() };
+let   busqueda = '';
+
+/* ── Render tabla ────────────────────────────────────────────── */
+function renderTabla() {
+  const q   = busqueda.toLowerCase();
+  const tbody = document.getElementById('tbodyBancos');
+  const filas = BANCOS_DATA.filter(b => {
+    if (filtros.moneda.size && !filtros.moneda.has(b.moneda)) return false;
+    if (filtros.estado.size && !filtros.estado.has(String(b.id_estado))) return false;
+    if (q && !b.cod_banco.toLowerCase().includes(q) &&
+             !b.nombre.toLowerCase().includes(q) &&
+             !b.nro_cuenta.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  tbody.innerHTML = filas.length ? '' :
+    '<tr><td colspan="8" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+
+  filas.forEach(b => {
+    const estadoBadge = b.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success" style="font-size:.63rem;">Activo</span>'
+      : '<span class="badge bg-secondary-subtle text-secondary" style="font-size:.63rem;">Inactivo</span>';
+    const monedaBadge = b.moneda === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">SOL</span>';
+    const tr = document.createElement('tr');
+    tr.style.fontSize = '.75rem';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${b.id_banco}</td>
+      <td class="font-monospace fw-bold text-primary">${escHtml(b.cod_banco)}</td>
+      <td class="fw-semibold">${escHtml(b.nombre)}</td>
+      <td class="font-monospace text-muted">${escHtml(b.nro_cuenta)}</td>
+      <td class="font-monospace text-muted">${escHtml(b.cci)}</td>
+      <td>${monedaBadge}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                title="Ver / Editar" style="font-size:.72rem;"
+                onclick="abrirDrawer('edit', ${b.id_banco})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Búsqueda ────────────────────────────────────────────────── */
+document.getElementById('buscarBanco').addEventListener('input', function () {
+  busqueda = this.value;
+  renderTabla();
+});
+
+/* ── Filtros columna ─────────────────────────────────────────── */
+function toggleFiltro(col, e) {
+  e.stopPropagation();
+  const panel = document.getElementById('panelFiltro' + col.charAt(0).toUpperCase() + col.slice(1));
+  const open  = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!open) {
+    construirFiltro(col, panel);
+    panel.style.display = 'block';
+    document.getElementById('iconFiltro' + col.charAt(0).toUpperCase() + col.slice(1)).classList.add('active');
+  }
+}
+
+function construirFiltro(col, panel) {
+  const campo = col === 'moneda' ? 'moneda' : 'id_estado';
+  const vals  = [...new Set(BANCOS_DATA.map(b => String(b[campo])))].sort();
+  const label = v => col === 'estado' ? (v === '1' ? 'Activo' : 'Inactivo') : v;
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span>Filtrar</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${col}')">Limpiar</span>
+    </div>
+    ${vals.map(v => `
+      <label class="filtro-opt">
+        <input type="checkbox" value="${v}"
+               ${filtros[col].has(v) ? 'checked' : ''}
+               onchange="onFiltroChange('${col}', this)" />
+        ${label(v)}
+      </label>`).join('')}`;
+}
+
+function onFiltroChange(col, cb) {
+  if (cb.checked) filtros[col].add(cb.value); else filtros[col].delete(cb.value);
+  const icon = document.getElementById('iconFiltro' + col.charAt(0).toUpperCase() + col.slice(1));
+  icon.classList.toggle('active', filtros[col].size > 0);
+  renderTabla();
+}
+
+function limpiarFiltro(col) {
+  filtros[col].clear();
+  cerrarTodosFiltros();
+  renderTabla();
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+
+document.addEventListener('click', cerrarTodosFiltros);
+
+/* ── Drawer ──────────────────────────────────────────────────── */
+let _modoActual = 'new';
+
+function abrirDrawer(modo, id) {
+  _modoActual = modo;
+  const form    = document.getElementById('bancoForm');
+  const badge   = document.getElementById('drawerBadge');
+  const title   = document.getElementById('drawerTitle');
+
+  limpiarForm();
+
+  if (modo === 'new') {
+    badge.textContent   = 'NUEVO';
+    badge.className     = 'badge bg-primary';
+    title.textContent   = 'Nuevo Banco';
+    form.action         = '{{ url_for("main.banco_nuevo") }}';
+  } else {
+    const b = BANCOS_DATA.find(x => x.id_banco === id);
+    if (!b) return;
+    badge.textContent   = 'EDITAR';
+    badge.className     = 'badge bg-warning text-dark';
+    title.textContent   = `Editar: ${b.nombre}`;
+    form.action         = `/maestras/bancos/${id}/editar`;
+    document.getElementById('f_cod_banco').value  = b.cod_banco;
+    document.getElementById('f_nombre').value     = b.nombre;
+    document.getElementById('f_nro_cuenta').value = b.nro_cuenta;
+    document.getElementById('f_cci').value        = b.cci;
+    document.getElementById('f_moneda').value     = b.moneda;
+    document.getElementById('f_id_estado').value  = String(b.id_estado);
+  }
+
+  document.getElementById('bancoDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+}
+
+function cerrarDrawer() {
+  document.getElementById('bancoDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+
+function limpiarForm() {
+  document.getElementById('f_cod_banco').value  = '';
+  document.getElementById('f_nombre').value     = '';
+  document.getElementById('f_nro_cuenta').value = '';
+  document.getElementById('f_cci').value        = '';
+  document.getElementById('f_moneda').value     = 'SOL';
+  document.getElementById('f_id_estado').value  = '1';
+}
+
+/* ── Excel ───────────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#','Código','Nombre','N° Cuenta','CCI','Moneda','Estado']];
+  BANCOS_DATA.forEach(b => filas.push([
+    b.id_banco, b.cod_banco, b.nombre, b.nro_cuenta,
+    b.cci, b.moneda, b.id_estado === 1 ? 'Activo' : 'Inactivo',
+  ]));
+  const ws  = XLSX.utils.aoa_to_sheet(filas);
+  const wb  = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Bancos');
+  XLSX.writeFile(wb, 'bancos.xlsx');
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

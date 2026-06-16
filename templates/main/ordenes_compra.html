@@ -1,0 +1,911 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} orden{{ 'es' if total != 1 else '' }}
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="ocData"     type="application/json">{{ oc_json | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-cart3 text-primary me-1"></i> Órdenes de Compra
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarOC" placeholder="Buscar proveedor, ref…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nueva OC
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaOC">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:65px;">OC-ID</th>
+          <th style="width:105px;">Cód. Proveedor</th>
+          <th style="width:80px;">Proveedor</th>
+          <th style="width:95px;">Referencia</th>
+          <th style="width:92px; position:relative; white-space:nowrap;">
+            Fecha OC
+            <button type="button" class="btn-col-filtro" id="btnFiltroFecha"
+                    onclick="toggleFiltroFecha(event)" title="Filtrar por fecha">
+              <i class="bi bi-funnel" id="iconFiltroFecha"></i>
+            </button>
+            <div class="col-filtro-panel filtro-fecha-panel" id="panelFiltroFecha"
+                 style="display:none;" onclick="event.stopPropagation()">
+              <div class="filtro-panel-header">
+                <span style="font-size:.72rem;font-weight:600;color:#475569;">Rango de fechas</span>
+                <span class="filtro-action danger" onclick="limpiarFiltroFecha(event)">Limpiar</span>
+              </div>
+              <div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
+                <div>
+                  <div style="font-size:.68rem;color:#64748b;margin-bottom:2px;">Desde</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaDesde"
+                         oninput="onFiltroFechaChange()" />
+                </div>
+                <div>
+                  <div style="font-size:.68rem;color:#64748b;margin-bottom:2px;">Hasta</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaHasta"
+                         oninput="onFiltroFechaChange()" />
+                </div>
+              </div>
+              <div class="filtro-panel-footer">
+                <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+                        style="font-size:.73rem;" onclick="cerrarTodosFiltros()">Aplicar</button>
+              </div>
+            </div>
+          </th>
+          <th style="width:92px;">F. Entrega</th>
+          <th style="width:55px;" class="text-center">Mon.</th>
+          <th style="width:105px;" class="text-end">Total</th>
+          <th style="width:70px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado', event)" title="Filtrar por estado">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:60px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyOC"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="countLabel">{{ total }}</strong> órdenes
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="oc-drawer" id="ocDrawer">
+
+  <!-- Cabecera del drawer -->
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVA</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nueva Orden de Compra</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- Formulario -->
+  <form id="formOC" method="POST"
+        action="{{ url_for('main.compras_ordenes_compra_nueva') }}" novalidate>
+    <input type="hidden" name="items_json" id="items_json_hidden">
+
+    <div class="drawer-body">
+
+      <!-- ── Cabecera del documento ──────────────────────── -->
+      <div class="form-section-label">Cabecera de la Orden de Compra</div>
+      <div class="row g-2 mb-3">
+
+        <!-- Proveedor -->
+        <div class="col-sm-3">
+          <label class="form-label-sm">Cód. Proveedor <span class="text-danger new-only">*</span></label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="card_code" id="f_card_code"
+                 list="listProveedores" placeholder="Código…" autocomplete="off"
+                 oninput="onProveedorSelect(this)" />
+          <datalist id="listProveedores"></datalist>
+        </div>
+        <div class="col-sm-5">
+          <label class="form-label-sm">Proveedor</label>
+          <input type="text" class="form-control form-control-sm bg-light always-readonly"
+                 id="bp_nombre_display" readonly />
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label-sm">Moneda</label>
+          <select class="form-select form-select-sm" name="doc_currency" id="f_doc_currency">
+            <option value="SOL">SOL</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label-sm">Tipo Cambio</label>
+          <input type="number" class="form-control form-control-sm text-end font-monospace"
+                 name="tipo_cambio" id="f_tipo_cambio"
+                 value="1.000000" step="0.000001" min="0.000001" />
+          <small class="text-muted" id="lblTCRef" style="font-size:.65rem;"></small>
+        </div>
+
+        <!-- Referencia + Almacén -->
+        <div class="col-sm-4">
+          <label class="form-label-sm">N° Referencia / OC Proveedor</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="num_at_card" id="f_num_at_card" placeholder="OC-00001" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Almacén</label>
+          <select class="form-select form-select-sm" name="invoice_wh" id="f_invoice_wh">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Usuario</label>
+          <select class="form-select form-select-sm" name="invoice_user" id="f_invoice_user"
+                  data-current="{{ current_user.id_usuario }}">
+            {% for u in usuarios %}
+              <option value="{{ u.id_usuario }}"
+                {% if u.id_usuario == current_user.id_usuario %}selected{% endif %}>
+                {{ u.nombres }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Fechas -->
+        <div class="col-sm-4">
+          <label class="form-label-sm">Fecha OC <span class="text-danger new-only">*</span></label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_date" id="f_doc_date" value="{{ today }}" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Fecha de Entrega</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_due_date" id="f_doc_due_date" value="{{ today }}" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Total</label>
+          <input type="text" class="form-control form-control-sm bg-light text-end fw-bold always-readonly"
+                 id="f_doc_total" readonly />
+        </div>
+
+        <!-- Comentarios + Referencia -->
+        <div class="col-sm-6">
+          <label class="form-label-sm">Comentarios</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="comments" id="f_comments" placeholder="Observaciones del pedido" />
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label-sm">Referencia / Diario</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="journal_memo" id="f_journal_memo" placeholder="Referencia interna" />
+        </div>
+
+      </div><!-- /cabecera row -->
+
+      <!-- ── Líneas de detalle (modo NUEVA) ─────────────── -->
+      <div id="seccionDetalle">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="form-section-label mb-0">Líneas de Detalle</div>
+          <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                  style="font-size:.72rem;" onclick="agregarLinea()">
+            <i class="bi bi-plus-lg"></i> Agregar Ítem
+          </button>
+        </div>
+
+        <div class="table-responsive rounded border" style="max-height:260px; overflow-y:auto;">
+          <table class="table table-sm align-middle mb-0" id="tablaDetalle"
+                 style="font-size:.75rem; min-width:700px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-2" style="width:28px;">#</th>
+                <th style="min-width:110px;">Código</th>
+                <th style="min-width:130px;">Descripción</th>
+                <th style="width:75px;">Cant.</th>
+                <th style="width:95px;">P. Unitario</th>
+                <th style="width:65px;">Unidad</th>
+                <th style="width:55px;">Imp.</th>
+                <th class="text-end" style="width:90px;">Subtotal</th>
+                <th style="width:32px;"></th>
+              </tr>
+            </thead>
+            <tbody id="lineasDetalle"></tbody>
+          </table>
+        </div>
+
+        <div class="mt-2 pe-1">
+          <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+            <span class="text-muted small">Subtotal s/IGV:</span>
+            <span class="fw-semibold" id="subtotalDisplay">0.0000</span>
+          </div>
+          <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+            <span class="text-muted small">IGV (18%):</span>
+            <span class="fw-semibold" id="igvDisplay">0.0000</span>
+          </div>
+          <div class="d-flex justify-content-end align-items-center gap-2">
+            <span class="text-muted small">Total:</span>
+            <span class="fw-bold" id="totalDisplay">S/ 0.00</span>
+          </div>
+        </div>
+      </div><!-- /seccionDetalle -->
+
+      <!-- ── Detalle ítems (modo VER) ───────────────────── -->
+      <div id="seccionItemsVer" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="form-section-label mb-0">Líneas de Detalle</div>
+        </div>
+        <div class="table-responsive rounded border" style="max-height:300px; overflow-y:auto;">
+          <table class="table table-sm align-middle mb-0"
+                 style="font-size:.75rem; min-width:620px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-2" style="width:28px;">#</th>
+                <th style="min-width:100px;">Código</th>
+                <th style="min-width:140px;">Descripción</th>
+                <th class="text-end" style="width:70px;">Cant.</th>
+                <th class="text-end" style="width:95px;">P. Unitario</th>
+                <th style="width:65px;">Unidad</th>
+                <th style="width:55px;">Imp.</th>
+                <th class="text-end" style="width:90px;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyItemsVer"></tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-2 pe-1">
+          <span class="text-muted small">Subtotal s/IGV:</span>
+          <span class="fw-semibold" id="ver_subtotal">—</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-1 pe-1">
+          <span class="text-muted small">IGV (18%):</span>
+          <span class="fw-semibold" id="ver_igv">—</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-1 pe-1">
+          <span class="text-muted small">Total registrado:</span>
+          <span class="fw-bold" id="ver_total">—</span>
+        </div>
+      </div>
+
+    </div><!-- /drawer-body -->
+
+    <!-- Footer del drawer -->
+    <div class="drawer-footer" id="drawerFooter">
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+        <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="button" id="btnAnularOC" style="display:none;"
+              class="btn btn-outline-danger btn-sm" onclick="confirmarAnularOC()">
+        <i class="bi bi-x-circle me-1"></i>Anular OC
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm px-4" id="btnGuardar">
+        <i class="bi bi-check-lg me-1"></i>
+        <span id="btnGuardarTxt">Registrar OC</span>
+      </button>
+    </div>
+  </form>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Form helpers ────────────────────────────────────────── */
+.form-section-label {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: .2rem; margin-bottom: .5rem;
+}
+.form-label-sm {
+  display: block; font-size: .75rem; font-weight: 600;
+  color: #475569; margin-bottom: .15rem;
+}
+.oc-row.selected { background: #eff6ff; }
+
+/* ── Overlay ─────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer ─────────────────────────────────────────────── */
+.oc-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(860px, 96vw);
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.oc-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex; justify-content: flex-end; gap: .5rem; flex-shrink: 0;
+}
+
+/* ── Tabla de detalle interna ────────────────────────────── */
+#tablaDetalle input, #tablaDetalle select {
+  font-size: .73rem; padding: .18rem .35rem; height: auto;
+}
+.btn-del-linea {
+  border: none; background: none; color: #ef4444;
+  padding: .1rem .3rem; border-radius: 4px; cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+
+/* ── Filtros de columna ──────────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px;
+  cursor: pointer; color: #94a3b8; font-size: .72rem;
+  vertical-align: middle; line-height: 1;
+}
+.btn-col-filtro.active { color: #2563eb; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.14);
+  min-width: 170px; font-size: .75rem;
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+  overflow: hidden;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; border-bottom: 1px solid #f1f5f9; background: #f8fafc;
+}
+.filtro-action { cursor: pointer; font-size: .7rem; color: #64748b; }
+.filtro-action:hover { color: #2563eb; text-decoration: underline; }
+.filtro-action.danger:hover { color: #ef4444; }
+.filtro-panel-footer { padding: 6px 10px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
+.filtro-fecha-panel { min-width: 210px; }
+
+.filtro-opciones { max-height: 220px; overflow-y: auto; padding: 4px 0; }
+.filtro-opcion {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; cursor: pointer; white-space: nowrap;
+  color: #334155; user-select: none;
+}
+.filtro-opcion:hover { background: #f1f5f9; }
+.filtro-opcion.selected { color: #2563eb; }
+.filtro-opcion .filtro-chk { font-size: .8rem; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Datos maestros ──────────────────────────────────────── */
+const OC_DATA = JSON.parse(document.getElementById('ocData').textContent);
+const ocMap   = {};
+OC_DATA.forEach(d => { ocMap[d.oc_id] = d; });
+
+let PROVEEDORES_DATA = [];
+let proveedoresMap   = {};
+let ITEMS_DATA       = [];
+let lineaNum         = 0;
+let currentOCId      = null;
+
+/* ── Cargar proveedores ─────────────────────────────────── */
+fetch('/api/socios-compras')
+  .then(r => r.json())
+  .then(data => {
+    PROVEEDORES_DATA = data;
+    data.forEach(s => { proveedoresMap[s.card_code] = s; });
+    const ls = document.getElementById('listProveedores');
+    data.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.card_code; o.label = s.card_name;
+      ls.appendChild(o);
+    });
+  });
+
+/* ── Cargar almacenes ───────────────────────────────────── */
+fetch('/api/warehouses')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_wh');
+    data.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w.whs_code; o.textContent = w.whs_name;
+      sel.appendChild(o);
+    });
+  });
+
+/* ── Cargar ítems para OC ───────────────────────────────── */
+fetch('/api/items-compras')
+  .then(r => r.json())
+  .then(data => {
+    ITEMS_DATA = data;
+    const li = document.createElement('datalist');
+    li.id = 'listItems';
+    data.forEach(it => {
+      const o = document.createElement('option');
+      o.value = it.item_code; o.label = it.item_name;
+      li.appendChild(o);
+    });
+    document.body.appendChild(li);
+  });
+
+/* ── Tipo Cambio por fecha ──────────────────────────────── */
+function normalizarFecha(f) {
+  if (!f) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(f)) {
+    const [d, m, y] = f.split('/');
+    return `${y}-${m}-${d}`;
+  }
+  return f;
+}
+function aplicarTC(compra, fecha) {
+  const tcInput = document.getElementById('f_tipo_cambio');
+  const tcRef   = document.getElementById('lblTCRef');
+  if (compra != null && !isNaN(Number(compra))) {
+    tcInput.value = Number(compra).toFixed(6);
+    if (tcRef) tcRef.textContent = `TC Compra: ${Number(compra).toFixed(4)} (${fecha || ''})`;
+  }
+}
+async function cargarTipoCambio(fecha) {
+  const tcRef = document.getElementById('lblTCRef');
+  const iso   = normalizarFecha(fecha);
+  if (!iso) { aplicarTC(TC_COMPRA, TC_FECHA); return; }
+  if (tcRef) tcRef.textContent = 'Buscando TC…';
+  try {
+    const res = await fetch(`/api/tipo-cambio?fecha=${iso}`);
+    if (!res.ok) { aplicarTC(TC_COMPRA, TC_FECHA); return; }
+    const data = await res.json();
+    if (data.found) { aplicarTC(data.tc_compra, data.fecha); }
+    else {
+      aplicarTC(TC_COMPRA, TC_FECHA);
+      if (tcRef && TC_COMPRA != null) tcRef.textContent += ' — último disponible';
+    }
+  } catch(e) { aplicarTC(TC_COMPRA, TC_FECHA); }
+}
+document.getElementById('f_doc_date').addEventListener('change', function () {
+  cargarTipoCambio(this.value);
+});
+document.getElementById('f_doc_currency').addEventListener('change', actualizarTotal);
+
+/* ── Proveedor ──────────────────────────────────────────── */
+function onProveedorSelect(inp) {
+  const s = proveedoresMap[inp.value];
+  setVal('bp_nombre_display', s ? s.card_name : '');
+}
+
+/* ── Render tabla listado ───────────────────────────────── */
+function estadoBadge(id) {
+  return id === 0
+    ? '<span class="badge bg-danger-subtle text-danger border" style="font-size:.63rem;">Anulada</span>'
+    : '<span class="badge bg-success-subtle text-success border" style="font-size:.63rem;">Activa</span>';
+}
+function simMoneda(m) { return m === 'USD' ? '$' : 'S/'; }
+
+let VISIBLE = [...OC_DATA];
+function renderTabla() {
+  const tbody = document.getElementById('tbodyOC');
+  tbody.innerHTML = '';
+  VISIBLE.forEach(oc => {
+    const tr = document.createElement('tr');
+    tr.className = 'oc-row';
+    tr.dataset.id = oc.oc_id;
+    tr.style.fontSize = '.75rem';
+    tr.innerHTML = `
+      <td class="ps-3 font-monospace fw-semibold" style="font-size:.73rem;">${oc.oc_id}</td>
+      <td class="font-monospace text-primary" style="font-size:.73rem;">${escHtml(oc.card_code)}</td>
+      <td class="fw-semibold">${escHtml(oc.bp_name)}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${escHtml(oc.num_at_card) || '—'}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${oc.doc_date || '—'}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${oc.doc_due_date || '—'}</td>
+      <td class="text-center" style="font-size:.72rem;">${escHtml(oc.doc_currency)}</td>
+      <td class="text-end fw-semibold font-monospace" style="font-size:.73rem;">
+        ${simMoneda(oc.doc_currency)} ${oc.doc_total.toFixed(2)}</td>
+      <td>${estadoBadge(oc.id_estado)}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                onclick="abrirDrawer('view', ${oc.oc_id})"
+                title="Ver OC" style="font-size:.72rem;">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('countLabel').textContent = VISIBLE.length;
+}
+
+/* ── Filtros ────────────────────────────────────────────── */
+const filtroEstado = new Set();
+const filtroFechaDoc = { desde: '', hasta: '' };
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+function toggleFiltroFecha(e) {
+  e.stopPropagation();
+  const p = document.getElementById('panelFiltroFecha');
+  const abierto = p.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) p.style.display = 'block';
+}
+function onFiltroFechaChange() {
+  filtroFechaDoc.desde = document.getElementById('filtroFechaDesde').value;
+  filtroFechaDoc.hasta = document.getElementById('filtroFechaHasta').value;
+  const activo = filtroFechaDoc.desde || filtroFechaDoc.hasta;
+  document.getElementById('iconFiltroFecha').className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroFecha').classList.toggle('active', !!activo);
+  aplicarFiltros();
+}
+function limpiarFiltroFecha(e) {
+  e.stopPropagation();
+  filtroFechaDoc.desde = ''; filtroFechaDoc.hasta = '';
+  document.getElementById('filtroFechaDesde').value = '';
+  document.getElementById('filtroFechaHasta').value = '';
+  document.getElementById('iconFiltroFecha').className = 'bi bi-funnel';
+  document.getElementById('btnFiltroFecha').classList.remove('active');
+  aplicarFiltros();
+}
+
+function toggleFiltro(key, e) {
+  e.stopPropagation();
+  const panel = document.getElementById('panelFiltroEstado');
+  const abierto = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (abierto) return;
+  const vals = [...new Set(OC_DATA.map(r => r.id_estado))].sort();
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span style="font-size:.72rem;font-weight:600;color:#475569;">Estado</span>
+      <span class="filtro-action danger" onclick="limpiarFiltroEstado(event)">Limpiar</span>
+    </div>
+    <div class="filtro-opciones">` +
+    vals.map(v => `<label class="filtro-opcion ${filtroEstado.has(v)?'selected':''}">
+      <i class="bi ${filtroEstado.has(v)?'bi-check-square-fill':'bi-square'} filtro-chk"></i>
+      <span>${v === 1 ? 'Activa' : 'Anulada'}</span>
+      <input type="checkbox" style="display:none" value="${v}"
+             ${filtroEstado.has(v)?'checked':''}
+             onchange="onChkEstado(this)">
+    </label>`).join('') +
+    `</div>
+    <div class="filtro-panel-footer">
+      <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+              style="font-size:.73rem;" onclick="cerrarTodosFiltros()">Aplicar</button>
+    </div>`;
+  panel.style.display = 'block';
+}
+function onChkEstado(chk) {
+  const v = parseInt(chk.value);
+  chk.checked ? filtroEstado.add(v) : filtroEstado.delete(v);
+  const activo = filtroEstado.size > 0;
+  document.getElementById('iconFiltroEstado').className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroEstado').classList.toggle('active', activo);
+  aplicarFiltros();
+}
+function limpiarFiltroEstado(e) {
+  e.stopPropagation();
+  filtroEstado.clear();
+  document.getElementById('iconFiltroEstado').className = 'bi bi-funnel';
+  document.getElementById('btnFiltroEstado').classList.remove('active');
+  aplicarFiltros();
+}
+
+function aplicarFiltros() {
+  const q = document.getElementById('buscarOC').value.toLowerCase();
+  VISIBLE = OC_DATA.filter(oc => {
+    if (q && !`${oc.card_code} ${oc.bp_name} ${oc.num_at_card}`.toLowerCase().includes(q)) return false;
+    if (filtroEstado.size && !filtroEstado.has(oc.id_estado)) return false;
+    if (filtroFechaDoc.desde && (oc.doc_date || '') < filtroFechaDoc.desde) return false;
+    if (filtroFechaDoc.hasta && (oc.doc_date || '') > filtroFechaDoc.hasta) return false;
+    return true;
+  });
+  renderTabla();
+}
+document.getElementById('buscarOC').addEventListener('input', aplicarFiltros);
+
+/* ── Drawer ─────────────────────────────────────────────── */
+function abrirDrawer(mode, id) {
+  if (mode === 'view' && id != null) {
+    verOC(id);
+  } else {
+    modoNueva();
+  }
+  document.getElementById('ocDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarDrawer() {
+  document.getElementById('ocDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  document.querySelectorAll('.oc-row').forEach(r => r.classList.remove('selected'));
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Modo NUEVA ─────────────────────────────────────────── */
+function modoNueva() {
+  setBadge('NUEVA', 'bg-primary');
+  setVal('drawerTitle', ''); document.getElementById('drawerTitle').textContent = 'Nueva Orden de Compra';
+  currentOCId = null;
+  document.getElementById('btnGuardar').style.display  = '';
+  document.getElementById('btnAnularOC').style.display = 'none';
+  document.getElementById('seccionDetalle').style.display   = '';
+  document.getElementById('seccionItemsVer').style.display  = 'none';
+  setReadonly(false);
+
+  ['f_card_code','f_num_at_card','f_comments','f_journal_memo'].forEach(id => setVal(id, ''));
+  setVal('bp_nombre_display', '');
+  setVal('f_doc_total', '');
+  document.getElementById('f_doc_currency').value = 'SOL';
+  document.getElementById('f_invoice_wh').value   = '';
+  const hoy = '{{ today }}';
+  setVal('f_doc_date', hoy); setVal('f_doc_due_date', hoy);
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  agregarLinea();
+
+  // Cargar TC por fecha de hoy
+  aplicarTC(TC_COMPRA, TC_FECHA);
+  cargarTipoCambio(hoy);
+
+  setTimeout(() => document.getElementById('f_card_code').focus(), 320);
+}
+
+/* ── Modo VER ───────────────────────────────────────────── */
+function verOC(id) {
+  const d = ocMap[id];
+  if (!d) return;
+
+  document.querySelectorAll('.oc-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`.oc-row[data-id="${id}"]`)?.classList.add('selected');
+
+  const sym = simMoneda(d.doc_currency);
+  setBadge('VER', 'bg-secondary');
+  document.getElementById('drawerTitle').textContent = `OC-${String(id).padStart(5,'0')}`;
+  document.getElementById('btnGuardar').style.display   = 'none';
+  document.getElementById('seccionDetalle').style.display   = 'none';
+  document.getElementById('seccionItemsVer').style.display  = '';
+
+  currentOCId = id;
+  document.getElementById('btnAnularOC').style.display = d.id_estado === 1 ? '' : 'none';
+
+  setReadonly(true);
+  setVal('f_card_code',        d.card_code);
+  setVal('bp_nombre_display',  d.bp_name);
+  setVal('f_num_at_card',      d.num_at_card);
+  setVal('f_comments',         d.comments);
+  setVal('f_journal_memo',     d.journal_memo);
+  setVal('f_doc_date',         d.doc_date);
+  setVal('f_doc_due_date',     d.doc_due_date);
+  setVal('f_tipo_cambio',      d.tipo_cambio ? Number(d.tipo_cambio).toFixed(6) : '1.000000');
+  document.getElementById('f_doc_currency').value = d.doc_currency || 'SOL';
+  document.getElementById('f_invoice_wh').value   = d.invoice_wh  || '';
+  setVal('f_doc_total', d.doc_total != null ? sym + ' ' + parseFloat(d.doc_total).toFixed(2) : '');
+  document.getElementById('lblTCRef').textContent = '';
+
+  // Seleccionar usuario
+  const selU = document.getElementById('f_invoice_user');
+  if (selU) selU.value = d.user_code || '';
+
+  // Ítems
+  const tbody = document.getElementById('tbodyItemsVer');
+  tbody.innerHTML = '';
+  const lineas = d.items || [];
+  if (!lineas.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3 small">Sin ítems registrados.</td></tr>';
+    document.getElementById('ver_subtotal').textContent = '0.0000';
+    document.getElementById('ver_igv').textContent      = '0.0000';
+    document.getElementById('ver_total').textContent    = sym + ' 0.00';
+    return;
+  }
+
+  const IGV = 0.18;
+  lineas.forEach((it, idx) => {
+    const sub = (it.quantity || 0) * (it.price_after_vat || 0);
+    const tr  = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ps-2 text-muted small">${idx + 1}</td>
+      <td class="font-monospace small fw-bold text-primary">${escHtml(it.item_code)}</td>
+      <td class="small">${escHtml(it.item_name)}</td>
+      <td class="text-end small">${parseFloat(it.quantity || 0).toFixed(2)}</td>
+      <td class="text-end small">${sym} ${parseFloat(it.price_after_vat || 0).toFixed(4)}</td>
+      <td class="small text-muted">${escHtml(it.warehouse_code || '')}</td>
+      <td class="small text-muted">${escHtml(it.tax_code || '')}</td>
+      <td class="text-end small fw-semibold">${sym} ${sub.toFixed(2)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('ver_subtotal').textContent = sym + ' ' + parseFloat(d.doc_subtotal || 0).toFixed(4);
+  document.getElementById('ver_igv').textContent      = sym + ' ' + parseFloat(d.doc_igv     || 0).toFixed(4);
+  document.getElementById('ver_total').textContent    = sym + ' ' + parseFloat(d.doc_total   || 0).toFixed(2);
+}
+
+/* ── Tabla de líneas (modo NUEVA) ───────────────────────── */
+function agregarLinea() {
+  lineaNum++;
+  const tr = document.createElement('tr');
+  tr.className = 'linea-detalle';
+  tr.innerHTML = `
+    <td class="ps-2 text-muted">${lineaNum}</td>
+    <td><input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+               list="listItems" placeholder="Código…" autocomplete="off"
+               oninput="onItemSelect(this)" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-item-name bg-light"
+               placeholder="Descripción" readonly /></td>
+    <td><input type="number" class="form-control form-control-sm inp-qty"
+               value="1" min="0.0001" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="number" class="form-control form-control-sm inp-price"
+               value="0.0000" min="0" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light" readonly /></td>
+    <td><input type="text" class="form-control form-control-sm inp-taxcode"
+               value="I18" maxlength="10" /></td>
+    <td class="text-end fw-semibold inp-subtotal-display">0.00</td>
+    <td><button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+          <i class="bi bi-trash"></i></button></td>`;
+  document.getElementById('lineasDetalle').appendChild(tr);
+  tr.querySelector('.inp-item-code').focus();
+  actualizarTotal();
+}
+
+function eliminarLinea(btn) { btn.closest('tr').remove(); actualizarTotal(); }
+
+function onItemSelect(inp) {
+  const it  = ITEMS_DATA.find(i => i.item_code === inp.value);
+  const row = inp.closest('tr');
+  row.querySelector('.inp-item-name').value = it ? (it.item_name || '') : '';
+  row.querySelector('.inp-price').value     = it ? Number(it.avg_price).toFixed(4) : '0.0000';
+  row.querySelector('.inp-unit-msr').value  = it ? (it.unit_msr || '') : '';
+  if (it && it.tax_code) row.querySelector('.inp-taxcode').value = it.tax_code;
+  actualizarTotal();
+}
+
+function actualizarTotal() {
+  const sym    = document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+  const IGV    = 0.18;
+  let total = 0, subtotal = 0;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty   = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price = parseFloat(row.querySelector('.inp-price').value) || 0;
+    const tax   = row.querySelector('.inp-taxcode').value;
+    const sub   = qty * price;
+    total    += sub;
+    subtotal += tax === 'I18' ? sub / (1 + IGV) : sub;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+  const igv = total - subtotal;
+  document.getElementById('subtotalDisplay').textContent = subtotal.toFixed(4);
+  document.getElementById('igvDisplay').textContent      = igv.toFixed(4);
+  document.getElementById('totalDisplay').textContent    = sym + ' ' + total.toFixed(2);
+  setVal('f_doc_total', sym + ' ' + total.toFixed(2));
+}
+
+/* ── Submit ─────────────────────────────────────────────── */
+document.getElementById('formOC').addEventListener('submit', function (e) {
+  if (document.getElementById('btnGuardar').style.display === 'none') return; // modo VER
+
+  const card = document.getElementById('f_card_code').value.trim();
+  if (!card) {
+    e.preventDefault();
+    alert('El Proveedor es obligatorio.');
+    document.getElementById('f_card_code').focus();
+    return;
+  }
+  const lineas = [];
+  let ok = true;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const code = row.querySelector('.inp-item-code').value.trim();
+    if (!code) { ok = false; return; }
+    lineas.push({
+      item_code:       code,
+      item_name:       row.querySelector('.inp-item-name').value.trim(),
+      quantity:        parseFloat(row.querySelector('.inp-qty').value)   || 0,
+      price_after_vat: parseFloat(row.querySelector('.inp-price').value) || 0,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+      warehouse_code:  '',
+    });
+  });
+  if (!ok)           { e.preventDefault(); alert('Complete el código en todas las líneas.'); return; }
+  if (!lineas.length){ e.preventDefault(); alert('Agregue al menos un ítem.'); return; }
+  document.getElementById('items_json_hidden').value = JSON.stringify(lineas);
+});
+
+/* ── Anular OC ──────────────────────────────────────────── */
+function confirmarAnularOC() {
+  if (!currentOCId) return;
+  if (!confirm('¿Anular esta Orden de Compra? Esta acción no se puede deshacer.')) return;
+  const f = document.createElement('form');
+  f.method = 'POST';
+  f.action = `/compras/ordenes-compra/${currentOCId}/anular`;
+  document.body.appendChild(f);
+  f.submit();
+}
+
+/* ── Exportar Excel ─────────────────────────────────────── */
+function exportarExcel() {
+  const rows = [['OC-ID','Proveedor','Cód.','Referencia','Fecha OC','F.Entrega',
+                 'Moneda','TC','Subtotal s/IGV','IGV','Total','Estado']];
+  VISIBLE.forEach(oc => rows.push([
+    `OC-${String(oc.oc_id).padStart(5,'0')}`,
+    oc.bp_name, oc.card_code, oc.num_at_card,
+    oc.doc_date, oc.doc_due_date, oc.doc_currency,
+    oc.tipo_cambio ? Number(oc.tipo_cambio).toFixed(4) : '1.0000',
+    oc.doc_subtotal.toFixed(4), oc.doc_igv.toFixed(4), oc.doc_total.toFixed(2),
+    oc.id_estado === 1 ? 'Activa' : 'Anulada',
+  ]));
+  const csv  = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8;'});
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'ordenes_compra.csv';
+  a.click();
+}
+
+/* ── Helpers ────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+function setBadge(txt, cls) {
+  const b = document.getElementById('drawerBadge');
+  b.textContent = txt; b.className = 'badge ' + cls;
+}
+function setReadonly(on) {
+  document.querySelectorAll('#formOC input:not(.always-readonly), #formOC select').forEach(el => {
+    if (el.id === 'items_json_hidden') return;
+    el.readOnly = on;
+    el.disabled = on && el.tagName === 'SELECT';
+  });
+}
+
+/* ── Inicializar ────────────────────────────────────────── */
+renderTabla();
+</script>
+{% endblock %}

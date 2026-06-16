@@ -1,0 +1,315 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} registros
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="tiposData" type="application/json">{{ tipos_json | safe }}</script>
+
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-tags text-primary me-1"></i> Tipos de Compra
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarInput" placeholder="Buscar nombre…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer(0)">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo Tipo
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:350px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.77rem;">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:60px;">#</th>
+          <th>Nombre</th>
+          <th class="text-center" style="width:90px;">Estado</th>
+          <th class="text-center" style="width:120px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyTipos"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="contadorVisible">{{ total }}</strong> registros
+  </div>
+</div>
+
+
+<!-- ── Overlay ──────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+<!-- ── Drawer ───────────────────────────────────────────────── -->
+<aside class="articulos-drawer" id="tipoDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Tipo de Compra</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+    <input type="hidden" id="f_id_tipo" value="0">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold" style="font-size:.82rem;">
+        Nombre <span class="text-danger">*</span>
+      </label>
+      <input type="text" class="form-control form-control-sm"
+             id="f_nombre" placeholder="Ej: Servicios de Luz" maxlength="200"
+             oninput="document.getElementById('charCount').textContent = this.value.length">
+      <div class="form-text text-end">
+        <span id="charCount">0</span> / 200 caracteres
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar" onclick="guardar()">
+      <i class="bi bi-check-lg me-1"></i>Guardar
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+.articulos-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 420px; max-width: 96vw;
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body   { flex: 1; overflow-y: auto; padding: 1.25rem; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+let TIPOS_DATA = JSON.parse(document.getElementById('tiposData').textContent);
+let busqueda   = '';
+
+document.getElementById('buscarInput').addEventListener('input', function() {
+  busqueda = this.value.toLowerCase();
+  renderTabla();
+});
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Render tabla ─────────────────────────────────────────── */
+function renderTabla() {
+  const tbody = document.getElementById('tbodyTipos');
+  const filas = TIPOS_DATA.filter(t =>
+    !busqueda || t.nombre.toLowerCase().includes(busqueda)
+  );
+
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  filas.forEach((t, i) => {
+    const estadoBadge = t.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success border" style="font-size:.65rem;">Activo</span>'
+      : '<span class="badge bg-danger-subtle  text-danger  border" style="font-size:.65rem;">Inactivo</span>';
+
+    const btnEstado = t.id_estado === 1
+      ? `<button class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:.7rem;"
+                 title="Desactivar" onclick="cambiarEstado(${t.id_tipo}, 0)">
+           <i class="bi bi-pause-circle"></i>
+         </button>`
+      : `<button class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:.7rem;"
+                 title="Activar" onclick="cambiarEstado(${t.id_tipo}, 1)">
+           <i class="bi bi-play-circle"></i>
+         </button>`;
+
+    const tr = document.createElement('tr');
+    if (t.id_estado !== 1) tr.style.opacity = '.55';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${i + 1}</td>
+      <td class="fw-semibold">${escHtml(t.nombre)}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-xs btn-outline-primary py-0 px-2 me-1" style="font-size:.7rem;"
+                onclick="abrirDrawer(${t.id_tipo})">
+          <i class="bi bi-pencil"></i>
+        </button>
+        ${btnEstado}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+}
+
+/* ── Drawer ────────────────────────────────────────────────── */
+function abrirDrawer(id_tipo) {
+  const t = TIPOS_DATA.find(x => x.id_tipo === id_tipo);
+
+  document.getElementById('f_id_tipo').value = id_tipo;
+  document.getElementById('f_nombre').value  = t ? t.nombre : '';
+  document.getElementById('charCount').textContent = t ? t.nombre.length : 0;
+
+  const badge = document.getElementById('drawerBadge');
+  const title = document.getElementById('drawerTitle');
+  if (id_tipo === 0) {
+    badge.textContent = 'NUEVO'; badge.className = 'badge bg-primary';
+    title.textContent = 'Nuevo Tipo de Compra';
+  } else {
+    badge.textContent = 'EDITAR'; badge.className = 'badge bg-warning text-dark';
+    title.textContent = `Editar: ${t?.nombre || ''}`;
+  }
+
+  document.getElementById('tipoDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  setTimeout(() => document.getElementById('f_nombre').focus(), 200);
+}
+
+function cerrarDrawer() {
+  document.getElementById('tipoDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+
+/* ── Guardar ───────────────────────────────────────────────── */
+async function guardar() {
+  const nombre = document.getElementById('f_nombre').value.trim();
+  if (!nombre) {
+    mostrarToast('warning', 'El nombre es obligatorio.');
+    return;
+  }
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const resp = await fetch('{{ url_for("main.maestras_tipos_compra_guardar") }}', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        id_tipo: parseInt(document.getElementById('f_id_tipo').value) || 0,
+        nombre,
+      }),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      mostrarToast('success', res.message);
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 800);
+    } else {
+      mostrarToast('danger', res.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar';
+  }
+}
+
+/* ── Cambiar estado ────────────────────────────────────────── */
+async function cambiarEstado(id_tipo, estado) {
+  const accion = estado === 1 ? 'activar' : 'desactivar';
+  if (!confirm(`¿Desea ${accion} este tipo de compra?`)) return;
+
+  try {
+    const resp = await fetch(`/maestras/tipos-compra/${id_tipo}/estado`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({id_estado: estado}),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      const t = TIPOS_DATA.find(x => x.id_tipo === id_tipo);
+      if (t) t.id_estado = estado;
+      renderTabla();
+      mostrarToast('success', res.message);
+    } else {
+      mostrarToast('danger', res.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  }
+}
+
+/* ── Excel ─────────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#', 'Nombre', 'Estado']];
+  TIPOS_DATA.forEach((t, i) => filas.push([
+    i + 1, t.nombre, t.id_estado === 1 ? 'Activo' : 'Inactivo',
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tipos de Compra');
+  XLSX.writeFile(wb, 'tipos_compra.xlsx');
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+/* ── Init ──────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

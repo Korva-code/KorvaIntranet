@@ -1,0 +1,886 @@
+{% extends 'maestras/base.html' %}
+
+{% block content %}
+
+{# ─── Datos JSON para Chart.js ──────────────────────────────── #}
+<script type="application/json" id="dataVentasMensuales">{{ ventas_mensuales_json | safe }}</script>
+<script type="application/json" id="dataComprasMensuales">{{ compras_mensuales_json | safe }}</script>
+
+{# ════════════════════════════════════════════════════════════════
+   SECCIÓN VENTAS
+   ════════════════════════════════════════════════════════════════ #}
+<div class="bg-white rounded-3 shadow-sm p-3 mb-4">
+
+  {# — Encabezado de sección — #}
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-graph-up-arrow fs-5 text-primary"></i>
+    <h5 class="mb-0 fw-bold">Análisis de Ventas</h5>
+    <span class="badge bg-primary ms-1">Ventas</span>
+  </div>
+
+  {# — Row 1: KPI Ventas — #}
+  <div class="row g-3 mb-3">
+
+    {# KPI 1: Ventas este mes #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Ventas este mes</p>
+            <h4 class="fw-bold mb-1 text-dark" id="kv-total-mes">
+              S/ {{ '{:,.2f}'.format(ventas_kpi.total_mes_actual) }}
+            </h4>
+            {% set vp = ventas_kpi.variacion_pct %}
+            {% if vp > 0 %}
+              <span class="badge bg-success-subtle text-success px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-arrow-up-short"></i> +{{ vp }}% vs mes ant.
+              </span>
+            {% elif vp < 0 %}
+              <span class="badge bg-danger-subtle text-danger px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-arrow-down-short"></i> {{ vp }}% vs mes ant.
+              </span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-dash"></i> Sin variación
+              </span>
+            {% endif %}
+          </div>
+          <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-cash-stack text-primary fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 2: Documentos emitidos #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Documentos este mes</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ ventas_kpi.docs_mes_actual }}</h4>
+            <small class="text-muted">{{ ventas_kpi.docs_anio }} en el año</small>
+          </div>
+          <div class="rounded-circle bg-info-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-receipt-cutoff text-info fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 3: Clientes únicos #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Clientes únicos</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ ventas_kpi.clientes_mes_actual }}</h4>
+            <small class="text-muted">Clientes atendidos este mes</small>
+          </div>
+          <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-people-fill text-success fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 4: Ticket promedio #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Ticket promedio</p>
+            <h4 class="fw-bold mb-1 text-dark">S/ {{ '{:,.2f}'.format(ventas_kpi.ticket_promedio) }}</h4>
+            <small class="text-muted">Promedio por documento</small>
+          </div>
+          <div class="rounded-circle bg-warning-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-tag-fill text-warning fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row KPI ventas #}
+
+  {# — Row 2: Gráfico mensual + Top Clientes — #}
+  <div class="row g-3 mb-3">
+
+    {# Gráfico barras mensual ventas #}
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-bar-chart-fill text-primary me-2"></i>Ventas mensuales (últimos 12 meses)
+          </h6>
+        </div>
+        <div class="card-body p-3" style="min-height:260px;">
+          <canvas id="chartVentas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    {# Tabla Top Clientes #}
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-trophy-fill text-warning me-2"></i>Top clientes (año actual)
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Cliente</th>
+                  <th class="text-end pe-3">Monto (S/)</th>
+                  <th class="text-end pe-3">Docs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for c in ventas_top_clientes %}
+                <tr>
+                  <td class="ps-3 text-muted">{{ loop.index }}</td>
+                  <td>
+                    <span class="fw-medium">{{ c.card_name }}</span>
+                    <br><span class="text-muted" style="font-size:.7rem;">{{ c.card_code }}</span>
+                  </td>
+                  <td class="text-end pe-3">{{ '{:,.2f}'.format(c.total_monto) }}</td>
+                  <td class="text-end pe-3">{{ c.cant_docs }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row 2 ventas #}
+
+  {# — Row 3: Top Artículos vendidos — #}
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-boxes text-primary me-2"></i>Top artículos vendidos (año actual)
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Código</th>
+                  <th>Artículo</th>
+                  <th class="text-end">Cantidad</th>
+                  <th class="text-end">Monto (S/)</th>
+                  <th class="text-end pe-3">Facturas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in ventas_top_articulos %}
+                <tr>
+                  <td class="ps-3 text-muted">{{ loop.index }}</td>
+                  <td><code style="font-size:.72rem;">{{ a.item_code }}</code></td>
+                  <td>{{ a.item_name }}</td>
+                  <td class="text-end">{{ '{:,.2f}'.format(a.total_cantidad) }}</td>
+                  <td class="text-end">{{ '{:,.2f}'.format(a.total_monto) }}</td>
+                  <td class="text-end pe-3">{{ a.cant_facturas }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>{# /Row 3 ventas #}
+
+</div>{# /bg-white ventas #}
+
+{# ─── Separador visual ─────────────────────────────────────────── #}
+<div class="d-flex align-items-center gap-2 my-3 text-muted">
+  <div class="flex-grow-1" style="height:1px;background:linear-gradient(90deg,#dee2e6,transparent);"></div>
+  <i class="bi bi-arrow-down-up"></i>
+  <div class="flex-grow-1" style="height:1px;background:linear-gradient(90deg,transparent,#dee2e6);"></div>
+</div>
+
+{# datos JSON inventario #}
+<script type="application/json" id="dataInvMensuales">{{ inv_mensuales_json | safe }}</script>
+
+{# ════════════════════════════════════════════════════════════════
+   SECCIÓN COMPRAS
+   ════════════════════════════════════════════════════════════════ #}
+<div class="bg-light rounded-3 shadow-sm p-3 mb-4">
+
+  {# — Encabezado de sección — #}
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-cart-fill fs-5 text-warning"></i>
+    <h5 class="mb-0 fw-bold">Análisis de Compras</h5>
+    <span class="badge bg-warning text-dark ms-1">Compras</span>
+  </div>
+
+  {# — Row 1: KPI Compras — #}
+  <div class="row g-3 mb-3">
+
+    {# KPI 1: Compras este mes #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Compras este mes</p>
+            <h4 class="fw-bold mb-1 text-dark">
+              S/ {{ '{:,.2f}'.format(compras_kpi.total_mes_actual) }}
+            </h4>
+            {% set cp = compras_kpi.variacion_pct %}
+            {% if cp > 0 %}
+              <span class="badge bg-danger-subtle text-danger px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-arrow-up-short"></i> +{{ cp }}% vs mes ant.
+              </span>
+            {% elif cp < 0 %}
+              <span class="badge bg-success-subtle text-success px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-arrow-down-short"></i> {{ cp }}% vs mes ant.
+              </span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary px-2 py-1" style="font-size:.72rem;">
+                <i class="bi bi-dash"></i> Sin variación
+              </span>
+            {% endif %}
+          </div>
+          <div class="rounded-circle bg-warning-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-bag-fill text-warning fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 2: Documentos de compra #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Documentos este mes</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ compras_kpi.docs_mes_actual }}</h4>
+            <small class="text-muted">{{ compras_kpi.docs_anio }} en el año</small>
+          </div>
+          <div class="rounded-circle bg-info-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-file-earmark-text text-info fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 3: Proveedores únicos #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Proveedores únicos</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ compras_kpi.clientes_mes_actual }}</h4>
+            <small class="text-muted">Proveedores atendidos este mes</small>
+          </div>
+          <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-building text-success fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 4: Ticket promedio compras #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Ticket promedio</p>
+            <h4 class="fw-bold mb-1 text-dark">S/ {{ '{:,.2f}'.format(compras_kpi.ticket_promedio) }}</h4>
+            <small class="text-muted">Promedio por documento</small>
+          </div>
+          <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;">
+            <i class="bi bi-calculator text-primary fs-5"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row KPI compras #}
+
+  {# — Row 2: Gráfico mensual + Top Proveedores — #}
+  <div class="row g-3 mb-3">
+
+    {# Gráfico barras mensual compras #}
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-bar-chart-fill text-warning me-2"></i>Compras mensuales (últimos 12 meses)
+          </h6>
+        </div>
+        <div class="card-body p-3" style="min-height:260px;">
+          <canvas id="chartCompras"></canvas>
+        </div>
+      </div>
+    </div>
+
+    {# Tabla Top Proveedores #}
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-trophy-fill text-warning me-2"></i>Top proveedores (año actual)
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Proveedor</th>
+                  <th class="text-end pe-3">Monto (S/)</th>
+                  <th class="text-end pe-3">Docs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in compras_top_proveedores %}
+                <tr>
+                  <td class="ps-3 text-muted">{{ loop.index }}</td>
+                  <td>
+                    <span class="fw-medium">{{ p.proveedor_nombre }}</span>
+                    <br><span class="text-muted" style="font-size:.7rem;">{{ p.card_code }}</span>
+                  </td>
+                  <td class="text-end pe-3">{{ '{:,.2f}'.format(p.total_monto) }}</td>
+                  <td class="text-end pe-3">{{ p.cant_docs }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row 2 compras #}
+
+  {# — Row 3: Top Artículos comprados — #}
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-boxes text-warning me-2"></i>Top artículos comprados (año actual)
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Código</th>
+                  <th>Artículo</th>
+                  <th class="text-end">Cantidad</th>
+                  <th class="text-end">Monto (S/)</th>
+                  <th class="text-end pe-3">Docs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in compras_top_articulos %}
+                <tr>
+                  <td class="ps-3 text-muted">{{ loop.index }}</td>
+                  <td><code style="font-size:.72rem;">{{ a.item_code }}</code></td>
+                  <td>{{ a.item_name }}</td>
+                  <td class="text-end">{{ '{:,.2f}'.format(a.total_cantidad) }}</td>
+                  <td class="text-end">{{ '{:,.2f}'.format(a.total_monto) }}</td>
+                  <td class="text-end pe-3">{{ a.cant_facturas }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>{# /Row 3 compras #}
+
+</div>{# /bg-light compras #}
+
+{# ─── Separador visual ─────────────────────────────────────────── #}
+<div class="d-flex align-items-center gap-2 my-3 text-muted">
+  <div class="flex-grow-1" style="height:1px;background:linear-gradient(90deg,#dee2e6,transparent);"></div>
+  <i class="bi bi-arrow-left-right"></i>
+  <div class="flex-grow-1" style="height:1px;background:linear-gradient(90deg,transparent,#dee2e6);"></div>
+</div>
+
+{# ════════════════════════════════════════════════════════════════
+   SECCIÓN INVENTARIO
+   ════════════════════════════════════════════════════════════════ #}
+<div class="rounded-3 shadow-sm p-3 mb-4" style="background:#f0fdf4;">
+
+  {# — Encabezado — #}
+  <div class="d-flex align-items-center gap-2 mb-3">
+    <i class="bi bi-boxes fs-5 text-success"></i>
+    <h5 class="mb-0 fw-bold">Análisis de Inventarios</h5>
+    <span class="badge bg-success ms-1">Almacén</span>
+  </div>
+
+  {# — Row 1: KPI Inventario — #}
+  <div class="row g-3 mb-3">
+
+    {# KPI 1: Entradas del mes #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Entradas este mes</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ '{:,.2f}'.format(inv_kpi.cant_entradas_mes) }}</h4>
+            <small class="text-muted">S/ {{ '{:,.2f}'.format(inv_kpi.valor_entradas_mes) }}</small>
+          </div>
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;background:rgba(25,135,84,.12);">
+            <i class="bi bi-box-arrow-in-down fs-5 text-success"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 2: Salidas del mes #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Salidas este mes</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ '{:,.2f}'.format(inv_kpi.cant_salidas_mes) }}</h4>
+            <small class="text-muted">S/ {{ '{:,.2f}'.format(inv_kpi.valor_salidas_mes) }}</small>
+          </div>
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;background:rgba(220,53,69,.12);">
+            <i class="bi bi-box-arrow-up fs-5 text-danger"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 3: Valor stock total #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Valor stock total</p>
+            <h4 class="fw-bold mb-1 text-dark">S/ {{ '{:,.2f}'.format(inv_kpi.stock_valor_total) }}</h4>
+            <small class="text-muted">{{ inv_kpi.almacenes_activos }} almacén(es) activo(s)</small>
+          </div>
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;background:rgba(13,110,253,.12);">
+            <i class="bi bi-archive-fill fs-5 text-primary"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# KPI 4: Ítems activos #}
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body d-flex align-items-start justify-content-between p-3">
+          <div>
+            <p class="text-muted mb-1" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;">Ítems activos</p>
+            <h4 class="fw-bold mb-1 text-dark">{{ inv_kpi.items_activos }}</h4>
+            <small class="text-muted">Con movimiento últimos 30 días</small>
+          </div>
+          <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+               style="width:44px;height:44px;background:rgba(255,193,7,.15);">
+            <i class="bi bi-tags-fill fs-5 text-warning"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row KPI inventario #}
+
+  {# — Row 2: Gráfico ENT vs SAL + Stock por Almacén — #}
+  <div class="row g-3 mb-3">
+
+    {# Gráfico barras mensual inventario #}
+    <div class="col-12 col-lg-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-bar-chart-steps text-success me-2"></i>Salidas mensuales por grupo (últimos 24 meses)
+          </h6>
+        </div>
+        <div class="card-body p-3" style="min-height:260px;">
+          <canvas id="chartInventario"></canvas>
+        </div>
+      </div>
+    </div>
+
+    {# Tabla stock por almacén #}
+    <div class="col-12 col-lg-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-building-fill text-success me-2"></i>Stock por almacén
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">Almacén</th>
+                  <th class="text-end">Ítems</th>
+                  <th class="text-end">Con stock</th>
+                  <th class="text-end">Sin stock</th>
+                  <th class="text-end pe-3">Valor (S/)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in inv_stock_almacen %}
+                <tr>
+                  <td class="ps-3">
+                    <span class="fw-medium">{{ a.whs_name }}</span>
+                    <br><span class="text-muted" style="font-size:.7rem;">{{ a.almacen }}</span>
+                  </td>
+                  <td class="text-end">{{ a.cant_items }}</td>
+                  <td class="text-end">
+                    <span class="badge bg-success-subtle text-success">{{ a.stock_positivo }}</span>
+                  </td>
+                  <td class="text-end">
+                    {% if a.stock_negativo > 0 %}
+                      <span class="badge bg-danger-subtle text-danger">{{ a.stock_negativo }}</span>
+                    {% else %}
+                      <span class="text-muted">0</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end pe-3">{{ '{:,.2f}'.format(a.valor_total) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>{# /Row 2 inventario #}
+
+  {# — Row 3: Top artículos por rotación — #}
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2 px-3">
+          <h6 class="mb-0 fw-semibold" style="font-size:.85rem;">
+            <i class="bi bi-arrow-repeat text-success me-2"></i>Top artículos por rotación (últimos 12 meses)
+          </h6>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size:.75rem;">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">#</th>
+                  <th>Artículo</th>
+                  <th>Grupo</th>
+                  <th class="text-end">Salidas</th>
+                  <th class="text-end">Entradas</th>
+                  <th class="text-end">Stock actual</th>
+                  <th class="text-end pe-3">Valor stock (S/)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for a in inv_top_rotacion %}
+                <tr>
+                  <td class="ps-3 text-muted">{{ loop.index }}</td>
+                  <td>
+                    <span class="fw-medium">{{ a.item_name }}</span>
+                    <br><code style="font-size:.7rem;">{{ a.item_code }}</code>
+                  </td>
+                  <td><span class="badge bg-secondary-subtle text-secondary" style="font-size:.7rem;">{{ a.group_name }}</span></td>
+                  <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(a.total_salidas) }}</td>
+                  <td class="text-end text-success">{{ '{:,.2f}'.format(a.total_entradas) }}</td>
+                  <td class="text-end">
+                    {% if a.stock_actual > 0 %}
+                      <span class="text-success fw-semibold">{{ '{:,.2f}'.format(a.stock_actual) }}</span>
+                    {% elif a.stock_actual < 0 %}
+                      <span class="text-danger fw-semibold">{{ '{:,.2f}'.format(a.stock_actual) }}</span>
+                    {% else %}
+                      <span class="text-muted">0.00</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end pe-3">{{ '{:,.2f}'.format(a.valor_stock) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Sin datos</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>{# /Row 3 inventario #}
+
+</div>{# /inventario #}
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* ── helpers ───────────────────────────────────────────────── */
+  function fmtMoney(v) {
+    return Number(v).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fmtInt(v) {
+    return Number(v).toLocaleString('es-PE');
+  }
+
+  /* ── leer datos JSON embebidos ─────────────────────────────── */
+  function readJson(id) {
+    try {
+      var el = document.getElementById(id);
+      return el ? JSON.parse(el.textContent) : { labels: [], montos: [], cantdocs: [] };
+    } catch (e) {
+      console.warn('[dashboard] Error leyendo ' + id, e);
+      return { labels: [], montos: [], cantdocs: [] };
+    }
+  }
+
+  /* ── opciones comunes de Chart.js ──────────────────────────── */
+  function buildChartOptions(color) {
+    return {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              return ' S/ ' + fmtMoney(ctx.parsed.y);
+            },
+            afterLabel: function (ctx) {
+              var cant = ctx.dataset.cantdocs ? ctx.dataset.cantdocs[ctx.dataIndex] : null;
+              return cant !== null ? ' Docs: ' + fmtInt(cant) : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(0,0,0,.05)' },
+          ticks: {
+            font: { size: 11 },
+            callback: function (v) { return 'S/ ' + fmtMoney(v); }
+          }
+        }
+      }
+    };
+  }
+
+  /* ── registrar plugin datalabels solo para charts que lo usen ─ */
+  Chart.register(ChartDataLabels);
+
+  /* ── inicializar charts al cargar el DOM ───────────────────── */
+  document.addEventListener('DOMContentLoaded', function () {
+
+    /* — Chart Ventas (apilado por grupo de artículo) — */
+    var dvJson = readJson('dataVentasMensuales');
+    var ctxV   = document.getElementById('chartVentas');
+    if (ctxV && dvJson.labels && dvJson.labels.length > 0 && dvJson.datasets && dvJson.datasets.length > 0) {
+      new Chart(ctxV, {
+        type: 'bar',
+        data: {
+          labels:   dvJson.labels,
+          datasets: dvJson.datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
+            },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  return ' ' + ctx.dataset.label + ': S/ ' + fmtMoney(ctx.parsed.y);
+                }
+              }
+            },
+            datalabels: {
+              anchor:    'center',
+              align:     'center',
+              color:     '#fff',
+              font:      { size: 10, weight: 'bold' },
+              formatter: function (value) {
+                if (!value || value < 1) return null;
+                if (value >= 1000) return 'S/ ' + (value / 1000).toFixed(1) + 'k';
+                return 'S/ ' + fmtMoney(value);
+              },
+              display: function (ctx) {
+                return (ctx.dataset.data[ctx.dataIndex] || 0) > 0;
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,.05)' },
+              ticks: {
+                font: { size: 11 },
+                callback: function (v) { return 'S/ ' + fmtMoney(v); }
+              }
+            }
+          }
+        }
+      });
+    } else if (ctxV) {
+      ctxV.parentElement.innerHTML =
+        '<p class="text-muted text-center mt-5" style="font-size:.8rem;">Sin datos de ventas para graficar</p>';
+    }
+
+    /* — Chart Compras (agrupado por grupo de artículo) — */
+    var dcJson = readJson('dataComprasMensuales');
+    var ctxC   = document.getElementById('chartCompras');
+    if (ctxC && dcJson.labels && dcJson.labels.length > 0 && dcJson.datasets && dcJson.datasets.length > 0) {
+      new Chart(ctxC, {
+        type: 'bar',
+        data: {
+          labels:   dcJson.labels,
+          datasets: dcJson.datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
+            },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  return ' ' + ctx.dataset.label + ': S/ ' + fmtMoney(ctx.parsed.y);
+                }
+              }
+            },
+            datalabels: {
+              anchor:    'center',
+              align:     'center',
+              color:     '#fff',
+              font:      { size: 10, weight: 'bold' },
+              formatter: function (value) {
+                if (!value || value < 1) return null;
+                if (value >= 1000) return 'S/ ' + (value / 1000).toFixed(1) + 'k';
+                return 'S/ ' + fmtMoney(value);
+              },
+              display: function (ctx) {
+                return (ctx.dataset.data[ctx.dataIndex] || 0) > 0;
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11 } }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,.05)' },
+              ticks: {
+                font: { size: 11 },
+                callback: function (v) { return 'S/ ' + fmtMoney(v); }
+              }
+            }
+          }
+        }
+      });
+    } else if (ctxC) {
+      ctxC.parentElement.innerHTML =
+        '<p class="text-muted text-center mt-5" style="font-size:.8rem;">Sin datos de compras para graficar</p>';
+    }
+
+    /* — Chart Inventario (Entradas vs Salidas) — */
+    var diJson = readJson('dataInvMensuales');
+    var ctxI   = document.getElementById('chartInventario');
+    if (ctxI && diJson.labels && diJson.labels.length > 0) {
+      new Chart(ctxI, {
+        type: 'bar',
+        data: { labels: diJson.labels, datasets: diJson.datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { font: { size: 11 }, boxWidth: 12, padding: 8 }
+            },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) {
+                  return ' ' + ctx.dataset.label + ': ' + fmtMoney(ctx.parsed.y) + ' uds';
+                }
+              }
+            },
+            datalabels: { display: false }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,.05)' },
+              ticks: { font: { size: 11 }, callback: function (v) { return fmtMoney(v); } }
+            }
+          }
+        }
+      });
+    } else if (ctxI) {
+      ctxI.parentElement.innerHTML =
+        '<p class="text-muted text-center mt-5" style="font-size:.8rem;">Sin datos de movimientos para graficar</p>';
+    }
+
+  });
+
+})();
+</script>
+{% endblock %}

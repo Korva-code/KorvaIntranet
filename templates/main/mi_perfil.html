@@ -1,0 +1,228 @@
+{% extends 'maestras/base.html' %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- Tarjeta principal del perfil -->
+  <div class="col-12 col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center py-4">
+        <!-- Avatar grande -->
+        <div class="profile-avatar mx-auto mb-3">
+          {{ current_user.initials }}
+        </div>
+        <h5 class="mb-1 fw-bold">{{ current_user.full_name or current_user.id_usuario }}</h5>
+        <p class="text-muted mb-1 small">ID de Usuario: <strong>{{ current_user.id_usuario }}</strong></p>
+        {% if current_user.email %}
+          <p class="text-muted mb-2 small">
+            <i class="bi bi-envelope me-1"></i> {{ current_user.email }}
+          </p>
+        {% endif %}
+
+        <!-- Badges de estado -->
+        <div class="d-flex justify-content-center gap-2 flex-wrap mt-2">
+          <span class="badge bg-success-subtle text-success border border-success-subtle">
+            <i class="bi bi-circle-fill me-1" style="font-size: .4rem;"></i> Activo
+          </span>
+          {% if current_user.is_admin %}
+            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+              <i class="bi bi-shield-lock me-1"></i> Administrador
+            </span>
+          {% endif %}
+          <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+            <i class="bi bi-person me-1"></i> {{ current_user.perfil_nombre }}
+          </span>
+        </div>
+      </div>
+
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between py-3">
+          <span class="text-muted small"><i class="bi bi-building me-2"></i>Empresa</span>
+          <span class="fw-semibold small">ID {{ current_user.id_empresa or '-' }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between py-3">
+          <span class="text-muted small"><i class="bi bi-geo-alt me-2"></i>Ubicación</span>
+          <span class="fw-semibold small">{{ current_user.department or '-' }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between py-3">
+          <span class="text-muted small"><i class="bi bi-shield me-2"></i>Perfil</span>
+          <div class="text-end">
+            <span class="fw-semibold small">{{ current_user.perfil_nombre }}</span>
+            {% if current_user.id_perfil %}
+              <br><span class="text-muted" style="font-size:.7rem;">ID {{ current_user.id_perfil }}</span>
+            {% endif %}
+          </div>
+        </li>
+        <li class="list-group-item d-flex justify-content-between py-3">
+          <span class="text-muted small"><i class="bi bi-person-gear me-2"></i>Rol</span>
+          <span class="fw-semibold small">ID {{ current_user.id_rol or '-' }}</span>
+        </li>
+        <li class="list-group-item d-flex justify-content-between py-3">
+          <span class="text-muted small"><i class="bi bi-box-seam me-2"></i>Almacén</span>
+          <div class="text-end">
+            {% if whs_name %}
+              <span class="fw-semibold small">{{ whs_name }}</span><br>
+              <span class="text-muted" style="font-size:.7rem;">
+                Cód. {{ current_user.whs_code.strip() if current_user.whs_code else '' }}
+              </span>
+            {% else %}
+              <span class="fw-semibold small">{{ current_user.id_almacen or '-' }}</span>
+            {% endif %}
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Panel derecho -->
+  <div class="col-12 col-lg-8">
+
+    <!-- Información general -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-person-lines-fill text-primary me-2"></i>Información de la Cuenta
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">ID de Usuario</label>
+            <div class="form-control-plaintext fw-semibold">{{ current_user.id_usuario }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">Nombre Completo</label>
+            <div class="form-control-plaintext fw-semibold">{{ current_user.full_name or '—' }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">Correo Electrónico</label>
+            <div class="form-control-plaintext">{{ current_user.email or '—' }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">Ubicación / Sede</label>
+            <div class="form-control-plaintext">{{ current_user.department or '—' }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">
+              <i class="bi bi-shield me-1"></i>Perfil
+            </label>
+            <div class="form-control-plaintext">
+              <span class="fw-semibold">{{ current_user.perfil_nombre }}</span>
+              {% if current_user.id_perfil %}
+                <span class="badge bg-primary-subtle text-primary ms-2">
+                  ID {{ current_user.id_perfil }}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">Rol</label>
+            <div class="form-control-plaintext">{{ current_user.id_rol or '—' }}</div>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted">
+              <i class="bi bi-box-seam me-1"></i>Almacén Asignado
+            </label>
+            <div class="form-control-plaintext">
+              {% if whs_name %}
+                <span class="fw-semibold">{{ whs_name }}</span>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">
+                  {{ current_user.whs_code.strip() if current_user.whs_code else '' }}
+                </span>
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cambiar contraseña -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-key-fill text-warning me-2"></i>Cambiar Contraseña
+        </h6>
+      </div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('main.cambiar_contrasena') }}" novalidate>
+
+          <div class="row g-3">
+            <div class="col-12">
+              <label for="contrasena_actual" class="form-label small fw-semibold">
+                Contraseña Actual
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light"><i class="bi bi-lock text-muted"></i></span>
+                <input type="password" class="form-control" id="contrasena_actual"
+                       name="contrasena_actual" placeholder="••••••••" required />
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="togglePwd('contrasena_actual', this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <label for="contrasena_nueva" class="form-label small fw-semibold">
+                Nueva Contraseña
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light"><i class="bi bi-lock-fill text-muted"></i></span>
+                <input type="password" class="form-control" id="contrasena_nueva"
+                       name="contrasena_nueva" placeholder="••••••••" required />
+                <button class="btn btn-outline-secondary" type="button"
+                        onclick="togglePwd('contrasena_nueva', this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <label for="contrasena_confirmar" class="form-label small fw-semibold">
+                Confirmar Nueva Contraseña
+              </label>
+              <div class="input-group">
+                <span class="input-group-text bg-light"><i class="bi bi-lock-fill text-muted"></i></span>
+                <input type="password" class="form-control" id="contrasena_confirmar"
+                       name="contrasena_confirmar" placeholder="••••••••" required />
+              </div>
+            </div>
+            <div class="col-12">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-2"></i> Actualizar Contraseña
+              </button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.profile-avatar {
+  width: 90px; height: 90px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 2rem; font-weight: 800;
+  box-shadow: 0 4px 16px rgba(37,99,235,.3);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePwd(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const icon  = btn.querySelector('i');
+  const isText = input.type === 'text';
+  input.type = isText ? 'password' : 'text';
+  icon.className = isText ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+</script>
+{% endblock %}

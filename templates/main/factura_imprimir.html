@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>{{ tipo_label }} {{ serie }}-{{ numero }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #000; background:#fff; }
+
+  /* ── Botón imprimir (oculto al imprimir) ── */
+  .btn-print {
+    display:block; margin:8px auto 12px;
+    padding:6px 24px; background:#1a73e8; color:#fff;
+    border:none; border-radius:4px; cursor:pointer; font-size:10pt;
+  }
+  @media print { .btn-print { display:none !important; } }
+
+  /* ── Hoja A4 ── */
+  .pagina {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 10mm 12mm;
+    background: #fff;
+  }
+  @media print {
+    html, body { margin:0; padding:0; }
+    .pagina { width:100%; margin:0; padding:10mm 12mm; page-break-after:always; }
+  }
+
+  /* ── Header empresa / documento ── */
+  .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px; }
+  .empresa h2 { font-size:11pt; font-weight:bold; text-transform:uppercase; }
+  .empresa p  { font-size:8pt; line-height:1.4; }
+
+  .doc-box {
+    border:2px solid #000; padding:6px 10px; text-align:center;
+    min-width:160px;
+  }
+  .doc-box .doc-tipo  { font-size:9pt; font-weight:bold; text-transform:uppercase; line-height:1.3; }
+  .doc-box .doc-ruc   { font-size:9pt; font-weight:bold; }
+  .doc-box .doc-serie { font-size:10pt; font-weight:bold; margin-top:4px; }
+
+  /* ── Línea separadora ── */
+  hr.sep { border:none; border-top:1px solid #000; margin:5px 0; }
+
+  /* ── Tabla de cabecera (datos cliente) ── */
+  .cab-table { width:100%; border-collapse:collapse; margin-bottom:5px; }
+  .cab-table td { font-size:8.5pt; padding:2px 3px; vertical-align:top; }
+  .cab-table td.lbl { font-weight:bold; white-space:nowrap; width:1%; }
+  .cab-table td.sep { padding:0 4px; }
+
+  /* ── Tabla de ítems ── */
+  .items-table { width:100%; border-collapse:collapse; margin:6px 0; }
+  .items-table th {
+    background:#000; color:#fff; font-size:7.5pt; text-align:center;
+    padding:3px 4px; border:1px solid #000;
+  }
+  .items-table td {
+    font-size:8pt; padding:2px 4px; border:1px solid #ccc; vertical-align:top;
+  }
+  .items-table .num  { text-align:right; }
+  .items-table .ctr  { text-align:center; }
+  .items-table tbody tr:nth-child(even) { background:#f9f9f9; }
+
+  /* ── Totales lado derecho ── */
+  .totales-wrap { display:flex; justify-content:flex-end; margin-top:4px; }
+  .totales-table { border-collapse:collapse; }
+  .totales-table td { font-size:8.5pt; padding:1px 6px; }
+  .totales-table td.lbl { text-align:right; }
+  .totales-table td.val { text-align:right; min-width:70px; }
+  .totales-table tr.total-row td { font-weight:bold; border-top:1px solid #000; padding-top:3px; }
+
+  /* ── SON ── */
+  .son { font-size:8.5pt; font-weight:bold; margin:5px 0; }
+
+  /* ── Resumen tributos ── */
+  .resumen-wrap { display:flex; margin-top:5px; }
+  .resumen-nota { flex:1; font-size:7pt; font-style:italic; color:#444; padding-right:10px; }
+  .resumen-table { border-collapse:collapse; }
+  .resumen-table td { font-size:8pt; padding:1px 6px; }
+  .resumen-table td.lbl { text-align:right; }
+  .resumen-table td.val { text-align:right; min-width:70px; }
+  .resumen-table tr.total-row td { font-weight:bold; border-top:1px solid #000; padding-top:2px; }
+
+  /* ── Footer legal ── */
+  .footer-legal { font-size:7pt; color:#444; margin-top:10px; text-align:justify; border-top:1px solid #ccc; padding-top:5px; }
+</style>
+</head>
+<body>
+
+<button class="btn-print" onclick="window.print()">
+  🖨 Imprimir / Guardar PDF
+</button>
+
+<div class="pagina">
+
+  {# ── Header ────────────────────────────────────── #}
+  <div class="header">
+    <div class="empresa">
+      <h2>KORVA S.A.C.</h2>
+      <p>CAL. ALFA CENTAURO 185 URB. LA CALERA DE MONTERRICO<br>
+         SURQUILLO - LIMA - LIMA</p>
+    </div>
+    <div class="doc-box">
+      <div class="doc-tipo">{{ tipo_label }}</div>
+      <div class="doc-ruc">RUC: 20615472019</div>
+      <div class="doc-serie">{{ serie }}-{{ numero }}</div>
+    </div>
+  </div>
+
+  <hr class="sep">
+
+  {# ── Datos del cliente ──────────────────────────── #}
+  <table class="cab-table">
+    <tr>
+      <td class="lbl">Fecha de Vencimiento</td>
+      <td class="sep">:</td>
+      <td>{{ inv[5].strftime('%d/%m/%Y') if inv[5] else '' }}</td>
+      <td style="width:30%"></td>
+    </tr>
+    <tr>
+      <td class="lbl">Fecha de Emisión</td>
+      <td class="sep">:</td>
+      <td><strong>{{ inv[4].strftime('%d/%m/%Y') if inv[4] else '' }}</strong></td>
+    </tr>
+    <tr>
+      <td class="lbl">Señor(es)</td>
+      <td class="sep">:</td>
+      <td colspan="2"><strong>{{ inv[10] }}</strong></td>
+    </tr>
+    <tr>
+      <td class="lbl">{{ 'RUC' if (inv[11]|string|length) == 11 else 'DNI' }}</td>
+      <td class="sep">:</td>
+      <td>{{ inv[11] }}</td>
+    </tr>
+    {% if inv[12] %}
+    <tr>
+      <td class="lbl">Dirección</td>
+      <td class="sep">:</td>
+      <td colspan="2">{{ inv[12] }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+      <td class="lbl">Tipo de Moneda</td>
+      <td class="sep">:</td>
+      <td>{{ moneda_label }}</td>
+    </tr>
+    {% if inv[8] %}
+    <tr>
+      <td class="lbl">Observación</td>
+      <td class="sep">:</td>
+      <td colspan="2">{{ inv[8] }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  <hr class="sep">
+
+  {# ── Tabla de ítems ─────────────────────────────── #}
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width:50px;">Cantidad</th>
+        <th style="width:60px;">Unidad Medida</th>
+        <th style="width:60px;">Código</th>
+        <th>Descripción</th>
+        <th style="width:80px;">Valor Unitario(*)</th>
+        <th style="width:70px;">Descuento(*)</th>
+        <th style="width:85px;">Importe de Venta(**)</th>
+        <th style="width:50px;">ICBPER</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr>
+        <td class="num">{{ '%.2f'|format(it.quantity) }}</td>
+        <td class="ctr">{{ it.unidad }}</td>
+        <td class="ctr">{{ it.item_code }}</td>
+        <td>{{ it.descripcion }}</td>
+        <td class="num">{{ '%.4f'|format(it.val_unit) }}</td>
+        <td class="num">0.00</td>
+        <td class="num">{{ '%.6f'|format(it.importe) }}</td>
+        <td class="num">0.00</td>
+      </tr>
+      {% endfor %}
+      {# Relleno si hay pocas líneas #}
+      {% for _ in range([8 - items|length, 0]|max) %}
+      <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# ── Totales parciales (derecha) ─────────────────── #}
+  <div class="totales-wrap">
+    <table class="totales-table">
+      <tr><td class="lbl">Otros Cargos :</td><td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">Otros Tributos :</td><td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">ICBPER :</td><td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr class="total-row">
+        <td class="lbl">Importe Total :</td>
+        <td class="val">{{ moneda_sym }} {{ '%.2f'|format(total) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  {# ── SON ─────────────────────────────────────────── #}
+  <p class="son">SON: {{ monto_letras }}</p>
+
+  <hr class="sep">
+
+  {# ── Resumen tributos + notas ────────────────────── #}
+  <div class="resumen-wrap">
+    <div class="resumen-nota">
+      (*) Sin impuestos.<br>
+      (**) Incluye impuestos, de ser Op. Gravada.
+    </div>
+    <table class="resumen-table">
+      <tr><td class="lbl">Op. Gravada :</td>    <td class="val">{{ moneda_sym }} {{ '%.2f'|format(op_grav) }}</td></tr>
+      <tr><td class="lbl">Op. Exonerada :</td>  <td class="val">{{ moneda_sym }} {{ '%.2f'|format(op_exo) }}</td></tr>
+      <tr><td class="lbl">Op. Inafecta :</td>   <td class="val">{{ moneda_sym }} {{ '%.2f'|format(op_ina) }}</td></tr>
+      <tr><td class="lbl">ISC :</td>             <td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">IGV :</td>             <td class="val">{{ moneda_sym }} {{ '%.2f'|format(igv) }}</td></tr>
+      <tr><td class="lbl">ICBPER :</td>          <td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">Otros Cargos :</td>    <td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">Otros Tributos :</td>  <td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr><td class="lbl">Monto de Redondeo :</td><td class="val">{{ moneda_sym }} 0.00</td></tr>
+      <tr class="total-row">
+        <td class="lbl">Importe Total :</td>
+        <td class="val">{{ moneda_sym }} {{ '%.2f'|format(total) }}</td>
+      </tr>
+    </table>
+  </div>
+
+  {# ── Footer legal ─────────────────────────────────── #}
+  <p class="footer-legal">
+    Esta es una representación impresa de la {{ tipo_label }}, generada en el Sistema de la SUNAT.
+    El Emisor Electrónico puede verificarla utilizando su clave SOL, el Adquirente o Usuario puede
+    consultar su validez en SUNAT Virtual: www.sunat.gob.pe, en Opciones sin Clave SOL /
+    Consulta de Validez del CPE.
+  </p>
+
+</div>
+
+<script>
+  // Imprimir automáticamente al abrir
+  window.addEventListener('load', function () {
+    setTimeout(function () { window.print(); }, 600);
+  });
+</script>
+</body>
+</html>

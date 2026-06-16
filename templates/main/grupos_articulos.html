@@ -1,0 +1,352 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ grupos | length }} grupos
+  </span>
+{% endblock %}
+
+{% block content %}
+
+{# Datos serializados desde la ruta #}
+<script id="gruposData" type="application/json">{{ grupos_json | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-collection text-primary me-1"></i> Grupos de Artículos
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarGrupo" placeholder="Buscar código, nombre…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo Grupo
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaGrupos">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:90px;">Código</th>
+          <th>Nombre del Grupo</th>
+          <th style="width:150px;">Costing Code</th>
+          <th class="text-center" style="width:75px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyGrupos">
+        {% for g in grupos %}
+        <tr class="grupo-row" data-code="{{ g.item_group_code }}" style="font-size:.75rem;">
+          <td class="ps-3">
+            <span class="badge bg-primary-subtle text-primary fw-bold" style="font-size:.7rem;">{{ g.item_group_code }}</span>
+          </td>
+          <td class="fw-semibold small">{{ g.item_group_name or '—' }}</td>
+          <td class="small text-muted">{{ g.costing_name or (g.costing_code or '') or '—' }}</td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                    onclick="abrirDrawer('edit', '{{ g.item_group_code }}')"
+                    title="Ver / Editar" style="font-size:.72rem;">
+              <i class="bi bi-eye-fill me-1"></i>Ver
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="text-center text-muted py-5">Sin grupos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong>{{ grupos | length }}</strong> grupos
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="articulos-drawer" id="gruposDrawer">
+
+  <!-- Cabecera -->
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Grupo</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()" title="Cerrar">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- Formulario -->
+  <form id="grupoForm" method="POST" action="{{ url_for('main.grupo_nuevo') }}" novalidate>
+    <div class="drawer-body">
+
+      <!-- ── Identificación ──────────────────────────────── -->
+      <div class="form-section-label">Identificación</div>
+      <div class="row g-2 mb-3">
+        <div class="col-sm-4">
+          <label class="form-label-sm">Código <span class="text-danger">*</span></label>
+          <input type="number" class="form-control form-control-sm font-monospace"
+                 name="item_group_code" id="f_item_group_code" required min="1"
+                 placeholder="101" />
+        </div>
+        <div class="col-sm-8">
+          <label class="form-label-sm">Nombre del Grupo</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="item_group_name" id="f_item_group_name"
+                 placeholder="Nombre del grupo" maxlength="50" />
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label-sm">Costing Code</label>
+          <select class="form-select form-select-sm" name="CostingCode" id="f_CostingCode">
+            <option value="">— Sin costing —</option>
+            {% for c in costings %}
+              <option value="{{ c.costingcode | trim }}">{{ c.costingcodename }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+    </div><!-- /drawer-body -->
+
+    <!-- Footer -->
+    <div class="drawer-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+        <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm px-4">
+        <i class="bi bi-check-lg me-1"></i>
+        <span id="btnGuardarTxt">Registrar</span>
+      </button>
+    </div>
+  </form>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-section-label {
+  font-size: .62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: .2rem;
+  margin-bottom: .5rem;
+}
+.form-label-sm {
+  display: block;
+  font-size: .75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: .15rem;
+}
+.grupo-row.selected { background: #eff6ff; }
+
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .45);
+  backdrop-filter: blur(2px);
+  z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+.articulos-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 500px;
+  max-width: 96vw;
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: .5rem;
+  flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Datos ─────────────────────────────────────────────── */
+const GRUPOS_DATA = JSON.parse(document.getElementById('gruposData').textContent);
+const gruposMap   = {};
+GRUPOS_DATA.forEach(d => gruposMap[d.item_group_code] = d);
+
+/* ── Búsqueda ──────────────────────────────────────────── */
+document.getElementById('buscarGrupo').addEventListener('input', function () {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#tbodyGrupos .grupo-row').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+/* ── Exportar Excel ────────────────────────────────────── */
+function exportarExcel() {
+  function thLabel(th) {
+    for (const node of th.childNodes)
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+        return node.textContent.trim();
+    return th.textContent.replace(/\s+/g, ' ').trim();
+  }
+  const ths  = [...document.querySelectorAll('#tablaGrupos thead th')];
+  const hdrs = ths.slice(0, -1).map(thLabel);
+  const filas = [];
+  document.querySelectorAll('#tbodyGrupos .grupo-row').forEach(r => {
+    if (r.style.display === 'none') return;
+    const tds = [...r.querySelectorAll('td')];
+    filas.push(tds.slice(0, -1).map(td => td.textContent.replace(/\s+/g, ' ').trim()));
+  });
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body>
+    <table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  filas.forEach(f => { html += '<tr>'; f.forEach(c => { html += `<td>${c}</td>`; }); html += '</tr>'; });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `grupos_articulos_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Abrir drawer ──────────────────────────────────────── */
+function abrirDrawer(mode, code) {
+  const drawer  = document.getElementById('gruposDrawer');
+  const overlay = document.getElementById('drawerOverlay');
+
+  if (mode === 'edit' && code != null) {
+    cargarGrupo(code);
+  } else {
+    limpiarForm();
+  }
+
+  drawer.classList.add('open');
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+/* ── Cerrar drawer ─────────────────────────────────────── */
+function cerrarDrawer() {
+  document.getElementById('gruposDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  document.querySelectorAll('.grupo-row').forEach(r => r.classList.remove('selected'));
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Cargar datos de un grupo ──────────────────────────── */
+function cargarGrupo(code) {
+  const key = parseInt(code);
+  const d = gruposMap[key] ?? gruposMap[code];
+  if (!d) return;
+
+  document.querySelectorAll('.grupo-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`.grupo-row[data-code="${key}"]`)?.classList.add('selected');
+
+  setFormMode('edit', code);
+
+  setVal('f_item_group_code', d.item_group_code);
+  setVal('f_item_group_name', d.item_group_name);
+  document.getElementById('f_CostingCode').value = (d.CostingCode || '').trim();
+}
+
+/* ── Limpiar formulario (modo nuevo) ───────────────────── */
+function limpiarForm() {
+  setFormMode('new', null);
+  ['f_item_group_code', 'f_item_group_name', 'f_CostingCode'].forEach(id => setVal(id, ''));
+  document.getElementById('f_item_group_code').removeAttribute('readonly');
+  setTimeout(() => document.getElementById('f_item_group_code').focus(), 320);
+}
+
+/* ── Cambiar modo NUEVO / EDITANDO ─────────────────────── */
+function setFormMode(mode, code) {
+  const form   = document.getElementById('grupoForm');
+  const badge  = document.getElementById('drawerBadge');
+  const title  = document.getElementById('drawerTitle');
+  const btnTxt = document.getElementById('btnGuardarTxt');
+  const codeEl = document.getElementById('f_item_group_code');
+
+  if (mode === 'edit' && code != null) {
+    form.action        = '/maestras/grupos/' + parseInt(code) + '/editar';
+    badge.textContent  = 'EDITANDO';
+    badge.className    = 'badge bg-warning text-dark';
+    title.textContent  = 'Editar Grupo';
+    btnTxt.textContent = 'Guardar Cambios';
+    codeEl.setAttribute('readonly', true);
+  } else {
+    form.action        = '{{ url_for("main.grupo_nuevo") }}';
+    badge.textContent  = 'NUEVO';
+    badge.className    = 'badge bg-primary';
+    title.textContent  = 'Nuevo Grupo';
+    btnTxt.textContent = 'Registrar';
+    codeEl.removeAttribute('readonly');
+  }
+}
+
+/* ── Helpers ───────────────────────────────────────────── */
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+</script>
+{% endblock %}

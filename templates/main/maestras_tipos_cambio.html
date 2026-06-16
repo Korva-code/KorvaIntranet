@@ -1,0 +1,223 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} registros
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="datosTC" type="application/json">{{ datos_json | safe }}</script>
+
+<div class="card border-0 shadow-sm">
+
+  <!-- ── Cabecera ───────────────────────────────────────────── -->
+  <div class="card-header bg-white border-bottom py-2">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+
+      <h6 class="mb-0 fw-semibold text-nowrap">
+        <i class="bi bi-currency-exchange text-primary me-1"></i> Tipos de Cambio
+      </h6>
+
+      <!-- Filtro año/mes -->
+      <form method="GET" class="d-flex align-items-center gap-2 ms-2" id="formFiltro">
+        <select name="anio" class="form-select form-select-sm" style="width:90px;"
+                onchange="document.getElementById('formFiltro').submit()">
+          {% for a in anios %}
+          <option value="{{ a }}" {% if a == sel_anio %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+        <select name="mes" class="form-select form-select-sm" style="width:130px;"
+                onchange="document.getElementById('formFiltro').submit()">
+          {% for nombre in meses %}
+          <option value="{{ loop.index }}" {% if loop.index == sel_mes %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </form>
+
+      <div class="d-flex gap-2 ms-auto">
+        <!-- Botón importar SUNAT -->
+        {% if scraping_ok %}
+        <button class="btn btn-sm btn-outline-danger text-nowrap" id="btnSunat"
+                onclick="importarSunat()">
+          <i class="bi bi-cloud-download me-1"></i>Importar SUNAT
+        </button>
+        {% else %}
+        <button class="btn btn-sm btn-outline-secondary text-nowrap" disabled
+                title="Instale: pip install requests beautifulsoup4">
+          <i class="bi bi-cloud-slash me-1"></i>Importar SUNAT
+        </button>
+        {% endif %}
+        <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tabla ─────────────────────────────────────────────── -->
+  <div class="table-responsive" style="min-height:350px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.77rem;">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px;">#</th>
+          <th style="width:80px;">Día</th>
+          <th style="width:160px;">Fecha</th>
+          <th class="text-end" style="width:130px;">TC Compra</th>
+          <th class="text-end" style="width:130px;">TC Venta</th>
+          <th class="text-end" style="width:130px;">Spread</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyTC"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small d-flex align-items-center gap-3">
+    <span>Total: <strong id="contadorVisible">{{ total }}</strong> días</span>
+    <span id="resumenTC" class="ms-auto" style="font-size:.72rem;"></span>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.tc-badge-compra {
+  display:inline-block; font-family:var(--bs-font-monospace);
+  font-size:.78rem; font-weight:700; color:#0ea5e9;
+}
+.tc-badge-venta {
+  display:inline-block; font-family:var(--bs-font-monospace);
+  font-size:.78rem; font-weight:700; color:#f59e0b;
+}
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const TC_DATA  = JSON.parse(document.getElementById('datosTC').textContent);
+const SEL_ANIO = {{ sel_anio }};
+const SEL_MES  = {{ sel_mes }};
+
+const MESES_ES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function pad(n) { return String(n).padStart(2,'0'); }
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Render ──────────────────────────────────────────────── */
+function renderTabla() {
+  const tbody = document.getElementById('tbodyTC');
+  if (!TC_DATA.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">'
+      + 'Sin datos para este período. Use <strong>Importar SUNAT</strong>.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    document.getElementById('resumenTC').textContent = '';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  let sumCompra = 0, sumVenta = 0, cnt = 0;
+
+  TC_DATA.forEach((t, i) => {
+    const fecha  = `${pad(t.dia)}/${pad(SEL_MES)}/${SEL_ANIO}`;
+    const compra = t.tc_compra != null ? t.tc_compra.toFixed(4) : '—';
+    const venta  = t.tc_venta  != null ? t.tc_venta.toFixed(4)  : '—';
+    const spread = (t.tc_compra != null && t.tc_venta != null)
+      ? (t.tc_venta - t.tc_compra).toFixed(4) : '—';
+
+    if (t.tc_compra != null) { sumCompra += t.tc_compra; sumVenta += t.tc_venta; cnt++; }
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${i + 1}</td>
+      <td class="fw-semibold">${pad(t.dia)}</td>
+      <td class="text-muted font-monospace" style="font-size:.72rem;">${fecha}</td>
+      <td class="text-end"><span class="tc-badge-compra">${compra}</span></td>
+      <td class="text-end"><span class="tc-badge-venta">${venta}</span></td>
+      <td class="text-end text-muted font-monospace" style="font-size:.72rem;">${spread}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = TC_DATA.length;
+  if (cnt) {
+    document.getElementById('resumenTC').textContent =
+      `Promedio: Compra ${(sumCompra/cnt).toFixed(4)} | Venta ${(sumVenta/cnt).toFixed(4)}`;
+  }
+}
+
+/* ── Importar desde SUNAT ────────────────────────────────── */
+async function importarSunat() {
+  const btn = document.getElementById('btnSunat');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando SUNAT…';
+
+  try {
+    const resp = await fetch('{{ url_for("main.maestras_tipos_cambio_importar") }}', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({anio: SEL_ANIO, mes: SEL_MES}),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      mostrarToast('success', res.message);
+      if (res.nuevos > 0) setTimeout(() => location.reload(), 1000);
+    } else {
+      mostrarToast('danger', res.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Importar SUNAT';
+  }
+}
+
+/* ── Excel ───────────────────────────────────────────────── */
+function exportarExcel() {
+  const mes_nombre = MESES_ES[SEL_MES];
+  const filas = [['Año', 'Mes', 'Día', 'Fecha', 'TC Compra', 'TC Venta', 'Spread']];
+  TC_DATA.forEach(t => {
+    const spread = (t.tc_compra != null && t.tc_venta != null)
+      ? +(t.tc_venta - t.tc_compra).toFixed(4) : '';
+    filas.push([
+      t.anio, mes_nombre, t.dia,
+      `${pad(t.dia)}/${pad(SEL_MES)}/${SEL_ANIO}`,
+      t.tc_compra, t.tc_venta, spread,
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{wch:6},{wch:12},{wch:5},{wch:12},{wch:10},{wch:10},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Tipo Cambio');
+  XLSX.writeFile(wb, `tipo_cambio_${SEL_ANIO}_${pad(SEL_MES)}.xlsx`);
+}
+
+/* ── Toast ───────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:280px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
+}
+
+/* ── Init ────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

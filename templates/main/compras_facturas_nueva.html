@@ -1,0 +1,354 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <a href="{{ url_for('main.compras_facturas') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver al listado
+  </a>
+{% endblock %}
+
+{% block content %}
+
+{# Datos para autocomplete #}
+<script id="itemsData"  type="application/json">{{ items_json_data  | safe }}</script>
+<script id="sociosData" type="application/json">{{ socios_json_data | safe }}</script>
+
+<form id="formFactura" method="POST" action="{{ url_for('main.compras_facturas_nueva') }}" novalidate>
+  <input type="hidden" name="items_json" id="items_json_hidden">
+
+  <!-- ══════════════════════════════════════════════════════
+       CABECERA
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-cart text-primary me-2"></i>Cabecera del Documento
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+
+        <!-- Socio de Negocio -->
+        <div class="col-md-5">
+          <label class="form-label form-label-sm fw-semibold">Socio de Negocio <span class="text-danger">*</span></label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="card_code" id="f_card_code" required
+                 list="listSocios" placeholder="Código del socio" autocomplete="off" />
+          <datalist id="listSocios"></datalist>
+          <div class="text-muted mt-1" style="font-size:.72rem;" id="bp_nombre_display"></div>
+        </div>
+
+        <!-- N° Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">N° Documento</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="num_at_card" id="f_num_at_card" placeholder="F001-00000001" />
+        </div>
+
+        <!-- Moneda -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Moneda</label>
+          <select class="form-select form-select-sm" name="doc_currency" id="f_doc_currency">
+            <option value="SOL" selected>SOL — Soles</option>
+            <option value="USD">USD — Dólares</option>
+          </select>
+        </div>
+
+        <!-- Fecha Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Documento <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_date" id="f_doc_date" value="{{ today }}" required />
+        </div>
+
+        <!-- Fecha Impuesto -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Impuesto</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="tax_date" id="f_tax_date" value="{{ today }}" />
+        </div>
+
+        <!-- Fecha Vencimiento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Vencimiento</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_due_date" id="f_doc_due_date" value="{{ today }}" />
+        </div>
+
+        <!-- Comentarios -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Comentarios</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="comments" id="f_comments" placeholder="Observaciones del documento" />
+        </div>
+
+        <!-- Referencia (journal_memo) -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Referencia / Diario</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="journal_memo" id="f_journal_memo" placeholder="Referencia interna" />
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       DETALLE DE ÍTEMS
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-list-ul text-primary me-2"></i>Líneas de Detalle
+      </h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarLinea()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar Ítem
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" id="tablaDetalle">
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3" style="width:30px;">#</th>
+            <th style="min-width:130px;">Código</th>
+            <th style="min-width:160px;">Descripción</th>
+            <th style="width:90px;">Cantidad</th>
+            <th style="width:110px;">P. c/IGV</th>
+            <th style="width:90px;">Cód. Imp.</th>
+            <th style="width:110px;">Almacén</th>
+            <th style="width:80px;">CC 1</th>
+            <th style="width:80px;">CC 2</th>
+            <th style="width:80px;">CC 3</th>
+            <th class="text-end" style="width:110px;">Subtotal</th>
+            <th style="width:40px;"></th>
+          </tr>
+        </thead>
+        <tbody id="lineasDetalle">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer bg-white d-flex justify-content-end align-items-center gap-3 py-2 px-3">
+      <span class="text-muted small">Total del documento:</span>
+      <span class="fw-bold fs-5" id="totalDisplay">S/ 0.00</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       BOTONES
+       ══════════════════════════════════════════════════════ -->
+  <div class="d-flex justify-content-end gap-2 mb-4">
+    <a href="{{ url_for('main.compras_facturas') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </a>
+    <button type="submit" class="btn btn-primary px-4" id="btnRegistrar">
+      <i class="bi bi-check-lg me-1"></i>Registrar Factura de Compra
+    </button>
+  </div>
+
+</form>
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm { font-size: .78rem; }
+#tablaDetalle td { vertical-align: middle; padding: .3rem .4rem; }
+#tablaDetalle input, #tablaDetalle select {
+  font-size: .78rem;
+  height: auto;
+}
+#tablaDetalle input {
+  padding: .2rem .4rem;
+}
+#tablaDetalle select {
+  padding-top: .2rem;
+  padding-bottom: .2rem;
+  padding-left: .4rem;
+}
+.btn-del-linea {
+  border: none; background: none;
+  color: #ef4444; font-size: .9rem;
+  padding: .1rem .35rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Datos maestros ────────────────────────────────────────── */
+const ITEMS_DATA  = JSON.parse(document.getElementById('itemsData').textContent);
+const SOCIOS_DATA = JSON.parse(document.getElementById('sociosData').textContent);
+const itemsMap    = {};
+ITEMS_DATA.forEach(d => itemsMap[d.item_code] = d);
+const sociosMap   = {};
+SOCIOS_DATA.forEach(d => sociosMap[d.card_code] = d);
+
+/* ── Poblar datalist de socios ─────────────────────────────── */
+const listSocios = document.getElementById('listSocios');
+SOCIOS_DATA.forEach(s => {
+  const opt = document.createElement('option');
+  opt.value = s.card_code;
+  opt.label = s.card_name;
+  listSocios.appendChild(opt);
+});
+
+/* ── Mostrar nombre del socio al escribir ──────────────────── */
+document.getElementById('f_card_code').addEventListener('input', function () {
+  const s = sociosMap[this.value];
+  document.getElementById('bp_nombre_display').textContent = s ? s.card_name : '';
+});
+
+/* ── Número de líneas ──────────────────────────────────────── */
+let lineaNum = 0;
+
+/* ── Moneda seleccionada ───────────────────────────────────── */
+function monedaSimbolo() {
+  return document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+}
+document.getElementById('f_doc_currency').addEventListener('change', actualizarTotal);
+
+/* ── Agregar línea ─────────────────────────────────────────── */
+const whsOptions = `{% for w in warehouses %}<option value="{{ w.whs_code }}">{{ w.whs_name }}</option>{% endfor %}`;
+
+function agregarLinea() {
+  lineaNum++;
+  const tbody = document.getElementById('lineasDetalle');
+
+  const tr = document.createElement('tr');
+  tr.className = 'linea-detalle';
+  tr.dataset.linea = lineaNum;
+  tr.innerHTML = `
+    <td class="ps-3 text-muted small">${lineaNum}</td>
+    <td>
+      <input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+             list="listItems" placeholder="Código…" autocomplete="off"
+             oninput="onItemSelect(this)" />
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm inp-item-name bg-light"
+             placeholder="Descripción" readonly />
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-qty"
+             value="1" min="0.0001" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-price"
+             value="0" min="0" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td>
+      <select class="form-select form-select-sm inp-taxcode">
+        <option value="I18">I18</option>
+        <option value="EXO">EXO</option>
+      </select>
+    </td>
+    <td>
+      <select class="form-select form-select-sm inp-whs">
+        ${whsOptions}
+      </select>
+    </td>
+    <td><input type="text" class="form-control form-control-sm inp-cc1" maxlength="20" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-cc2" maxlength="20" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-cc3" maxlength="20" /></td>
+    <td class="text-end small fw-semibold inp-subtotal-display">0.00</td>
+    <td>
+      <button type="button" class="btn-del-linea" onclick="eliminarLinea(this)" title="Eliminar">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+  tr.querySelector('.inp-item-code').focus();
+  actualizarTotal();
+}
+
+/* ── Autocompletar ítem ────────────────────────────────────── */
+function onItemSelect(input) {
+  const d   = itemsMap[input.value];
+  const row = input.closest('tr');
+  row.querySelector('.inp-item-name').value = d ? (d.item_name || '') : '';
+  if (d && d.tax_code_ar) row.querySelector('.inp-taxcode').value = d.tax_code_ar;
+  actualizarTotal();
+}
+
+/* ── Eliminar línea ────────────────────────────────────────── */
+function eliminarLinea(btn) {
+  btn.closest('tr').remove();
+  actualizarTotal();
+}
+
+/* ── Calcular totales ──────────────────────────────────────── */
+function actualizarTotal() {
+  let total = 0;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty   = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price = parseFloat(row.querySelector('.inp-price').value) || 0;
+    const sub   = qty * price;
+    total += sub;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+  const sym = monedaSimbolo();
+  document.getElementById('totalDisplay').textContent = sym + ' ' + total.toFixed(2);
+}
+
+/* ── Datalist de ítems ─────────────────────────────────────── */
+(function buildItemsDatalist() {
+  const dl = document.createElement('datalist');
+  dl.id = 'listItems';
+  ITEMS_DATA.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.item_code;
+    opt.label = d.item_name;
+    dl.appendChild(opt);
+  });
+  document.body.appendChild(dl);
+})();
+
+/* ── Validar y serializar antes de enviar ──────────────────── */
+document.getElementById('formFactura').addEventListener('submit', function (e) {
+  const lineas = [];
+  let valido = true;
+
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const item_code = row.querySelector('.inp-item-code').value.trim();
+    const qty       = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price     = parseFloat(row.querySelector('.inp-price').value) || 0;
+
+    if (!item_code) { valido = false; return; }
+
+    lineas.push({
+      item_code:       item_code,
+      quantity:        qty,
+      price_after_vat: price,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+      warehouse_code:  row.querySelector('.inp-whs').value,
+      costing_code:    row.querySelector('.inp-cc1').value.trim(),
+      costing_code2:   row.querySelector('.inp-cc2').value.trim(),
+      costing_code3:   row.querySelector('.inp-cc3').value.trim(),
+    });
+  });
+
+  if (!valido) {
+    e.preventDefault();
+    alert('Complete el código de ítem en todas las líneas.');
+    return;
+  }
+  if (lineas.length === 0) {
+    e.preventDefault();
+    alert('Agregue al menos un ítem en el detalle.');
+    return;
+  }
+
+  document.getElementById('items_json_hidden').value = JSON.stringify(lineas);
+});
+
+/* ── Agregar primera línea vacía al cargar ─────────────────── */
+agregarLinea();
+</script>
+{% endblock %}

@@ -1,0 +1,270 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ usuarios | length }} usuarios
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  TABLA DE USUARIOS                                       ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div class="card border-0 shadow-sm">
+  <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+    <h6 class="mb-0 fw-semibold">
+      <i class="bi bi-people-fill text-primary me-2"></i>Usuarios del Sistema
+    </h6>
+    <div class="input-group input-group-sm" style="max-width: 250px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarUsuario" placeholder="Filtrar...">
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3" style="width:70px;">ID</th>
+          <th style="width:200px;">Nombre</th>
+          <th style="width:200px;">Correo</th>
+          <th style="width:150px;">Perfil</th>
+          <th class="text-center" style="width:65px;">Rol</th>
+          <th style="width:200px;">Almacén</th>
+          <th>Ubicación</th>
+          <th class="text-center" style="width:90px;">Estado</th>
+          <th class="text-center" style="width:80px;">Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td class="ps-3">
+            <span class="badge bg-secondary-subtle text-secondary fw-bold">{{ u.id_usuario }}</span>
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <div class="user-avatar user-avatar-sm flex-shrink-0">
+                <span>{{ u.initials }}</span>
+              </div>
+              <span class="fw-semibold small">{{ u.full_name or u.id_usuario }}</span>
+            </div>
+          </td>
+          <td class="small text-muted text-truncate" style="max-width:130px;" title="{{ u.email }}">{{ u.email or '—' }}</td>
+          <td class="small">
+            {% if u.id_perfil %}
+              <span class="badge bg-primary-subtle text-primary me-1">{{ u.id_perfil }}</span>
+              <span class="text-muted">{{ u.perfil_nombre }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <span class="badge bg-info-subtle text-info">{{ u.id_rol or '-' }}</span>
+          </td>
+          <td class="small">
+            {% if u.whs_code and u.whs_code.strip() %}
+              <span class="badge bg-light text-dark border me-1">{{ u.whs_code.strip() }}</span>
+              <span class="text-muted">{{ u.whs_name or '' }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted">{{ u.department or '—' }}</td>
+          <td class="text-center">
+            {% if u.id_estado == 1 %}
+              <span class="badge bg-success-subtle text-success">
+                <i class="bi bi-circle-fill me-1" style="font-size:.4rem;"></i>Activo
+              </span>
+            {% else %}
+              <span class="badge bg-danger-subtle text-danger">
+                <i class="bi bi-circle-fill me-1" style="font-size:.4rem;"></i>Inactivo
+              </span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-primary btn-editar"
+                    title="Editar usuario"
+                    data-id="{{ u.id_usuario }}"
+                    data-nombres="{{ u.nombres or '' }}"
+                    data-correo="{{ u.email }}"
+                    data-ubicacion="{{ u.department }}"
+                    data-id_perfil="{{ u.id_perfil or '' }}"
+                    data-id_rol="{{ u.id_rol or '' }}"
+                    data-id_estado="{{ u.id_estado or 1 }}"
+                    data-whs_code="{{ (u.whs_code or '').strip() }}"
+                    data-bs-toggle="modal" data-bs-target="#modalEditarUsuario">
+              <i class="bi bi-pencil-fill"></i>
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted py-4">No hay usuarios registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white text-muted small py-2 px-3">
+    Total: {{ usuarios | length }} usuarios en <strong>w_usuarios</strong>
+  </div>
+</div>
+
+
+<!-- ╔══════════════════════════════════════════════════════════╗ -->
+<!-- ║  MODAL — EDITAR USUARIO                                  ║ -->
+<!-- ╚══════════════════════════════════════════════════════════╝ -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1"
+     aria-labelledby="modalEditarLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content border-0 shadow">
+
+      <div class="modal-header border-bottom">
+        <h5 class="modal-title fw-bold" id="modalEditarLabel">
+          <i class="bi bi-pencil-square text-primary me-2"></i>
+          Editar Usuario — <span id="modalUserId" class="text-muted fw-normal"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <form id="formEditarUsuario" method="POST" action="" novalidate>
+        <div class="modal-body">
+          <div class="row g-3">
+
+            <!-- Nombres -->
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-person me-1 text-primary"></i>Nombre
+              </label>
+              <input type="text" class="form-control" name="nombres" id="editNombres"
+                     placeholder="Nombre completo" maxlength="100" />
+            </div>
+
+            <!-- Correo -->
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-envelope me-1 text-primary"></i>Correo Electrónico
+              </label>
+              <input type="email" class="form-control" name="correo" id="editCorreo"
+                     placeholder="usuario@empresa.com" maxlength="60" />
+            </div>
+
+            <!-- Ubicación -->
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-geo-alt me-1 text-primary"></i>Ubicación / Sede
+              </label>
+              <input type="text" class="form-control" name="ubicacion" id="editUbicacion"
+                     placeholder="Sede o ciudad" />
+            </div>
+
+            <!-- Almacén (dropdown whs_name) -->
+            <div class="col-sm-6">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-box-seam me-1 text-primary"></i>Almacén
+              </label>
+              <select class="form-select" name="whs_code" id="editWhsCode">
+                <option value="">— Sin almacén —</option>
+                {% for w in warehouses %}
+                  <option value="{{ w.code }}">{{ w.code }} — {{ w.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Perfil (dropdown descripcion) -->
+            <div class="col-sm-4">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-shield me-1 text-primary"></i>Perfil
+              </label>
+              <select class="form-select" name="id_perfil" id="editIdPerfil">
+                <option value="">— Sin perfil —</option>
+                {% for p in perfiles %}
+                  <option value="{{ p.id_perfil }}">{{ p.id_perfil }} — {{ p.nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Rol -->
+            <div class="col-sm-4">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-person-gear me-1 text-primary"></i>ID Rol
+              </label>
+              <input type="number" class="form-control" name="id_rol" id="editIdRol"
+                     min="0" step="1" placeholder="1" required />
+            </div>
+
+            <!-- Estado -->
+            <div class="col-sm-4">
+              <label class="form-label small fw-semibold">
+                <i class="bi bi-toggle-on me-1 text-primary"></i>Estado
+              </label>
+              <select class="form-select" name="id_estado" id="editIdEstado">
+                <option value="1">Activo</option>
+                <option value="0">Inactivo</option>
+              </select>
+            </div>
+
+          </div><!-- /row -->
+        </div><!-- /modal-body -->
+
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg me-1"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i> Guardar Cambios
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Filtro de búsqueda ─────────────────────────────────────── */
+document.getElementById('buscarUsuario').addEventListener('input', function () {
+  const q = this.value.toLowerCase();
+  document.querySelectorAll('#tablaUsuarios tbody tr').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
+/* ── Pre-poblar modal al abrir ──────────────────────────────── */
+document.querySelectorAll('.btn-editar').forEach(btn => {
+  btn.addEventListener('click', function () {
+    const d = this.dataset;
+
+    document.getElementById('modalUserId').textContent = d.id;
+    document.getElementById('editNombres').value   = d.nombres;
+    document.getElementById('editCorreo').value    = d.correo;
+    document.getElementById('editUbicacion').value = d.ubicacion;
+    document.getElementById('editIdRol').value     = d.id_rol;
+    document.getElementById('editIdEstado').value  = d.id_estado;
+
+    /* Seleccionar perfil correcto */
+    const selPerfil = document.getElementById('editIdPerfil');
+    selPerfil.value = d.id_perfil || '';
+
+    /* Seleccionar almacén correcto */
+    const selWhs  = document.getElementById('editWhsCode');
+    const code = d.whs_code.trim();
+    selWhs.value = '';
+    for (let opt of selWhs.options) {
+      if (opt.value.trim() === code) { selWhs.value = opt.value; break; }
+    }
+
+    /* Apuntar el action del form al usuario correcto */
+    document.getElementById('formEditarUsuario').action =
+      '/admin/usuarios/' + encodeURIComponent(d.id) + '/editar';
+  });
+});
+</script>
+{% endblock %}

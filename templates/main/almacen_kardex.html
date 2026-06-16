@@ -1,0 +1,247 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} movimientos
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="movData"       type="application/json">{{ movimientos_json | safe }}</script>
+<script id="itemsData"     type="application/json">{{ items_json | safe }}</script>
+<script id="warehousesData" type="application/json">{{ warehouses_json | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     FILTROS
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="GET" action="{{ url_for('main.almacen_kardex') }}"
+          class="d-flex flex-wrap align-items-end gap-2">
+
+      <div style="min-width:220px; flex:1;">
+        <label class="form-label form-label-sm mb-1">Artículo</label>
+        <select class="form-select form-select-sm" name="item_code" id="selItem">
+          <option value="">— Todos los artículos —</option>
+        </select>
+      </div>
+
+      <div style="min-width:180px;">
+        <label class="form-label form-label-sm mb-1">Almacén</label>
+        <select class="form-select form-select-sm" name="almacen" id="selAlmacen">
+          <option value="">— Todos —</option>
+        </select>
+      </div>
+
+      <div class="d-flex gap-2 align-items-end">
+        <button type="submit" class="btn btn-sm btn-primary px-3">
+          <i class="bi bi-search me-1"></i>Buscar
+        </button>
+        <a href="{{ url_for('main.almacen_kardex') }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-x-circle me-1"></i>Limpiar
+        </a>
+        <button type="button" class="btn btn-sm btn-success" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     TABLA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold">
+      <i class="bi bi-clipboard2-data text-primary me-1"></i> Kardex Valorizado
+    </h6>
+    <span class="badge bg-secondary ms-auto" id="contadorVisible">{{ total }}</span>
+  </div>
+
+  <div class="table-responsive" style="min-height:420px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.75rem;">
+      <thead class="table-light" style="font-size:.72rem;">
+        <tr>
+          <th class="ps-3" style="width:50px;">#</th>
+          <th style="width:95px;">Fecha</th>
+          <th style="width:80px;">Comprob.</th>
+          <th style="width:95px;">Cod. Socio</th>
+          <th style="min-width:160px;">Socio</th>
+          <th style="min-width:130px;">Artículo</th>
+          <th style="min-width:200px;">Descripción</th>
+          <th style="min-width:110px;">Almacén</th>
+          <th class="text-center" style="width:70px;">Origen</th>
+          <th class="text-center" style="width:65px;">Tipo</th>
+          <th class="text-end" style="width:90px;">Cantidad</th>
+          <th class="text-end" style="width:100px;">P.Unit (S/IGV)</th>
+          <th class="text-end" style="width:110px;">Subtotal</th>
+          <th class="text-end" style="width:110px;">Stock Acum.</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyKardex"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="footerContador">{{ total }}</strong> movimientos</span>
+    <span class="ms-auto d-flex gap-3">
+      <span>Cant. Entradas: <strong class="text-success" id="sumaQtyEnt">0.0000</strong></span>
+      <span>Cant. Salidas: <strong class="text-danger" id="sumaQtySal">0.0000</strong></span>
+      <span>|</span>
+      <span>Subtotal: <strong class="text-dark" id="sumaSubtotal">0.00</strong></span>
+    </span>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.tipo-sal {
+  display: inline-block; font-size: .62rem; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px;
+  background: #fee2e2; color: #dc2626;
+}
+.tipo-ent {
+  display: inline-block; font-size: .62rem; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px;
+  background: #dcfce7; color: #16a34a;
+}
+.qty-neg { color: #dc2626; font-weight: 600; }
+.qty-pos { color: #16a34a; font-weight: 600; }
+.stock-neg { color: #dc2626; font-style: italic; }
+.stock-pos { color: #16a34a; }
+.origen-badge {
+  display: inline-block; font-size: .62rem; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px;
+}
+.origen-VENTA  { background: #ede9fe; color: #7c3aed; }
+.origen-COMPRA { background: #fef3c7; color: #b45309; }
+.form-label-sm { font-size: .75rem; font-weight: 600; color: #475569; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const MOV_DATA   = JSON.parse(document.getElementById('movData').textContent);
+const ITEMS_DATA = JSON.parse(document.getElementById('itemsData').textContent);
+const WH_DATA    = JSON.parse(document.getElementById('warehousesData').textContent);
+const SEL_ITEM   = {{ selected_item | tojson }};
+const SEL_ALM    = {{ selected_almacen | tojson }};
+
+/* ── Poblar selects ──────────────────────────────────────── */
+(function() {
+  const si = document.getElementById('selItem');
+  ITEMS_DATA.forEach(it => {
+    const o = document.createElement('option');
+    o.value       = it.item_code;
+    o.textContent = `${it.item_code} — ${it.item_name}`;
+    if (it.item_code === SEL_ITEM) o.selected = true;
+    si.appendChild(o);
+  });
+
+  const sa = document.getElementById('selAlmacen');
+  WH_DATA.forEach(w => {
+    const o = document.createElement('option');
+    o.value       = w.whs_code;
+    o.textContent = `${w.whs_code} — ${w.whs_name}`;
+    if (w.whs_code === SEL_ALM) o.selected = true;
+    sa.appendChild(o);
+  });
+})();
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Render tabla ────────────────────────────────────────── */
+function renderTabla() {
+  const tbody = document.getElementById('tbodyKardex');
+
+  if (!MOV_DATA.length) {
+    tbody.innerHTML = '<tr><td colspan="14" class="text-center text-muted py-5">Sin movimientos. Use los filtros para buscar.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    document.getElementById('footerContador').textContent  = 0;
+    return;
+  }
+
+  let lastKey = null;
+
+  tbody.innerHTML = '';
+  MOV_DATA.forEach((m, idx) => {
+    const key = `${m.item_code}||${m.almacen}`;
+    const esNuevoGrupo = key !== lastKey;
+    lastKey = key;
+
+    const tipoBadge = m.tipo_movimiento === 'ENT'
+      ? '<span class="tipo-ent">ENT</span>'
+      : '<span class="tipo-sal">SAL</span>';
+
+    const qtyClass    = m.quantity  < 0 ? 'qty-neg'   : 'qty-pos';
+    const stockClass  = m.stock_acum < 0 ? 'stock-neg' : 'stock-pos';
+
+    const tr = document.createElement('tr');
+    if (esNuevoGrupo && idx > 0) tr.style.borderTop = '2px solid #e2e8f0';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${m.id}</td>
+      <td class="font-monospace">${m.doc_date || '—'}</td>
+      <td class="font-monospace text-muted">${escHtml(m.invoice_type)}</td>
+      <td class="font-monospace text-muted">${escHtml(m.card_code)}</td>
+      <td>${escHtml(m.bp_name)}</td>
+      <td class="font-monospace fw-semibold">${escHtml(m.item_code)}</td>
+      <td class="text-muted">${escHtml(m.item_name)}</td>
+      <td class="text-muted">${escHtml(m.almacen_nombre || m.almacen)}</td>
+      <td class="text-center">
+        <span class="origen-badge origen-${escHtml(m.origen)}">${escHtml(m.origen)}</span>
+      </td>
+      <td class="text-center">${tipoBadge}</td>
+      <td class="text-end ${qtyClass}">${m.quantity.toFixed(4)}</td>
+      <td class="text-end font-monospace text-muted">${m.avg_price.toFixed(4)}</td>
+      <td class="text-end font-monospace">${m.subtotal.toFixed(2)}</td>
+      <td class="text-end fw-semibold ${stockClass}">${m.stock_acum.toFixed(4)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = MOV_DATA.length;
+  document.getElementById('footerContador').textContent  = MOV_DATA.length;
+
+  let sumaQtyEnt = 0, sumaQtySal = 0, sumaSubtotal = 0;
+  MOV_DATA.forEach(m => {
+    if (m.tipo_movimiento === 'ENT') sumaQtyEnt += (m.quantity || 0);
+    else                             sumaQtySal += Math.abs(m.quantity || 0);
+    sumaSubtotal += (m.subtotal || 0);
+  });
+  document.getElementById('sumaQtyEnt').textContent   = sumaQtyEnt.toFixed(4);
+  document.getElementById('sumaQtySal').textContent   = sumaQtySal.toFixed(4);
+  document.getElementById('sumaSubtotal').textContent = sumaSubtotal.toFixed(2);
+}
+
+/* ── Excel ───────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#','Fecha','Comprob.','Cod. Socio','Socio','Artículo','Descripción',
+                   'Almacén','Origen','Tipo','Cantidad','P.Unit','Subtotal','Stock Acum.']];
+  MOV_DATA.forEach(m => filas.push([
+    m.id, m.doc_date, m.invoice_type,
+    m.card_code, m.bp_name,
+    m.item_code, m.item_name, m.almacen_nombre || m.almacen,
+    m.origen, m.tipo_movimiento,
+    m.quantity.toFixed(4), m.avg_price.toFixed(4),
+    m.subtotal.toFixed(2), m.stock_acum.toFixed(4),
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Kardex');
+  XLSX.writeFile(wb, 'kardex_valorizado.xlsx');
+}
+
+/* ── Init ────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

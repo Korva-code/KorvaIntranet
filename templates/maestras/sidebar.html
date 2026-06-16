@@ -1,0 +1,85 @@
+<nav class="intranet-sidebar" id="sidebar">
+
+  <div class="sidebar-header">
+    <span class="sidebar-label">NAVEGACIÓN</span>
+  </div>
+
+  <ul class="sidebar-nav">
+
+    <!-- Dashboard (siempre visible) -->
+    <li class="nav-item">
+      <a href="{{ url_for('main.dashboard') }}"
+         class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+        <i class="bi bi-speedometer2 nav-icon"></i>
+        <span class="nav-text">Dashboard</span>
+      </a>
+    </li>
+
+    <!-- ── OPERACIONES: menú dinámico según perfil ──────────────── -->
+    {% if user_menu %}
+    <li class="nav-item nav-section">
+      <span class="nav-section-label">OPERACIONES</span>
+    </li>
+
+    {% for section in user_menu %}
+      {% if section.children %}
+        {% set child_eps = section.children | map(attribute='endpoint') | list %}
+        {% set is_open   = request.endpoint in child_eps %}
+        <li class="nav-item">
+          <a class="nav-link nav-link-parent {% if is_open %}active{% endif %}"
+             data-bs-toggle="collapse" href="#dynMenu{{ section.id_menu }}" role="button"
+             aria-expanded="{{ 'true' if is_open else 'false' }}">
+            <i class="bi {{ section.icon }} nav-icon"></i>
+            <span class="nav-text">{{ section.label }}</span>
+            <i class="bi bi-chevron-right arrow-icon"></i>
+          </a>
+          <div class="collapse {% if is_open %}show{% endif %}"
+               id="dynMenu{{ section.id_menu }}">
+            <ul class="sub-menu">
+              {% for item in section.children %}
+              <li>
+                <a href="{{ url_for(item.endpoint) }}"
+                   class="sub-link {% if request.endpoint == item.endpoint %}active{% endif %}">
+                  <i class="bi {{ item.icon }}"></i> {{ item.label }}
+                </a>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </li>
+      {% elif section.endpoint %}
+        <li class="nav-item">
+          <a href="{{ url_for(section.endpoint) }}"
+             class="nav-link {% if request.endpoint == section.endpoint %}active{% endif %}">
+            <i class="bi {{ section.icon }} nav-icon"></i>
+            <span class="nav-text">{{ section.label }}</span>
+          </a>
+        </li>
+      {% endif %}
+    {% endfor %}
+    {% endif %}
+
+    <!-- ── SISTEMA (siempre visible) ──────────────────────────── -->
+    <li class="nav-item nav-section">
+      <span class="nav-section-label">SISTEMA</span>
+    </li>
+
+    <li class="nav-item">
+      <a href="{{ url_for('main.mi_perfil') }}"
+         class="nav-link {% if request.endpoint == 'main.mi_perfil' %}active{% endif %}">
+        <i class="bi bi-person-circle nav-icon"></i>
+        <span class="nav-text">Mi Perfil</span>
+      </a>
+    </li>
+
+  </ul>
+
+  <div class="sidebar-footer">
+    <a href="{{ url_for('auth.logout') }}" class="sidebar-logout">
+      <i class="bi bi-box-arrow-left nav-icon"></i>
+      <span class="nav-text">Cerrar Sesión</span>
+    </a>
+  </div>
+
+</nav>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>

@@ -1,0 +1,674 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <a href="{{ url_for('main.ventas_facturas') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver al listado
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<form id="formFactura" method="POST" action="{{ url_for('main.ventas_facturas_nueva') }}" novalidate>
+  <input type="hidden" name="items_json" id="items_json_hidden">
+
+  <!-- ══════════════════════════════════════════════════════
+       CABECERA
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-file-earmark-text text-primary me-2"></i>Cabecera del Documento
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+
+        <!-- Socio de Negocio -->
+        <div class="col-md-5">
+          <label class="form-label form-label-sm fw-semibold">Socio de Negocio <span class="text-danger">*</span></label>
+          <input type="hidden" name="card_code" id="f_card_code" required />
+          <div class="position-relative">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" class="form-control form-control-sm"
+                     id="f_socio_search" placeholder="Buscar código o nombre…"
+                     autocomplete="off" />
+            </div>
+            <div id="socioDropdown" class="socio-dropdown" style="display:none;"></div>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.72rem;" id="bp_nombre_display"></div>
+        </div>
+
+        <!-- N° Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">N° Documento</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="num_at_card" id="f_num_at_card" placeholder="F001-00000001" />
+        </div>
+
+        <!-- Moneda -->
+        <div class="col-md-2">
+          <label class="form-label form-label-sm fw-semibold">Moneda</label>
+          <select class="form-select form-select-sm" name="doc_currency" id="f_doc_currency">
+            <option value="SOL" selected>SOL — Soles</option>
+            <option value="USD">USD — Dólares</option>
+          </select>
+        </div>
+
+        <!-- Usuario -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Usuario</label>
+          <select class="form-select form-select-sm" name="invoice_user" id="f_invoice_user"
+                  data-current="{{ current_user.id_usuario }}">
+            <option value="">Cargando…</option>
+          </select>
+        </div>
+
+        <!-- Fecha Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Documento <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_date" id="f_doc_date" value="{{ today }}" required />
+        </div>
+
+        <!-- Fecha Impuesto -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Impuesto</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="tax_date" id="f_tax_date" value="{{ today }}" />
+        </div>
+
+        <!-- Fecha Vencimiento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha Vencimiento</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_due_date" id="f_doc_due_date" value="{{ today }}" />
+        </div>
+
+        <!-- Comentarios -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Comentarios</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="comments" id="f_comments" placeholder="Observaciones del documento" />
+        </div>
+
+        <!-- Referencia -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Referencia / Diario</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="journal_memo" id="f_journal_memo" placeholder="Referencia interna" />
+        </div>
+
+        <!-- Almacén -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Almacén</label>
+          <select class="form-select form-select-sm" name="invoice_wh" id="f_invoice_wh">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+
+        <!-- Tipo de Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Tipo de Documento</label>
+          <select class="form-select form-select-sm" name="invoice_type" id="f_invoice_type">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+
+        <!-- Serie -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Serie</label>
+          <select class="form-select form-select-sm" name="invoice_serie" id="f_invoice_serie">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+
+        <input type="hidden" name="invoice_pos"    id="f_invoice_pos" />
+        <input type="hidden" name="invoice_idtype" id="f_invoice_idtype" />
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       DETALLE DE ÍTEMS
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-list-ul text-primary me-2"></i>Líneas de Detalle
+      </h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarLinea()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar Ítem
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" id="tablaDetalle">
+        <colgroup>
+          <col style="width:30px;">
+          <col style="width:130px;">
+          <col style="min-width:160px;">
+          <col style="width:90px;">
+          <col style="width:100px;">
+          <col style="width:100px;">
+          <col style="width:80px;">
+          <col style="width:90px;">
+          <col style="width:110px;">
+          <col style="width:40px;">
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">#</th>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>P. s/IGV</th>
+            <th>P. c/IGV</th>
+            <th>Unidad</th>
+            <th>Cód. Imp.</th>
+            <th class="text-end">Subtotal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="lineasDetalle">
+          <!-- Rows inserted by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card-footer bg-white py-2 px-3">
+      <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+        <span class="text-muted small">Sub total ventas:</span>
+        <span class="fw-semibold" id="subtotalVentasDisplay">0.0000</span>
+      </div>
+      <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+        <span class="text-muted small">IGV:</span>
+        <span class="fw-semibold" id="igvDisplay">0.0000</span>
+      </div>
+      <div class="d-flex justify-content-end align-items-center gap-2">
+        <span class="text-muted small">Total del documento:</span>
+        <span class="fw-bold fs-5" id="totalDisplay">S/ 0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       BOTONES (fijos al fondo del viewport)
+       ══════════════════════════════════════════════════════ -->
+  <div id="barraAcciones"
+       class="d-flex justify-content-end gap-2 py-2 px-3 barra-acciones-fija">
+    <a href="{{ url_for('main.ventas_facturas') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </a>
+    <button type="submit" class="btn btn-primary px-4" id="btnRegistrar">
+      <i class="bi bi-check-lg me-1"></i>Registrar Factura
+    </button>
+  </div>
+  <!-- Espaciador para que el contenido no quede bajo la barra fija -->
+  <div style="height:60px;"></div>
+
+</form>
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Barra de botones fija al fondo ─────────────────────────── */
+.barra-acciones-fija {
+  position: fixed;
+  bottom: var(--taskbar-height, 38px);
+  right: 0;
+  left: var(--sidebar-width, 260px);
+  background: #fff;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+  z-index: 500;
+}
+body.sidebar-collapsed .barra-acciones-fija {
+  left: var(--sidebar-collapsed-width, 70px);
+}
+
+.form-label-sm { font-size: .78rem; }
+
+/* ── Scroll interno del tbody ────────────────────────────────── */
+#tablaDetalle          { table-layout: fixed; width: 100%; }
+#tablaDetalle thead tr { display: table; width: 100%; table-layout: fixed; }
+#lineasDetalle         { display: block; max-height: 190px; overflow-y: auto; overflow-x: hidden; }
+#lineasDetalle tr      { display: table; width: 100%; table-layout: fixed; }
+
+#tablaDetalle td { vertical-align: middle; padding: .3rem .4rem; }
+#tablaDetalle input, #tablaDetalle select {
+  font-size: .78rem;
+  height: auto;
+}
+#tablaDetalle input  { padding: .2rem .4rem; }
+#tablaDetalle select { padding: .2rem .4rem; }
+
+.btn-del-linea {
+  border: none; background: none;
+  color: #ef4444; font-size: .9rem;
+  padding: .1rem .35rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+
+/* ── Combobox socios ─────────────────────────────────────────── */
+.socio-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-top: none; border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  max-height: 220px; overflow-y: auto;
+}
+.socio-opt {
+  padding: 5px 10px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  border-bottom: 1px solid #f1f5f9;
+}
+.socio-opt:last-child { border-bottom: none; }
+.socio-opt:hover { background: #eff6ff; }
+
+/* ── Combobox ítems (por fila de detalle) ────────────────────── */
+.item-combo-wrap { position: relative; }
+.item-combo-dropdown {
+  position: absolute; top: 100%; left: 0; min-width: 380px; z-index: 600;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-top: none; border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  max-height: 200px; overflow-y: auto;
+}
+.item-opt {
+  display: flex; align-items: baseline; gap: .4rem;
+  padding: 4px 8px; cursor: pointer;
+  border-bottom: 1px solid #f1f5f9; font-size: .72rem;
+}
+.item-opt:last-child { border-bottom: none; }
+.item-opt:hover { background: #eff6ff; }
+.item-opt-price { margin-left: auto; color: #16a34a; font-weight: 600; white-space: nowrap; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Estado global ──────────────────────────────────────────── */
+let SOCIOS_DATA      = [];
+let sociosMap        = {};
+let ITEMS_CON_PRECIO = [];
+let itemsTaxMap      = {};
+
+/* ── Cargar usuarios desde API ──────────────────────────────── */
+fetch('/api/usuarios-lista?perfil=0')
+  .then(r => r.json())
+  .then(data => {
+    const sel     = document.getElementById('f_invoice_user');
+    const current = sel.dataset.current || '';
+    sel.innerHTML = '';
+    data.forEach(u => {
+      const o = document.createElement('option');
+      o.value       = u.id_usuario;
+      o.textContent = u.nombres || u.id_usuario;
+      if (u.id_usuario === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  })
+  .catch(err => console.error('[usuarios] ERROR:', err));
+
+/* ── Cargar almacenes en selector cabecera ──────────────────── */
+fetch('/api/warehouses')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_wh');
+    data.forEach(w => {
+      const o = document.createElement('option');
+      o.value       = w.whs_code;
+      o.textContent = w.whs_name;
+      sel.appendChild(o);
+    });
+  })
+  .catch(err => console.error('[warehouses] ERROR:', err));
+
+/* ── Cargar tipos de documento ──────────────────────────────── */
+fetch('/api/invoice-types')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_type');
+    data.forEach(t => {
+      const o = document.createElement('option');
+      o.value          = t.invoice_type;
+      o.dataset.idtype = t.idtype;
+      o.textContent    = t.invoice_type;
+      sel.appendChild(o);
+    });
+  })
+  .catch(err => console.error('[invoice-types] ERROR:', err));
+
+/* ── Cargar series (cascada almacén + tipo) ─────────────────── */
+function cargarSeries() {
+  const whs    = document.getElementById('f_invoice_wh').value;
+  const tipSel = document.getElementById('f_invoice_type');
+  const selOpt = tipSel.options[tipSel.selectedIndex];
+  const idtype = selOpt ? (selOpt.dataset.idtype || '') : '';
+
+  document.getElementById('f_invoice_idtype').value = idtype;
+
+  const selSerie = document.getElementById('f_invoice_serie');
+  selSerie.innerHTML = '<option value="">— Seleccione —</option>';
+  document.getElementById('f_invoice_pos').value = '';
+
+  if (!whs || !idtype) return;
+
+  fetch(`/api/invoice-series?invoice_wh=${encodeURIComponent(whs)}&idtype=${encodeURIComponent(idtype)}`)
+    .then(r => r.json())
+    .then(data => {
+      data.forEach(s => {
+        const o = document.createElement('option');
+        o.value       = s.invoice_serie;
+        o.dataset.pos = s.invoice_pos ?? '';
+        o.textContent = s.invoice_serie;
+        selSerie.appendChild(o);
+      });
+    })
+    .catch(err => console.error('[invoice-series] ERROR:', err));
+}
+
+document.getElementById('f_invoice_wh').addEventListener('change', cargarSeries);
+document.getElementById('f_invoice_type').addEventListener('change', cargarSeries);
+document.getElementById('f_invoice_serie').addEventListener('change', function () {
+  const opt = this.options[this.selectedIndex];
+  document.getElementById('f_invoice_pos').value = opt ? (opt.dataset.pos || '') : '';
+});
+
+/* ── Cargar socios desde API ────────────────────────────────── */
+console.log('[socios] iniciando fetch /api/socios-ventas...');
+fetch('/api/socios-ventas')
+  .then(r => {
+    console.log('[socios] status HTTP:', r.status, r.url);
+    return r.json();
+  })
+  .then(data => {
+    SOCIOS_DATA = data;
+    data.forEach(s => { sociosMap[s.card_code] = s; });
+    console.log('[socios] cargados:', data.length, '| primero:', data[0]);
+  })
+  .catch(err => console.error('[socios] ERROR fetch:', err));
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function monedaSimbolo() {
+  return document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+}
+document.getElementById('f_doc_currency').addEventListener('change', actualizarTotal);
+
+/* ── Referencias al combobox socio ──────────────────────────── */
+const socioSearch   = document.getElementById('f_socio_search');
+const socioHidden   = document.getElementById('f_card_code');
+const socioDropdown = document.getElementById('socioDropdown');
+const socioDisplay  = document.getElementById('bp_nombre_display');
+
+/* ── Seleccionar socio ──────────────────────────────────────── */
+function seleccionarSocio(code) {
+  const s = sociosMap[code];
+  socioHidden.value        = code;
+  socioSearch.value        = code;
+  socioDisplay.textContent = s ? s.card_name : '';
+  socioDropdown.style.display = 'none';
+  console.log('[socio] code:', code, '| name:', s?.card_name);
+  cargarItemsConPrecio(code);
+  actualizarFechaVenc(s ? (s.Creditday || 0) : 0);
+}
+
+/* ── Mostrar dropdown socios ─────────────────────────────────── */
+function mostrarDropdownSocios(q) {
+  const txt = q.trim().toLowerCase();
+  if (!txt) { socioDropdown.style.display = 'none'; return; }
+  const matches = SOCIOS_DATA.filter(s =>
+    s.card_code.toLowerCase().includes(txt) || s.card_name.toLowerCase().includes(txt)
+  ).slice(0, 50);
+  if (!matches.length) { socioDropdown.style.display = 'none'; return; }
+  socioDropdown.innerHTML = matches.map(s =>
+    `<div class="socio-opt" data-code="${escHtml(s.card_code)}">
+       <span class="font-monospace text-primary fw-semibold" style="font-size:.72rem;">${escHtml(s.card_code)}</span>
+       <span class="text-muted ms-2" style="font-size:.72rem;">${escHtml(s.card_name)}</span>
+     </div>`
+  ).join('');
+  socioDropdown.style.display = 'block';
+}
+
+socioSearch.addEventListener('input', function () {
+  socioHidden.value        = '';
+  socioDisplay.textContent = '';
+  ITEMS_CON_PRECIO         = [];
+  itemsTaxMap              = {};
+  mostrarDropdownSocios(this.value);
+});
+
+socioDropdown.addEventListener('mousedown', function (e) {
+  const opt = e.target.closest('.socio-opt');
+  if (!opt) return;
+  e.preventDefault();
+  seleccionarSocio(opt.dataset.code);
+});
+
+socioSearch.addEventListener('blur', () => {
+  setTimeout(() => { socioDropdown.style.display = 'none'; }, 200);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#f_socio_search') && !e.target.closest('#socioDropdown'))
+    socioDropdown.style.display = 'none';
+});
+
+/* ── Cargar ítems con precio para el socio seleccionado ──────── */
+function cargarItemsConPrecio(card_code) {
+  const url = '/api/items-con-precio?card_code=' + encodeURIComponent(card_code);
+  console.log('[items] fetch:', url);
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      ITEMS_CON_PRECIO = data;
+      itemsTaxMap = {};
+      data.forEach(it => { if (it.tax_code_ap) itemsTaxMap[it.item_code] = it.tax_code_ap; });
+      console.log('[items] cargados:', data.length, '| primer ítem:', data[0]);
+    })
+    .catch(err => console.error('[items] error:', err));
+}
+
+/* ── Número de líneas ───────────────────────────────────────── */
+let lineaNum = 0;
+
+/* ── Mostrar dropdown ítems ──────────────────────────────────── */
+function mostrarDropdownItems(input, dropdown) {
+  const q = input.value.trim().toLowerCase();
+  if (!q) { dropdown.style.display = 'none'; return; }
+  if (!socioHidden.value) {
+    dropdown.innerHTML = '<div class="item-opt text-muted fst-italic px-2">Seleccione un socio de negocio primero</div>';
+    dropdown.style.display = 'block';
+    return;
+  }
+  const matches = ITEMS_CON_PRECIO.filter(it =>
+    it.item_code.toLowerCase().includes(q) || it.item_name.toLowerCase().includes(q)
+  ).slice(0, 40);
+  if (!matches.length) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = matches.map(it => {
+    const precio = parseFloat(it.PriceAfterVAT || 0).toFixed(2);
+    return `<div class="item-opt" data-code="${escHtml(it.item_code)}">
+      <span class="font-monospace text-primary fw-semibold">${escHtml(it.item_code)}</span>
+      <span class="text-dark">${escHtml(it.item_name)}</span>
+      <span class="item-opt-price">${precio}</span>
+    </div>`;
+  }).join('');
+  dropdown.style.display = 'block';
+}
+
+/* ── Seleccionar ítem en una fila ───────────────────────────── */
+function seleccionarItem(tr, code) {
+  const it = ITEMS_CON_PRECIO.find(i => i.item_code === code);
+  if (!it) return;
+  tr.querySelector('.inp-item-code').value  = code;
+  tr.querySelector('.inp-item-name').value  = it.item_name || '';
+  tr.querySelector('.inp-avg-price').value  = it.avg_price != null ? parseFloat(it.avg_price).toFixed(4) : '';
+  tr.querySelector('.inp-price').value      = parseFloat(it.PriceAfterVAT || 0).toFixed(2);
+  const tax = itemsTaxMap[code] || it.tax_code_ap || '';
+  if (tax) tr.querySelector('.inp-taxcode').value = tax;
+  tr.querySelector('.inp-unit-msr').value = it.sal_unit_msr || '';
+  actualizarTotal();
+}
+
+/* ── Agregar línea ──────────────────────────────────────────── */
+function agregarLinea() {
+  lineaNum++;
+  const tbody = document.getElementById('lineasDetalle');
+  const tr = document.createElement('tr');
+  tr.className = 'linea-detalle';
+  tr.dataset.linea = lineaNum;
+  tr.innerHTML = `
+    <td class="ps-3 text-muted small">${lineaNum}</td>
+    <td>
+      <div class="item-combo-wrap">
+        <input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+               placeholder="Código o nombre…" autocomplete="off" />
+        <div class="item-combo-dropdown" style="display:none;"></div>
+      </div>
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm inp-item-name bg-light"
+             placeholder="Descripción" readonly />
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-qty"
+             value="1" min="0.0001" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light"
+               readonly placeholder="0.0000" /></td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-price"
+             value="0" min="0" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light"
+               readonly /></td>
+    <td>
+      <select class="form-select form-select-sm inp-taxcode">
+        <option value="I18">I18</option>
+        <option value="EXO">EXO</option>
+      </select>
+    </td>
+    <td class="text-end small fw-semibold inp-subtotal-display">0.00</td>
+    <td>
+      <button type="button" class="btn-del-linea" onclick="eliminarLinea(this)" title="Eliminar">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+
+  const codeInput = tr.querySelector('.inp-item-code');
+  const dropdown  = tr.querySelector('.item-combo-dropdown');
+
+  codeInput.addEventListener('input', () => mostrarDropdownItems(codeInput, dropdown));
+  codeInput.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; }, 150));
+  dropdown.addEventListener('mousedown', function (e) {
+    const opt = e.target.closest('.item-opt');
+    if (!opt) return;
+    e.preventDefault();
+    seleccionarItem(tr, opt.dataset.code);
+    dropdown.style.display = 'none';
+  });
+
+  codeInput.focus();
+  actualizarTotal();
+}
+
+/* ── Eliminar línea ─────────────────────────────────────────── */
+function eliminarLinea(btn) {
+  btn.closest('tr').remove();
+  actualizarTotal();
+}
+
+/* ── Calcular totales ───────────────────────────────────────── */
+function actualizarTotal() {
+  let total = 0, subtotalVentas = 0;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty      = parseFloat(row.querySelector('.inp-qty').value)       || 0;
+    const price    = parseFloat(row.querySelector('.inp-price').value)     || 0;
+    const avgPrice = parseFloat(row.querySelector('.inp-avg-price').value) || 0;
+    const sub      = qty * price;
+    total          += sub;
+    subtotalVentas += qty * avgPrice;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+  document.getElementById('subtotalVentasDisplay').textContent = subtotalVentas.toFixed(4);
+  document.getElementById('igvDisplay').textContent            = (subtotalVentas * 0.18).toFixed(4);
+  document.getElementById('totalDisplay').textContent = monedaSimbolo() + ' ' + total.toFixed(2);
+}
+
+/* ── Validar y serializar antes de enviar ───────────────────── */
+document.getElementById('formFactura').addEventListener('submit', function (e) {
+  const lineas = [];
+  let valido = true;
+
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const item_code = row.querySelector('.inp-item-code').value.trim();
+    const qty       = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price     = parseFloat(row.querySelector('.inp-price').value) || 0;
+    if (!item_code) { valido = false; return; }
+    lineas.push({
+      item_code,
+      quantity:        qty,
+      price_after_vat: price,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+      warehouse_code:  '',
+      costing_code:    '',
+      costing_code2:   '',
+      costing_code3:   '',
+    });
+  });
+
+  if (!valido) {
+    e.preventDefault();
+    alert('Complete el código de ítem en todas las líneas.');
+    return;
+  }
+  if (lineas.length === 0) {
+    e.preventDefault();
+    alert('Agregue al menos un ítem en el detalle.');
+    return;
+  }
+
+  document.getElementById('items_json_hidden').value = JSON.stringify(lineas);
+});
+
+/* ── Fecha vencimiento por días de crédito ──────────────────── */
+function actualizarFechaVenc(creditday) {
+  const fld     = document.getElementById('f_doc_due_date');
+  const docDate = document.getElementById('f_doc_date').value;
+  if (creditday > 0) {
+    if (docDate) fld.value = addDays(docDate, creditday);
+    fld.readOnly = true;
+    fld.classList.add('bg-light');
+  } else {
+    fld.readOnly = false;
+    fld.classList.remove('bg-light');
+  }
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+document.getElementById('f_doc_date').addEventListener('input', function () {
+  const code = document.getElementById('f_card_code').value;
+  const s    = code ? sociosMap[code] : null;
+  actualizarFechaVenc(s ? (s.Creditday || 0) : 0);
+});
+
+/* primera línea al cargar */
+agregarLinea();
+</script>
+{% endblock %}

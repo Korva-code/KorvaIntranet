@@ -1,0 +1,177 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} artículos
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="stockData"    type="application/json">{{ stock_json    | safe }}</script>
+<script id="almacenesData" type="application/json">{{ almacenes_json | safe }}</script>
+
+<!-- ── Filtros ─────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2">
+    <form method="GET" action="{{ url_for('main.almacen_stock') }}"
+          class="d-flex flex-wrap align-items-end gap-2">
+
+      <div style="min-width:220px; flex:1;">
+        <label class="form-label-sm mb-1">Almacén</label>
+        <select class="form-select form-select-sm" name="almacen" id="selAlmacen">
+          <option value="">— Todos los almacenes —</option>
+          {% for w in almacenes %}
+          <option value="{{ w.whs_code }}"
+                  {% if w.whs_code == selected_almacen %}selected{% endif %}>
+            {{ w.whs_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="input-group input-group-sm" style="max-width:240px;">
+        <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+        <input type="text" class="form-control" id="buscarInput"
+               placeholder="Código, descripción…">
+      </div>
+
+      <div class="d-flex gap-2 align-items-end">
+        <button type="submit" class="btn btn-sm btn-primary px-3">
+          <i class="bi bi-search me-1"></i>Buscar
+        </button>
+        <a href="{{ url_for('main.almacen_stock') }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-x-circle me-1"></i>Limpiar
+        </a>
+        <button type="button" class="btn btn-sm btn-success" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ── Tabla ─────────────────────────────────────────────────────── -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold">
+      <i class="bi bi-layers text-primary me-1"></i> Stock por Almacén
+    </h6>
+    <span class="badge bg-secondary ms-auto" id="contadorVisible">{{ total }}</span>
+  </div>
+
+  <div class="table-responsive" style="min-height:400px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.75rem;">
+      <thead class="table-light" style="font-size:.72rem;">
+        <tr>
+          <th class="ps-3" style="width:50px;">#</th>
+          <th style="width:110px;">Código</th>
+          <th style="min-width:200px;">Descripción</th>
+          <th style="min-width:140px;">Almacén</th>
+          <th class="text-end" style="width:110px;">Stock</th>
+          <th class="text-end" style="width:110px;">P. Unit. (s/IGV)</th>
+          <th class="text-end" style="width:120px;">Valor Total</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyStock"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-4">
+    <span class="text-muted small">
+      Total: <strong id="footerContador">{{ total }}</strong> artículos
+    </span>
+    <span class="ms-auto fw-semibold text-success small">
+      Valor total: S/ <strong id="footerValor">0.00</strong>
+    </span>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm { font-size: .75rem; font-weight: 600; color: #475569; }
+.stock-neg  { color: #ef4444; font-weight: 600; }
+.stock-zero { color: #94a3b8; }
+.stock-pos  { color: #16a34a; font-weight: 600; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const STOCK_DATA    = JSON.parse(document.getElementById('stockData').textContent);
+let busqueda = '';
+
+document.getElementById('buscarInput').addEventListener('input', function() {
+  busqueda = this.value.toLowerCase();
+  renderTabla();
+});
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderTabla() {
+  const tbody = document.getElementById('tbodyStock');
+
+  const filas = STOCK_DATA.filter(r => {
+    if (!busqueda) return true;
+    return r.item_code.toLowerCase().includes(busqueda) ||
+           r.item_name.toLowerCase().includes(busqueda) ||
+           r.whs_name.toLowerCase().includes(busqueda);
+  });
+
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    document.getElementById('footerContador').textContent  = 0;
+    document.getElementById('footerValor').textContent     = '0.00';
+    return;
+  }
+
+  let sumaValor = 0;
+  tbody.innerHTML = '';
+
+  filas.forEach((r, idx) => {
+    sumaValor += r.valor_total;
+
+    const stockClass = r.stock < 0 ? 'stock-neg' : r.stock === 0 ? 'stock-zero' : 'stock-pos';
+    const stockSign  = r.stock > 0 ? '+' : '';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${idx + 1}</td>
+      <td class="font-monospace fw-semibold">${escHtml(r.item_code)}</td>
+      <td>${escHtml(r.item_name)}</td>
+      <td class="text-muted">${escHtml(r.whs_name)}</td>
+      <td class="text-end ${stockClass}">${stockSign}${r.stock.toFixed(4)}</td>
+      <td class="text-end text-muted">S/ ${r.avg_price.toFixed(4)}</td>
+      <td class="text-end fw-semibold">S/ ${r.valor_total.toFixed(2)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+  document.getElementById('footerContador').textContent  = filas.length;
+  document.getElementById('footerValor').textContent     = sumaValor.toFixed(2);
+}
+
+function exportarExcel() {
+  const filas = [['#','Código','Descripción','Almacén','Stock','P.Unit s/IGV','Valor Total']];
+  STOCK_DATA.forEach((r, i) => filas.push([
+    i + 1, r.item_code, r.item_name, r.whs_name,
+    r.stock.toFixed(4), r.avg_price.toFixed(4), r.valor_total.toFixed(2),
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Stock');
+  XLSX.writeFile(wb, 'stock_almacen.xlsx');
+}
+
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

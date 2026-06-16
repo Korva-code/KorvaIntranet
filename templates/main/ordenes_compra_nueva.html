@@ -1,0 +1,572 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <a href="{{ url_for('main.compras_ordenes_compra') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver al listado
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<form id="formOC" method="POST" action="{{ url_for('main.compras_ordenes_compra_nueva') }}" novalidate>
+  <input type="hidden" name="items_json" id="items_json_hidden">
+
+  <!-- ══════════════════════════════════════════════════════
+       CABECERA
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-cart3 text-primary me-2"></i>Cabecera de la Orden de Compra
+      </h6>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+
+        <!-- Proveedor -->
+        <div class="col-md-5">
+          <label class="form-label form-label-sm fw-semibold">Proveedor <span class="text-danger">*</span></label>
+          <input type="hidden" name="card_code" id="f_card_code" required />
+          <div class="position-relative">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" class="form-control form-control-sm"
+                     id="f_socio_search" placeholder="Buscar código o nombre del proveedor…"
+                     autocomplete="off" />
+            </div>
+            <div id="socioDropdown" class="socio-dropdown" style="display:none;"></div>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.72rem;" id="bp_nombre_display"></div>
+        </div>
+
+        <!-- N° Referencia OC -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">N° Referencia / OC Proveedor</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="num_at_card" id="f_num_at_card" placeholder="OC-00001 / Ref. interna" />
+        </div>
+
+        <!-- Moneda -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Moneda</label>
+          <select class="form-select form-select-sm" name="doc_currency" id="f_doc_currency">
+            <option value="SOL" selected>SOL — Soles</option>
+            <option value="USD">USD — Dólares</option>
+          </select>
+        </div>
+
+        <!-- Tipo Cambio -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Tipo de Cambio</label>
+          <input type="number" class="form-control form-control-sm text-end font-monospace"
+                 name="tipo_cambio" id="f_tipo_cambio"
+                 value="1.000000" step="0.000001" min="0.000001" />
+          <small class="text-muted" id="lblTCRef" style="font-size:.68rem;"></small>
+        </div>
+
+        <!-- Almacén -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Almacén</label>
+          <select class="form-select form-select-sm" name="invoice_wh" id="f_invoice_wh">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+
+        <!-- Usuario -->
+        <div class="col-md-3">
+          <label class="form-label form-label-sm fw-semibold">Usuario</label>
+          <select class="form-select form-select-sm" name="invoice_user" id="f_invoice_user"
+                  data-current="{{ current_user.id_usuario }}">
+            <option value="">Cargando…</option>
+          </select>
+        </div>
+
+        <!-- Fecha Documento -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha OC <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_date" id="f_doc_date" value="{{ today }}" required />
+        </div>
+
+        <!-- Fecha Entrega -->
+        <div class="col-md-4">
+          <label class="form-label form-label-sm fw-semibold">Fecha de Entrega</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_due_date" id="f_doc_due_date" value="{{ today }}" />
+        </div>
+
+        <!-- Comentarios -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Comentarios</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="comments" id="f_comments" placeholder="Observaciones del pedido" />
+        </div>
+
+        <!-- Referencia/Diario -->
+        <div class="col-md-6">
+          <label class="form-label form-label-sm fw-semibold">Referencia / Diario</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="journal_memo" id="f_journal_memo" placeholder="Referencia interna" />
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       DETALLE DE ÍTEMS
+       ══════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-semibold">
+        <i class="bi bi-list-ul text-primary me-2"></i>Líneas de Detalle
+      </h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="agregarLinea()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar Ítem
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0" id="tablaDetalle">
+        <colgroup>
+          <col style="width:30px;">
+          <col style="width:135px;">
+          <col style="min-width:170px;">
+          <col style="width:90px;">
+          <col style="width:105px;">
+          <col style="width:70px;">
+          <col style="width:80px;">
+          <col style="width:110px;">
+          <col style="width:40px;">
+        </colgroup>
+        <thead class="table-light">
+          <tr>
+            <th class="ps-3">#</th>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>P. Unitario</th>
+            <th>Unidad</th>
+            <th>Imp.</th>
+            <th class="text-end">Subtotal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="lineasDetalle"></tbody>
+      </table>
+    </div>
+
+    <div class="card-footer bg-white py-2 px-3">
+      <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+        <span class="text-muted small">Sub total s/IGV:</span>
+        <span class="fw-semibold font-monospace" id="subtotalDisplay">0.0000</span>
+      </div>
+      <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+        <span class="text-muted small">IGV (18%):</span>
+        <span class="fw-semibold font-monospace" id="igvDisplay">0.0000</span>
+      </div>
+      <div class="d-flex justify-content-end align-items-center gap-2">
+        <span class="text-muted small">Total del documento:</span>
+        <span class="fw-bold fs-5 font-monospace" id="totalDisplay">S/ 0.00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra fija de acciones -->
+  <div class="d-flex justify-content-end gap-2 py-2 px-3 barra-acciones-fija">
+    <a href="{{ url_for('main.compras_ordenes_compra') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </a>
+    <button type="submit" class="btn btn-primary px-4" id="btnRegistrar">
+      <i class="bi bi-check-lg me-1"></i>Registrar OC
+    </button>
+  </div>
+  <div style="height:60px;"></div>
+
+</form>
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.barra-acciones-fija {
+  position: fixed;
+  bottom: var(--taskbar-height, 38px);
+  right: 0;
+  left: var(--sidebar-width, 260px);
+  background: #fff;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.08);
+  z-index: 500;
+}
+body.sidebar-collapsed .barra-acciones-fija {
+  left: var(--sidebar-collapsed-width, 70px);
+}
+
+.form-label-sm { font-size: .78rem; }
+
+#tablaDetalle          { table-layout: fixed; width: 100%; }
+#tablaDetalle thead tr { display: table; width: 100%; table-layout: fixed; }
+#lineasDetalle         { display: block; max-height: 220px; overflow-y: auto; overflow-x: hidden; }
+#lineasDetalle tr      { display: table; width: 100%; table-layout: fixed; }
+#tablaDetalle td       { vertical-align: middle; padding: .3rem .4rem; }
+#tablaDetalle input, #tablaDetalle select { font-size: .78rem; height: auto; }
+#tablaDetalle input  { padding: .2rem .4rem; }
+#tablaDetalle select { padding: .2rem .4rem; }
+
+.btn-del-linea {
+  border: none; background: none;
+  color: #ef4444; font-size: .9rem;
+  padding: .1rem .35rem; border-radius: 4px; cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+
+.socio-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-top: none; border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  max-height: 220px; overflow-y: auto;
+}
+.socio-opt {
+  padding: 5px 10px; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  border-bottom: 1px solid #f1f5f9;
+}
+.socio-opt:last-child { border-bottom: none; }
+.socio-opt:hover { background: #eff6ff; }
+
+.item-combo-wrap { position: relative; }
+.item-combo-dropdown {
+  position: absolute; top: 100%; left: 0; min-width: 360px; z-index: 600;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-top: none; border-radius: 0 0 6px 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  max-height: 200px; overflow-y: auto;
+}
+.item-opt {
+  display: flex; align-items: baseline; gap: .4rem;
+  padding: 4px 8px; cursor: pointer;
+  border-bottom: 1px solid #f1f5f9; font-size: .72rem;
+}
+.item-opt:last-child { border-bottom: none; }
+.item-opt:hover { background: #eff6ff; }
+.item-opt-price { margin-left: auto; color: #16a34a; font-weight: 600; white-space: nowrap; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Estado global ──────────────────────────────────────────── */
+let SOCIOS_DATA = [];
+let sociosMap   = {};
+let ITEMS_DATA  = [];
+let lineaNum    = 0;
+
+/* ── Cargar usuarios ────────────────────────────────────────── */
+fetch('/api/usuarios-lista?perfil=0')
+  .then(r => r.json())
+  .then(data => {
+    const sel     = document.getElementById('f_invoice_user');
+    const current = sel.dataset.current || '';
+    sel.innerHTML = '';
+    data.forEach(u => {
+      const o = document.createElement('option');
+      o.value       = u.id_usuario;
+      o.textContent = u.nombres || u.id_usuario;
+      if (u.id_usuario === current) o.selected = true;
+      sel.appendChild(o);
+    });
+  });
+
+/* ── Cargar almacenes ───────────────────────────────────────── */
+fetch('/api/warehouses')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_wh');
+    data.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w.whs_code; o.textContent = w.whs_name;
+      sel.appendChild(o);
+    });
+  });
+
+/* ── Cargar proveedores ─────────────────────────────────────── */
+fetch('/api/socios-compras')
+  .then(r => r.json())
+  .then(data => {
+    SOCIOS_DATA = data;
+    data.forEach(s => { sociosMap[s.card_code] = s; });
+  });
+
+/* ── Cargar ítems para OC ───────────────────────────────────── */
+fetch('/api/items-compras')
+  .then(r => r.json())
+  .then(data => { ITEMS_DATA = data; });
+
+/* ── Tipo Cambio por fecha ──────────────────────────────────── */
+function normalizarFecha(f) {
+  if (!f) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(f)) {
+    const [d, m, y] = f.split('/');
+    return `${y}-${m}-${d}`;
+  }
+  return f;
+}
+
+function aplicarTC(compra, fecha) {
+  const tcInput = document.getElementById('f_tipo_cambio');
+  const tcRef   = document.getElementById('lblTCRef');
+  if (compra !== null && compra !== undefined && !isNaN(Number(compra))) {
+    tcInput.value = Number(compra).toFixed(6);
+    if (tcRef) tcRef.textContent = `TC Compra: ${Number(compra).toFixed(4)} (${fecha || ''})`;
+  }
+}
+
+async function cargarTipoCambio(fecha) {
+  const tcRef = document.getElementById('lblTCRef');
+  const iso   = normalizarFecha(fecha);
+  if (!iso) { aplicarTC(TC_COMPRA, TC_FECHA); return; }
+  if (tcRef) tcRef.textContent = 'Buscando TC…';
+  try {
+    const res = await fetch(`/api/tipo-cambio?fecha=${iso}`);
+    if (!res.ok) { aplicarTC(TC_COMPRA, TC_FECHA); return; }
+    const data = await res.json();
+    if (data.found) {
+      aplicarTC(data.tc_compra, data.fecha);
+    } else {
+      aplicarTC(TC_COMPRA, TC_FECHA);
+      if (tcRef && TC_COMPRA != null) tcRef.textContent += ' — último disponible';
+    }
+  } catch(e) {
+    aplicarTC(TC_COMPRA, TC_FECHA);
+  }
+}
+
+// TC inmediato desde global, luego refinar con fecha
+aplicarTC(TC_COMPRA, TC_FECHA);
+cargarTipoCambio(document.getElementById('f_doc_date').value);
+
+document.getElementById('f_doc_date').addEventListener('change', function () {
+  cargarTipoCambio(this.value);
+});
+
+/* ── Helpers ──────────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function monedaSimbolo() {
+  return document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+}
+document.getElementById('f_doc_currency').addEventListener('change', actualizarTotal);
+
+/* ── Combobox proveedor ────────────────────────────────────────── */
+const socioSearch   = document.getElementById('f_socio_search');
+const socioHidden   = document.getElementById('f_card_code');
+const socioDropdown = document.getElementById('socioDropdown');
+const socioDisplay  = document.getElementById('bp_nombre_display');
+
+socioSearch.addEventListener('input', function () {
+  socioHidden.value        = '';
+  socioDisplay.textContent = '';
+  const q = this.value.trim().toLowerCase();
+  if (!q) { socioDropdown.style.display = 'none'; return; }
+  const matches = SOCIOS_DATA.filter(s =>
+    s.card_code.toLowerCase().includes(q) || s.card_name.toLowerCase().includes(q)
+  ).slice(0, 50);
+  if (!matches.length) { socioDropdown.style.display = 'none'; return; }
+  socioDropdown.innerHTML = matches.map(s =>
+    `<div class="socio-opt" data-code="${escHtml(s.card_code)}">
+       <span class="font-monospace text-primary fw-semibold" style="font-size:.72rem;">${escHtml(s.card_code)}</span>
+       <span class="text-muted ms-2" style="font-size:.72rem;">${escHtml(s.card_name)}</span>
+     </div>`
+  ).join('');
+  socioDropdown.style.display = 'block';
+});
+
+socioDropdown.addEventListener('mousedown', function (e) {
+  const opt = e.target.closest('.socio-opt');
+  if (!opt) return;
+  e.preventDefault();
+  const s = sociosMap[opt.dataset.code];
+  socioHidden.value        = opt.dataset.code;
+  socioSearch.value        = opt.dataset.code;
+  socioDisplay.textContent = s ? s.card_name : '';
+  socioDropdown.style.display = 'none';
+});
+
+socioSearch.addEventListener('blur', () => {
+  setTimeout(() => { socioDropdown.style.display = 'none'; }, 200);
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#f_socio_search') && !e.target.closest('#socioDropdown'))
+    socioDropdown.style.display = 'none';
+});
+
+/* ── Dropdown ítems ────────────────────────────────────────────── */
+function mostrarDropdownItems(input, dropdown) {
+  const q = input.value.trim().toLowerCase();
+  if (!q) { dropdown.style.display = 'none'; return; }
+  const matches = ITEMS_DATA.filter(it =>
+    it.item_code.toLowerCase().includes(q) || it.item_name.toLowerCase().includes(q)
+  ).slice(0, 40);
+  if (!matches.length) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = matches.map(it =>
+    `<div class="item-opt" data-code="${escHtml(it.item_code)}">
+       <span class="font-monospace text-primary fw-semibold">${escHtml(it.item_code)}</span>
+       <span class="text-dark">${escHtml(it.item_name)}</span>
+       <span class="item-opt-price">${Number(it.avg_price).toFixed(4)}</span>
+     </div>`
+  ).join('');
+  dropdown.style.display = 'block';
+}
+
+function seleccionarItem(tr, code) {
+  const it = ITEMS_DATA.find(i => i.item_code === code);
+  if (!it) return;
+  tr.querySelector('.inp-item-code').value  = code;
+  tr.querySelector('.inp-item-name').value  = it.item_name || '';
+  tr.querySelector('.inp-price').value      = Number(it.avg_price).toFixed(4);
+  tr.querySelector('.inp-unit-msr').value   = it.unit_msr || '';
+  tr.querySelector('.inp-taxcode').value    = it.tax_code || 'I18';
+  actualizarTotal();
+}
+
+/* ── Agregar línea ─────────────────────────────────────────────── */
+function agregarLinea() {
+  lineaNum++;
+  const tbody = document.getElementById('lineasDetalle');
+  const tr = document.createElement('tr');
+  tr.className  = 'linea-detalle';
+  tr.dataset.linea = lineaNum;
+  tr.innerHTML = `
+    <td class="ps-3 text-muted small">${lineaNum}</td>
+    <td>
+      <div class="item-combo-wrap">
+        <input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+               placeholder="Código o nombre…" autocomplete="off" />
+        <div class="item-combo-dropdown" style="display:none;"></div>
+      </div>
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm inp-item-name bg-light"
+             placeholder="Descripción" readonly />
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-qty"
+             value="1" min="0.0001" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm inp-price"
+             value="0.0000" min="0" step="any" oninput="actualizarTotal()" />
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm inp-unit-msr bg-light" readonly />
+    </td>
+    <td>
+      <select class="form-select form-select-sm inp-taxcode">
+        <option value="I18">I18</option>
+        <option value="EXO">EXO</option>
+      </select>
+    </td>
+    <td class="text-end small fw-semibold font-monospace inp-subtotal-display">0.00</td>
+    <td>
+      <button type="button" class="btn-del-linea" onclick="eliminarLinea(this)" title="Eliminar">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+
+  const codeInput = tr.querySelector('.inp-item-code');
+  const dropdown  = tr.querySelector('.item-combo-dropdown');
+
+  codeInput.addEventListener('input',  () => mostrarDropdownItems(codeInput, dropdown));
+  codeInput.addEventListener('blur',   () => setTimeout(() => { dropdown.style.display = 'none'; }, 150));
+  dropdown.addEventListener('mousedown', function (e) {
+    const opt = e.target.closest('.item-opt');
+    if (!opt) return;
+    e.preventDefault();
+    seleccionarItem(tr, opt.dataset.code);
+    dropdown.style.display = 'none';
+  });
+
+  codeInput.focus();
+  actualizarTotal();
+}
+
+/* ── Eliminar línea ─────────────────────────────────────────────── */
+function eliminarLinea(btn) {
+  btn.closest('tr').remove();
+  actualizarTotal();
+}
+
+/* ── Calcular totales ───────────────────────────────────────────── */
+function actualizarTotal() {
+  const IGV_RATE = 0.18;
+  let totalConIGV = 0, subtotalSinIGV = 0;
+
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty   = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price = parseFloat(row.querySelector('.inp-price').value) || 0;
+    const tax   = row.querySelector('.inp-taxcode').value;
+    const sub   = qty * price;   // precio ya incluye IGV si es I18
+    totalConIGV     += sub;
+    subtotalSinIGV  += tax === 'I18' ? sub / (1 + IGV_RATE) : sub;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+
+  const igv = totalConIGV - subtotalSinIGV;
+  document.getElementById('subtotalDisplay').textContent = subtotalSinIGV.toFixed(4);
+  document.getElementById('igvDisplay').textContent      = igv.toFixed(4);
+  document.getElementById('totalDisplay').textContent    = monedaSimbolo() + ' ' + totalConIGV.toFixed(2);
+}
+
+/* ── Validar y serializar antes de enviar ───────────────────────── */
+document.getElementById('formOC').addEventListener('submit', function (e) {
+  const lineas = [];
+  let valido = true;
+
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const item_code = row.querySelector('.inp-item-code').value.trim();
+    const qty       = parseFloat(row.querySelector('.inp-qty').value)   || 0;
+    const price     = parseFloat(row.querySelector('.inp-price').value) || 0;
+    const item_name = row.querySelector('.inp-item-name').value.trim();
+    if (!item_code) { valido = false; return; }
+    lineas.push({
+      item_code,
+      item_name,
+      quantity:       qty,
+      price_after_vat: price,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+      warehouse_code:  '',
+    });
+  });
+
+  if (!valido) {
+    e.preventDefault();
+    alert('Complete el código de ítem en todas las líneas.');
+    return;
+  }
+  if (!lineas.length) {
+    e.preventDefault();
+    alert('Agregue al menos un ítem en el detalle.');
+    return;
+  }
+  if (!document.getElementById('f_card_code').value.trim()) {
+    e.preventDefault();
+    alert('Seleccione un proveedor.');
+    document.getElementById('f_socio_search').focus();
+    return;
+  }
+
+  document.getElementById('items_json_hidden').value = JSON.stringify(lineas);
+});
+
+/* ── Primera línea al cargar ────────────────────────────────────── */
+agregarLinea();
+</script>
+{% endblock %}

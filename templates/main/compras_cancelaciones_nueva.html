@@ -1,0 +1,647 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <a href="{{ url_for('main.compras_cancelaciones') }}"
+     class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<form id="formCancelacion" method="POST"
+      action="{{ url_for('main.compras_cancelaciones_nueva') }}" novalidate>
+  <input type="hidden" name="lineas_json" id="lineas_json" value="[]">
+  <input type="hidden" name="card_code"   id="f_card_code" value="">
+
+  <div class="row g-3 align-items-start">
+
+    <!-- ── Columna izquierda: datos del pago ───────────────── -->
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2">
+          <h6 class="mb-0 fw-semibold">
+            <i class="bi bi-cash-coin text-primary me-1"></i>Datos del Pago
+          </h6>
+        </div>
+        <div class="card-body">
+
+          <!-- Proveedor -->
+          <div class="mb-3">
+            <label class="form-label-sm">Proveedor <span class="text-danger">*</span></label>
+            <div class="position-relative">
+              <input type="text" class="form-control form-control-sm"
+                     id="f_socio_search" placeholder="Buscar código o nombre…"
+                     autocomplete="off" />
+              <div id="socioDropdown" class="socio-dropdown" style="display:none;"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.72rem;" id="bp_nombre_display"></div>
+          </div>
+
+          <!-- Banco -->
+          <div class="mb-2">
+            <label class="form-label-sm">Banco <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm" name="id_banco" id="f_id_banco" required>
+              <option value="">— Seleccione —</option>
+            </select>
+          </div>
+
+          <!-- Fecha pago -->
+          <div class="mb-2">
+            <label class="form-label-sm">Fecha de Pago <span class="text-danger">*</span></label>
+            <input type="date" class="form-control form-control-sm"
+                   name="fecha_pago" id="f_fecha_pago" value="{{ today }}" required />
+          </div>
+
+          <!-- Moneda pago + TC -->
+          <div class="row g-2 mb-2">
+            <div class="col-6">
+              <label class="form-label-sm">Moneda Pago</label>
+              <select class="form-select form-select-sm" name="moneda_pago" id="f_moneda_pago">
+                <option value="SOL">SOL — Soles</option>
+                <option value="USD">USD — Dólares</option>
+              </select>
+            </div>
+            <div class="col-6" id="divTipoCambio">
+              <label class="form-label-sm">Tipo Cambio</label>
+              <input type="number" class="form-control form-control-sm text-end font-monospace"
+                     name="tipo_cambio" id="f_tipo_cambio"
+                     value="1.000000"
+                     step="0.000001" min="0.000001" />
+              <small class="text-muted" id="lblTCRef" style="font-size:.68rem;"></small>
+            </div>
+          </div>
+
+          <!-- Importe pagado -->
+          <div class="mb-2">
+            <label class="form-label-sm">
+              Importe Pagado <span class="text-danger">*</span>
+              <span class="text-muted fw-normal" id="lblMonedaImporte">(SOL)</span>
+            </label>
+            <input type="number" class="form-control form-control-sm text-end font-monospace"
+                   name="importe" id="f_importe"
+                   placeholder="0.00" min="0.01" step="0.01" required />
+            <div class="text-muted mt-1" style="font-size:.7rem;" id="lblImporteHint">
+              Monto total del pago realizado, puede ser completo o parcial.
+            </div>
+          </div>
+
+          <!-- Referencia -->
+          <div class="mb-2">
+            <label class="form-label-sm">Referencia</label>
+            <input type="text" class="form-control form-control-sm font-monospace"
+                   name="referencia" id="f_referencia"
+                   placeholder="N° operación / voucher" />
+          </div>
+
+          <!-- Concepto -->
+          <div class="mb-2">
+            <label class="form-label-sm">Concepto</label>
+            <input type="text" class="form-control form-control-sm"
+                   name="concepto" id="f_concepto"
+                   placeholder="Descripción del pago" />
+          </div>
+
+        </div><!-- /card-body -->
+      </div>
+    </div>
+
+    <!-- ── Columna derecha: facturas pendientes ────────────── -->
+    <div class="col-md-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2">
+          <h6 class="mb-0 fw-semibold">
+            <i class="bi bi-receipt text-primary me-1"></i>
+            <span id="tituloFacturas">Facturas Pendientes de Pago</span>
+          </h6>
+          <span class="badge bg-secondary-subtle text-secondary ms-1"
+                id="badgeCount" style="display:none;"></span>
+          <div class="ms-auto">
+            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                    id="btnCheckAll" style="font-size:.72rem; display:none;"
+                    onclick="toggleTodos()">
+              <i class="bi bi-check2-all me-1"></i>Marcar todos
+            </button>
+          </div>
+        </div>
+
+        <!-- Placeholder -->
+        <div id="phSocio" class="text-center py-5 text-muted">
+          <i class="bi bi-building" style="font-size:2rem; opacity:.3;"></i>
+          <div class="mt-2" style="font-size:.82rem;">Seleccione un proveedor para ver sus facturas pendientes de pago</div>
+        </div>
+
+        <!-- Spinner -->
+        <div id="spnLoading" class="text-center py-5" style="display:none;">
+          <div class="spinner-border spinner-border-sm text-primary"></div>
+          <div class="mt-2 text-muted" style="font-size:.8rem;">Cargando facturas…</div>
+        </div>
+
+        <!-- Sin pendientes -->
+        <div id="divSinPendientes" class="text-center py-5 text-muted" style="display:none;">
+          <i class="bi bi-check-circle" style="font-size:2rem; color:#22c55e; opacity:.7;"></i>
+          <div class="mt-2" style="font-size:.82rem;">Este proveedor no tiene facturas pendientes de pago</div>
+        </div>
+
+        <!-- Tabla facturas -->
+        <div id="divFacturas" style="display:none;">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size:.75rem;">
+              <thead class="table-light" style="font-size:.72rem;">
+                <tr>
+                  <th style="width:36px;" class="text-center">
+                    <input type="checkbox" id="chkTodos" class="form-check-input"
+                           title="Marcar/desmarcar todos" onchange="toggleTodosChk(this.checked)" />
+                  </th>
+                  <th style="min-width:105px;">Factura</th>
+                  <th style="width:90px;">F. Emisión</th>
+                  <th style="width:90px;">F. Vencim.</th>
+                  <th style="width:72px;" class="text-center">Días Venc.</th>
+                  <th style="width:60px;" class="text-center">Moneda</th>
+                  <th class="text-end" style="width:100px;">Total</th>
+                  <th class="text-end" style="width:90px;">Aplicado</th>
+                  <th class="text-end" style="width:95px;">Saldo</th>
+                  <th class="text-end" style="min-width:115px;">Aplicar</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyFacturas"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Totales -->
+        <div id="divTotales" class="card-footer bg-light py-2 px-3" style="display:none;">
+          <div class="d-flex align-items-center justify-content-end gap-4">
+            <span class="text-muted small">Total a aplicar:</span>
+            <div class="d-flex gap-3">
+              <span id="totalSol" class="fw-bold" style="font-size:.85rem; color:#0ea5e9;">S/ 0.00</span>
+              <span id="totalUsd" class="fw-bold" style="font-size:.85rem; color:#f59e0b;">$ 0.00</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /row -->
+
+  <div style="height:64px;"></div>
+</form>
+
+<!-- ── Barra de acciones fija ──────────────────────────────── -->
+<div class="barra-acciones-fija d-flex align-items-center justify-content-end gap-2 px-4 py-2">
+  <a href="{{ url_for('main.compras_cancelaciones') }}"
+     class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-x me-1"></i>Cancelar
+  </a>
+  <button type="button" class="btn btn-primary btn-sm px-4" id="btnGuardar"
+          onclick="guardarCancelacion()" disabled>
+    <i class="bi bi-check-lg me-1"></i>Guardar Pago
+  </button>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm { font-size: .78rem; font-weight: 600; margin-bottom: .2rem; display: block; }
+
+/* ── Socio combobox ──────────────────────────────────────── */
+.socio-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: #fff; border: 1px solid #e2e8f0; border-top: none;
+  border-radius: 0 0 6px 6px; box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  max-height: 220px; overflow-y: auto;
+}
+.socio-opt {
+  display: flex; align-items: baseline; gap: .4rem;
+  padding: 5px 10px; cursor: pointer; font-size: .73rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.socio-opt:last-child { border-bottom: none; }
+.socio-opt:hover { background: #eff6ff; }
+
+/* ── Barra acciones fija ─────────────────────────────────── */
+.barra-acciones-fija {
+  position: fixed; bottom: var(--taskbar-height, 38px); right: 0;
+  left: var(--sidebar-width, 260px);
+  background: #fff; border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 8px rgba(0,0,0,.08); z-index: 500;
+}
+body.sidebar-collapsed .barra-acciones-fija {
+  left: var(--sidebar-collapsed-width, 70px);
+}
+
+/* ── Fila vencida ────────────────────────────────────────── */
+.row-vencida td { color: #b91c1c !important; }
+.row-vencida .saldo-cell { font-weight: 700; color: #dc2626 !important; }
+
+/* ── Input aplicar ───────────────────────────────────────── */
+.inp-aplicar {
+  width: 100%; min-width: 90px; text-align: right;
+  font-family: var(--bs-font-monospace); font-size: .78rem;
+  border: 1px solid #e2e8f0; border-radius: 4px;
+  padding: 2px 6px; background: #f8fafc;
+  transition: border-color .15s, background .15s;
+}
+.inp-aplicar:focus  { outline: none; border-color: #3b82f6; background: #fff; }
+.inp-aplicar:disabled { opacity: .45; cursor: not-allowed; background: #f1f5f9; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+let SOCIOS_DATA    = [];
+let sociosMap      = {};
+let FACTURAS_DATA  = [];
+let cardCodeActual = '';
+
+/* ── Cargar socios (proveedores) ─────────────────────────── */
+fetch('/api/socios-compras')
+  .then(r => r.json())
+  .then(data => {
+    SOCIOS_DATA = data;
+    data.forEach(s => { sociosMap[s.card_code] = s; });
+  });
+
+/* ── Cargar bancos ───────────────────────────────────────── */
+fetch('/api/bancos')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_id_banco');
+    data.forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.id_banco; o.textContent = b.nombre;
+      sel.appendChild(o);
+    });
+  });
+
+/* ── Helpers ─────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function mostrar(id)  { document.getElementById(id).style.display = ''; }
+function ocultar(id)  { document.getElementById(id).style.display = 'none'; }
+
+/* ── Combobox proveedores ────────────────────────────────── */
+const socioSearch   = document.getElementById('f_socio_search');
+const socioHidden   = document.getElementById('f_card_code');
+const socioDropdown = document.getElementById('socioDropdown');
+const socioDisplay  = document.getElementById('bp_nombre_display');
+
+socioSearch.addEventListener('input', function () {
+  const q = this.value.trim().toLowerCase();
+  socioHidden.value = ''; socioDisplay.textContent = '';
+  resetFacturas();
+  if (!q) { ocultar('socioDropdown'); return; }
+  const matches = SOCIOS_DATA.filter(s =>
+    s.card_code.toLowerCase().includes(q) || s.card_name.toLowerCase().includes(q)
+  ).slice(0, 60);
+  if (!matches.length) { ocultar('socioDropdown'); return; }
+  socioDropdown.innerHTML = matches.map(s =>
+    `<div class="socio-opt" data-code="${escHtml(s.card_code)}">
+       <span class="font-monospace text-primary fw-semibold" style="font-size:.72rem;">${escHtml(s.card_code)}</span>
+       <span class="text-muted ms-1" style="font-size:.72rem;">${escHtml(s.card_name)}</span>
+     </div>`
+  ).join('');
+  socioDropdown.style.display = 'block';
+});
+
+socioDropdown.addEventListener('mousedown', function (e) {
+  const opt = e.target.closest('.socio-opt');
+  if (!opt) return;
+  e.preventDefault();
+  seleccionarSocio(opt.dataset.code);
+});
+
+socioSearch.addEventListener('blur', () => {
+  setTimeout(() => { socioDropdown.style.display = 'none'; }, 150);
+});
+
+function seleccionarSocio(code) {
+  const s = sociosMap[code];
+  socioHidden.value        = code;
+  socioSearch.value        = code;
+  socioDisplay.textContent = s ? s.card_name : '';
+  socioDropdown.style.display = 'none';
+  cardCodeActual = code;
+  cargarFacturasPendientes(code);
+}
+
+/* ── Facturas pendientes ─────────────────────────────────── */
+function resetFacturas() {
+  FACTURAS_DATA  = [];
+  cardCodeActual = '';
+  ocultar('divFacturas'); ocultar('divSinPendientes');
+  ocultar('divTotales'); ocultar('badgeCount'); ocultar('btnCheckAll');
+  mostrar('phSocio');
+  document.getElementById('tbodyFacturas').innerHTML = '';
+  document.getElementById('tituloFacturas').textContent = 'Facturas Pendientes de Pago';
+  document.getElementById('btnGuardar').disabled = true;
+}
+
+function cargarFacturasPendientes(code) {
+  ocultar('phSocio'); ocultar('divFacturas');
+  ocultar('divSinPendientes'); ocultar('divTotales');
+  mostrar('spnLoading');
+
+  fetch(`/api/facturas-p-pendientes?card_code=${encodeURIComponent(code)}`)
+    .then(r => r.json())
+    .then(data => {
+      ocultar('spnLoading');
+      FACTURAS_DATA = data;
+      const socio = sociosMap[code];
+      document.getElementById('tituloFacturas').textContent =
+        `Facturas Pendientes — ${socio ? socio.card_name : code}`;
+
+      if (!data.length) {
+        mostrar('divSinPendientes');
+        document.getElementById('btnGuardar').disabled = true;
+        return;
+      }
+
+      const badge = document.getElementById('badgeCount');
+      badge.textContent = `${data.length} factura${data.length !== 1 ? 's' : ''}`;
+      mostrar('badgeCount'); mostrar('btnCheckAll');
+      renderFacturas();
+      distribuirImporte();
+      mostrar('divFacturas'); mostrar('divTotales');
+    })
+    .catch(() => { ocultar('spnLoading'); mostrar('phSocio'); });
+}
+
+const hoy    = new Date().toISOString().slice(0, 10);
+const HOY_MS = new Date(hoy).getTime();
+
+function diasVencidos(docDueDate) {
+  if (!docDueDate) return null;
+  return Math.floor((new Date(docDueDate).getTime() - HOY_MS) / 86400000);
+}
+
+function diasVencCell(dias) {
+  if (dias === null) return '<span class="text-muted">—</span>';
+  if (dias > 0)  return `<span class="text-success" style="font-size:.72rem;">+${dias}d</span>`;
+  if (dias === 0) return `<span class="badge bg-warning-subtle text-warning border" style="font-size:.65rem;">Hoy</span>`;
+  return `<span class="badge bg-danger-subtle text-danger border" style="font-size:.65rem;">${dias}d</span>`;
+}
+
+function renderFacturas() {
+  const tbody = document.getElementById('tbodyFacturas');
+  tbody.innerHTML = '';
+
+  FACTURAS_DATA.forEach((f, idx) => {
+    const dias    = diasVencidos(f.doc_due_date);
+    const vencida = dias !== null && dias <= 0;
+    const sym     = f.doc_currency === 'USD' ? '$' : 'S/';
+    const monBadge = f.doc_currency === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">SOL</span>';
+    const invoiceLabel = (f.invoice_serie && f.invoice_number)
+      ? `${f.invoice_serie}-${f.invoice_number}` : `#${f.invoice_id}`;
+
+    const tr = document.createElement('tr');
+    tr.id = `fila_${idx}`;
+    if (vencida) tr.className = 'row-vencida';
+    tr.innerHTML = `
+      <td class="text-center">
+        <input type="checkbox" class="form-check-input chk-factura" checked
+               data-idx="${idx}" onchange="onCheckFactura(${idx}, this.checked)" />
+      </td>
+      <td class="fw-semibold font-monospace" title="${escHtml(f.invoice_type)}">${escHtml(invoiceLabel)}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${f.doc_date || '—'}</td>
+      <td class="font-monospace ${vencida ? 'text-danger fw-semibold' : 'text-muted'}" style="font-size:.72rem;">${f.doc_due_date || '—'}</td>
+      <td class="text-center">${diasVencCell(dias)}</td>
+      <td class="text-center">${monBadge}</td>
+      <td class="text-end text-muted">${sym} ${f.monto_factura.toFixed(2)}</td>
+      <td class="text-end text-muted">${sym} ${f.total_aplicado.toFixed(2)}</td>
+      <td class="text-end saldo-cell fw-semibold">${sym} ${f.saldo_pendiente.toFixed(2)}</td>
+      <td class="text-end pe-2">
+        <input type="number" class="inp-aplicar" id="inp_${idx}"
+               data-idx="${idx}" data-moneda="${escHtml(f.doc_currency)}"
+               value="${f.saldo_pendiente.toFixed(2)}"
+               min="0.01" step="0.01"
+               oninput="actualizarTotales()" />
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('chkTodos').checked = true;
+  // no llamar actualizarTotales aquí; distribuirImporte lo hace después
+}
+
+function onCheckFactura(idx, checked) {
+  const inp = document.getElementById(`inp_${idx}`);
+  inp.disabled = !checked;
+  inp.value = '0.00';
+  sincronizarChkTodos();
+  distribuirImporte();
+}
+
+function sincronizarChkTodos() {
+  const chks = document.querySelectorAll('.chk-factura');
+  document.getElementById('chkTodos').checked = [...chks].every(c => c.checked);
+}
+
+function toggleTodosChk(checked) {
+  document.querySelectorAll('.chk-factura').forEach(c => {
+    c.checked = checked;
+    const inp = document.getElementById(`inp_${parseInt(c.dataset.idx)}`);
+    inp.disabled = !checked;
+    inp.value = '0.00';
+  });
+  distribuirImporte();
+}
+
+function toggleTodos() {
+  const chkTodos = document.getElementById('chkTodos');
+  chkTodos.checked = !chkTodos.checked;
+  toggleTodosChk(chkTodos.checked);
+}
+
+/* ── Distribuir importe entre facturas marcadas ──────────── */
+function distribuirImporte() {
+  const importe    = parseFloat(document.getElementById('f_importe').value) || 0;
+  const monedaPago = document.getElementById('f_moneda_pago').value;
+  const tc         = parseFloat(document.getElementById('f_tipo_cambio').value) || 1;
+  const chks       = document.querySelectorAll('.chk-factura');
+
+  if (importe <= 0) {
+    // Sin importe: restaurar saldo pendiente en cada marcada
+    chks.forEach(c => {
+      const idx = parseInt(c.dataset.idx);
+      const inp = document.getElementById(`inp_${idx}`);
+      inp.disabled = !c.checked;
+      inp.value    = c.checked ? FACTURAS_DATA[idx].saldo_pendiente.toFixed(2) : '0.00';
+    });
+    actualizarTotales();
+    return;
+  }
+
+  // Con importe: distribuir secuencialmente en moneda_pago
+  let restante = importe;
+
+  chks.forEach(c => {
+    const idx        = parseInt(c.dataset.idx);
+    const inp        = document.getElementById(`inp_${idx}`);
+    const f          = FACTURAS_DATA[idx];
+
+    inp.disabled = !c.checked;
+
+    if (!c.checked || restante <= 0) {
+      inp.value = '0.00';
+      return;
+    }
+
+    // Convertir restante (moneda_pago) → moneda factura
+    let restanteEnFact;
+    if (monedaPago === f.doc_currency)                         restanteEnFact = restante;
+    else if (monedaPago === 'SOL' && f.doc_currency === 'USD') restanteEnFact = restante / tc;
+    else                                                        restanteEnFact = restante * tc;
+
+    const aplicar = Math.min(f.saldo_pendiente, Math.max(0, restanteEnFact));
+    inp.value = aplicar.toFixed(2);
+
+    // Restar aplicado convertido a moneda_pago
+    let aplicadoEnPago;
+    if (monedaPago === f.doc_currency)                         aplicadoEnPago = aplicar;
+    else if (monedaPago === 'SOL' && f.doc_currency === 'USD') aplicadoEnPago = aplicar * tc;
+    else                                                        aplicadoEnPago = aplicar / tc;
+
+    restante = Math.max(0, restante - aplicadoEnPago);
+  });
+
+  actualizarTotales();
+}
+
+function actualizarTotales() {
+  let totalSol = 0, totalUsd = 0;
+  let haySeleccion = false;
+
+  document.querySelectorAll('.chk-factura').forEach(c => {
+    if (!c.checked) return;
+    const idx   = parseInt(c.dataset.idx);
+    const inp   = document.getElementById(`inp_${idx}`);
+    const monto = parseFloat(inp.value) || 0;
+    if (monto > 0) haySeleccion = true;
+    const moneda = inp.dataset.moneda;
+    if (moneda === 'USD') totalUsd += monto;
+    else                  totalSol += monto;
+  });
+
+  document.getElementById('totalSol').textContent = `S/ ${totalSol.toFixed(2)}`;
+  document.getElementById('totalUsd').textContent = `$ ${totalUsd.toFixed(2)}`;
+  document.getElementById('btnGuardar').disabled  = !haySeleccion;
+}
+
+/* ── Guardar ─────────────────────────────────────────────── */
+function guardarCancelacion() {
+  const cardCode = document.getElementById('f_card_code').value.trim();
+  if (!cardCode) {
+    alert('Seleccione un proveedor.');
+    document.getElementById('f_socio_search').focus();
+    return;
+  }
+  if (!document.getElementById('f_id_banco').value) {
+    alert('Seleccione un banco.');
+    document.getElementById('f_id_banco').focus();
+    return;
+  }
+
+  const lineas = [];
+  document.querySelectorAll('.chk-factura').forEach(c => {
+    if (!c.checked) return;
+    const idx   = parseInt(c.dataset.idx);
+    const inp   = document.getElementById(`inp_${idx}`);
+    const monto = parseFloat(inp.value) || 0;
+    if (monto <= 0) return;
+    const f = FACTURAS_DATA[idx];
+    lineas.push({
+      invoice_id:     f.invoice_id,
+      monto_aplicado: monto,
+      monto_factura:  f.monto_factura,
+      moneda_factura: f.doc_currency,
+    });
+  });
+
+  if (!lineas.length) {
+    alert('Marque al menos una factura con monto mayor a 0.');
+    return;
+  }
+
+  document.getElementById('lineas_json').value = JSON.stringify(lineas);
+  document.getElementById('formCancelacion').submit();
+}
+
+/* ── Importe: distribuye al escribir ─────────────────────── */
+document.getElementById('f_importe').addEventListener('input', distribuirImporte);
+
+/* ── Tipo cambio: buscar por fecha de pago ───────────────── */
+function normalizarFecha(f) {
+  if (!f) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(f)) {
+    const [d, m, y] = f.split('/');
+    return `${y}-${m}-${d}`;
+  }
+  return f;
+}
+
+function aplicarTC(venta, fecha) {
+  const tcInput = document.getElementById('f_tipo_cambio');
+  const tcRef   = document.getElementById('lblTCRef');
+  if (venta !== null && venta !== undefined && !isNaN(Number(venta))) {
+    tcInput.value = Number(venta).toFixed(6);
+    if (tcRef) tcRef.textContent = `TC Venta: ${Number(venta).toFixed(4)} (${fecha || ''})`;
+  }
+}
+
+async function cargarTipoCambio(fecha) {
+  const tcRef = document.getElementById('lblTCRef');
+  const iso   = normalizarFecha(fecha);
+  if (!iso) { aplicarTC(TC_VENTA, TC_FECHA); return; }
+  if (tcRef) tcRef.textContent = 'Buscando TC…';
+  try {
+    const res = await fetch(`/api/tipo-cambio?fecha=${iso}`);
+    if (!res.ok) { aplicarTC(TC_VENTA, TC_FECHA); return; }
+    const data = await res.json();
+    if (data.found) {
+      aplicarTC(data.tc_venta, data.fecha);
+    } else {
+      aplicarTC(TC_VENTA, TC_FECHA);
+      if (tcRef && TC_VENTA != null) tcRef.textContent += ' — último disponible';
+    }
+  } catch(e) {
+    aplicarTC(TC_VENTA, TC_FECHA);
+  }
+}
+
+// Aplicar TC global de inmediato (no espera fetch)
+aplicarTC(TC_VENTA, TC_FECHA);
+// Luego actualizar con el TC específico de la fecha de pago
+cargarTipoCambio(document.getElementById('f_fecha_pago').value);
+
+document.getElementById('f_fecha_pago').addEventListener('change', function () {
+  cargarTipoCambio(this.value);
+});
+
+/* ── Tipo cambio: redistribuye al cambiar ────────────────── */
+document.getElementById('f_tipo_cambio').addEventListener('input', distribuirImporte);
+
+/* ── Moneda pago: actualiza etiqueta y redistribuye ─────── */
+document.getElementById('f_moneda_pago').addEventListener('change', function () {
+  const tc  = document.getElementById('f_tipo_cambio');
+  const lbl = document.getElementById('lblMonedaImporte');
+  if (this.value === 'USD') {
+    tc.style.borderColor = '#f59e0b';
+    lbl.textContent = '(USD)';
+  } else {
+    tc.style.borderColor = '';
+    lbl.textContent = '(SOL)';
+  }
+  distribuirImporte();
+});
+</script>
+{% endblock %}

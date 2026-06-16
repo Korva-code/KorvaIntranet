@@ -1,0 +1,962 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} gastos
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="gastosData"  type="application/json">{{ gastos_json  | safe }}</script>
+<script id="tiposData"   type="application/json">{{ tipos_json   | safe }}</script>
+<script id="bancosData"  type="application/json">{{ bancos_json  | safe }}</script>
+<script id="sociosData"  type="application/json">{{ socios_json  | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-receipt text-primary me-1"></i> Gastos
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarGasto"
+             placeholder="Buscar concepto, documento…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo Gasto
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaGastos">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px; position:relative; white-space:nowrap;">
+            ID
+            <button type="button" class="btn-col-filtro" id="btnSort_id"
+                    onclick="sortColumna('id', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_id"></i>
+            </button>
+          </th>
+          <th style="min-width:130px; position:relative; white-space:nowrap;">
+            Tipo de Gasto
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="min-width:150px; position:relative; white-space:nowrap;">
+            Proveedor / Beneficiario
+            <button type="button" class="btn-col-filtro" id="btnSort_proveedor"
+                    onclick="sortColumna('proveedor', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_proveedor"></i>
+            </button>
+          </th>
+          <th style="width:120px;">Nro. Documento</th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Fecha
+            <button type="button" class="btn-col-filtro" id="btnSort_fecha"
+                    onclick="sortColumna('fecha', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_fecha"></i>
+            </button>
+          </th>
+          <th style="width:105px; position:relative; white-space:nowrap;">
+            Vencimiento
+            <button type="button" class="btn-col-filtro" id="btnSort_venc"
+                    onclick="sortColumna('venc', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_venc"></i>
+            </button>
+          </th>
+          <th style="width:65px; position:relative; white-space:nowrap;">
+            Mon.
+            <button type="button" class="btn-col-filtro" id="btnFiltroMoneda"
+                    onclick="toggleFiltro('moneda', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroMoneda"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroMoneda" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-end" style="width:110px; position:relative; white-space:nowrap;">
+            Monto
+            <button type="button" class="btn-col-filtro" id="btnSort_monto"
+                    onclick="sortColumna('monto', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_monto"></i>
+            </button>
+          </th>
+          <th style="min-width:120px; position:relative; white-space:nowrap;">
+            Banco
+            <button type="button" class="btn-col-filtro" id="btnFiltroBanco"
+                    onclick="toggleFiltro('banco', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroBanco"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroBanco" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="min-width:140px;">Concepto</th>
+          <th style="min-width:110px; position:relative; white-space:nowrap;">
+            Usuario Aplica
+            <button type="button" class="btn-col-filtro" id="btnFiltroUsuario"
+                    onclick="toggleFiltro('usuario', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroUsuario"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroUsuario" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:85px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:70px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyGastos"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="contadorVisible">{{ total }}</strong> gastos</span>
+    <span class="ms-auto">
+      Suma SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
+      &nbsp;|&nbsp;
+      Suma USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="gastos-drawer" id="gastoDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Gasto</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body" id="drawerBody">
+    <input type="hidden" id="f_gasto_id" value="0">
+
+    <!-- Clasificación -->
+    <div class="form-section-label">Clasificación</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-6">
+        <label class="form-label-sm">Tipo de Gasto <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="f_id_tipo_gasto">
+          <option value="">— Seleccionar —</option>
+        </select>
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-sm">Moneda</label>
+        <select class="form-select form-select-sm" id="f_doc_currency">
+          <option value="SOL">SOL — Soles</option>
+          <option value="USD">USD — Dólares</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Proveedor / Beneficiario -->
+    <div class="form-section-label">Proveedor / Beneficiario</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-4">
+        <label class="form-label-sm">Código</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_card_code" list="listaSocios" placeholder="Código…"
+               autocomplete="off" oninput="onSocioSelect(this)">
+        <datalist id="listaSocios"></datalist>
+      </div>
+      <div class="col-sm-8">
+        <label class="form-label-sm">Nombre</label>
+        <input type="text" class="form-control form-control-sm bg-light always-readonly"
+               id="f_bp_nombre" readonly>
+      </div>
+    </div>
+
+    <!-- Comprobante -->
+    <div class="form-section-label">Comprobante</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-5">
+        <label class="form-label-sm">Nro. Documento</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_nro_documento" placeholder="F001-00000001">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Monto <span class="text-danger">*</span></label>
+        <input type="number" class="form-control form-control-sm text-end"
+               id="f_monto" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label-sm">T.C.</label>
+        <input type="number" class="form-control form-control-sm"
+               id="f_tipo_cambio" min="0" step="0.000001" placeholder="1.000000"
+               value="1">
+      </div>
+    </div>
+
+    <!-- Fechas -->
+    <div class="form-section-label">Fechas</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-6">
+        <label class="form-label-sm">Fecha Gasto <span class="text-danger">*</span></label>
+        <input type="date" class="form-control form-control-sm" id="f_doc_date">
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-sm">Vencimiento</label>
+        <input type="date" class="form-control form-control-sm" id="f_doc_due_date">
+      </div>
+    </div>
+
+    <!-- Pago -->
+    <div class="form-section-label">Pago</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <label class="form-label-sm">Banco / Caja</label>
+        <select class="form-select form-select-sm" id="f_id_banco">
+          <option value="">— Sin banco —</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Referencia de Pago</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_referencia" placeholder="Nro. operación, cheque, etc.">
+      </div>
+    </div>
+
+    <!-- Descripción -->
+    <div class="form-section-label">Descripción</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <label class="form-label-sm">Concepto <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_concepto" placeholder="Descripción del gasto">
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Memo / Diario</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_journal_memo" placeholder="Nota interna">
+      </div>
+    </div>
+
+    <!-- Imagen / Comprobante -->
+    <div class="form-section-label">Imagen / Comprobante</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <input type="hidden" id="f_imagen">
+        <div id="imagenUploadWrap">
+          <label class="form-label-sm">Adjuntar foto o escaneado</label>
+          <input type="file" class="form-control form-control-sm" id="f_imagen_file"
+                 accept="image/*" onchange="subirImagen(this)">
+        </div>
+        <div id="imagenSpinner" class="mt-2" style="display:none;">
+          <span class="spinner-border spinner-border-sm text-primary"></span>
+          <span class="text-muted small ms-1">Subiendo imagen…</span>
+        </div>
+        <div id="imagenPreview" class="mt-2" style="display:none;">
+          <a id="imagenLink" href="#" target="_blank">
+            <img id="imgPreviewEl" src="" alt="comprobante"
+                 class="img-thumbnail"
+                 style="width:100%; max-height:420px; object-fit:contain; cursor:zoom-in;">
+          </a>
+          <div class="mt-1">
+            <button type="button" id="btnQuitarImagen"
+                    class="btn btn-sm btn-outline-danger py-0 px-2"
+                    onclick="quitarImagen()">
+              <i class="bi bi-trash me-1"></i>Quitar imagen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-outline-warning btn-sm" id="btnEditar"
+            style="display:none;" onclick="modoEditar()">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </button>
+    <button type="button" class="btn btn-outline-danger btn-sm" id="btnAnular"
+            style="display:none;" onclick="anularGasto()">
+      <i class="bi bi-x-circle me-1"></i>Anular
+    </button>
+    <button type="button" class="btn btn-success btn-sm px-3" id="btnAplicar"
+            style="display:none;" onclick="aplicarGasto()">
+      <i class="bi bi-bank me-1"></i>Aplicar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar"
+            onclick="guardarGasto()">
+      <i class="bi bi-check-lg me-1"></i><span id="btnGuardarTxt">Guardar</span>
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm {
+  font-size: .78rem; font-weight: 600; margin-bottom: .2rem; display: block;
+}
+.form-section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #64748b;
+  border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-bottom: .6rem;
+}
+
+/* ── Overlay ────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer ─────────────────────────────────────────────── */
+.gastos-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(520px, 97vw);
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.gastos-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+
+/* ── Filtros ─────────────────────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px; margin-left: 1px;
+  color: #94a3b8; cursor: pointer; font-size: .72rem; vertical-align: middle;
+}
+.btn-col-filtro:hover, .btn-col-filtro.active { color: #3b82f6; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; min-width: 190px; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 0;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px 6px; font-size: .72rem; font-weight: 600; color: #475569;
+  border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+}
+.filtro-action { cursor: pointer; font-size: .68rem; color: #3b82f6; }
+.filtro-action.danger { color: #ef4444; }
+.filtro-opt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px; font-size: .73rem; cursor: pointer;
+}
+.filtro-opt:hover { background: #f8fafc; }
+.filtro-opt input[type=checkbox] { accent-color: #3b82f6; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const GASTOS_DATA  = JSON.parse(document.getElementById('gastosData').textContent);
+const TIPOS_DATA   = JSON.parse(document.getElementById('tiposData').textContent);
+const BANCOS_DATA  = JSON.parse(document.getElementById('bancosData').textContent);
+const SOCIOS_DATA  = JSON.parse(document.getElementById('sociosData').textContent);
+const TODAY        = '{{ today }}';
+
+const sociosMap = {};
+SOCIOS_DATA.forEach(s => { sociosMap[s.card_code] = s; });
+
+/* ── Poblar catálogos ───────────────────────────────────── */
+(function () {
+  const selTipo = document.getElementById('f_id_tipo_gasto');
+  TIPOS_DATA.forEach(t => selTipo.add(new Option(t.nombre, t.id_tipo_gasto)));
+
+  const selBanco = document.getElementById('f_id_banco');
+  BANCOS_DATA.forEach(b => selBanco.add(new Option(b.nombre, b.id_banco)));
+
+  const dl = document.getElementById('listaSocios');
+  SOCIOS_DATA.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.card_code; o.label = s.card_name;
+    dl.appendChild(o);
+  });
+})();
+
+/* ── Socio select ───────────────────────────────────────── */
+function onSocioSelect(inp) {
+  const s = sociosMap[inp.value];
+  document.getElementById('f_bp_nombre').value = s ? (s.card_name || '') : '';
+}
+
+/* ── Ordenamiento ───────────────────────────────────────── */
+const _sortState = {};
+const _sortGetters = {
+  id:        g => g.gasto_id,
+  proveedor: g => (g.bp_name  || g.card_code || '').toLowerCase(),
+  fecha:     g => g.doc_date     || '',
+  venc:      g => g.doc_due_date || '',
+  monto:     g => g.monto        || 0,
+};
+
+function sortColumna(key, e) {
+  e.stopPropagation();
+  Object.keys(_sortState).forEach(k => {
+    if (k !== key) {
+      const pi = document.getElementById('iconSort_' + k);
+      const pb = document.getElementById('btnSort_'  + k);
+      if (pi) pi.className = 'bi bi-arrow-down-up';
+      if (pb) pb.classList.remove('active');
+      delete _sortState[k];
+    }
+  });
+  _sortState[key] = _sortState[key] === 'asc' ? 'desc' : 'asc';
+  const dir  = _sortState[key];
+  const icon = document.getElementById('iconSort_' + key);
+  const btn  = document.getElementById('btnSort_'  + key);
+  if (icon) icon.className = dir === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+  if (btn)  btn.classList.add('active');
+  renderTabla();
+}
+
+/* ── Filtros ────────────────────────────────────────────── */
+const filtros = { tipo: new Set(), moneda: new Set(), banco: new Set(), usuario: new Set(), estado: new Set() };
+let busqueda = '';
+
+function toggleFiltro(col, e) {
+  e.stopPropagation();
+  const key   = col.charAt(0).toUpperCase() + col.slice(1);
+  const panel = document.getElementById('panelFiltro' + key);
+  const open  = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!open) { construirFiltro(col, panel); panel.style.display = 'block'; }
+}
+
+function construirFiltro(col, panel) {
+  let vals, labelFn;
+  if (col === 'tipo') {
+    vals    = [...new Set(GASTOS_DATA.map(g => String(g.id_tipo_gasto ?? '')))].sort();
+    labelFn = v => GASTOS_DATA.find(g => String(g.id_tipo_gasto ?? '') === v)?.tipo_nombre || (v === '' ? '(Sin tipo)' : v);
+  } else if (col === 'moneda') {
+    vals    = [...new Set(GASTOS_DATA.map(g => g.doc_currency))].sort();
+    labelFn = v => v;
+  } else if (col === 'banco') {
+    vals    = [...new Set(GASTOS_DATA.map(g => g.banco_nombre || ''))].filter(Boolean).sort();
+    labelFn = v => v || '(Sin banco)';
+  } else if (col === 'usuario') {
+    vals    = [...new Set(GASTOS_DATA.map(g => g.user_nombre || ''))].filter(Boolean).sort();
+    labelFn = v => v;
+  } else if (col === 'estado') {
+    vals    = [...new Set(GASTOS_DATA.map(g => String(g.id_estado)))].sort();
+    labelFn = v => v === '1' ? 'Activo' : v === '2' ? 'Aplicado' : 'Anulado';
+  }
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span>Filtrar</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${col}')">Limpiar</span>
+    </div>
+    ${vals.map(v => `
+      <label class="filtro-opt">
+        <input type="checkbox" value="${escHtml(v)}"
+               ${filtros[col].has(v) ? 'checked' : ''}
+               onchange="onFiltroChange('${col}', this)" />
+        ${escHtml(labelFn(v))}
+      </label>`).join('')}`;
+}
+
+function onFiltroChange(col, cb) {
+  if (cb.checked) filtros[col].add(cb.value); else filtros[col].delete(cb.value);
+  const key = col.charAt(0).toUpperCase() + col.slice(1);
+  document.getElementById('iconFiltro' + key).classList.toggle('active', filtros[col].size > 0);
+  renderTabla();
+}
+
+function limpiarFiltro(col) {
+  filtros[col].clear();
+  cerrarTodosFiltros();
+  renderTabla();
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+document.getElementById('buscarGasto').addEventListener('input', function () {
+  busqueda = this.value;
+  renderTabla();
+});
+
+/* ── Render grilla ──────────────────────────────────────── */
+function renderTabla() {
+  const q = busqueda.toLowerCase();
+
+  let filas = GASTOS_DATA.filter(g => {
+    if (filtros.tipo.size    && !filtros.tipo.has(String(g.id_tipo_gasto ?? '')))  return false;
+    if (filtros.moneda.size  && !filtros.moneda.has(g.doc_currency))              return false;
+    if (filtros.banco.size   && !filtros.banco.has(g.banco_nombre || ''))         return false;
+    if (filtros.usuario.size && !filtros.usuario.has(g.user_nombre || ''))         return false;
+    if (filtros.estado.size  && !filtros.estado.has(String(g.id_estado)))          return false;
+    if (q && !g.concepto.toLowerCase().includes(q) &&
+             !g.nro_documento.toLowerCase().includes(q) &&
+             !(g.bp_name || '').toLowerCase().includes(q) &&
+             !(g.tipo_nombre || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Ordenar
+  const sortKey = Object.keys(_sortState)[0];
+  if (sortKey) {
+    const dir    = _sortState[sortKey];
+    const getter = _sortGetters[sortKey];
+    const isNum  = sortKey === 'id' || sortKey === 'monto';
+    filas.sort((a, b) => {
+      const va = getter(a), vb = getter(b);
+      if (isNum) return dir === 'asc' ? va - vb : vb - va;
+      return dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  const tbody = document.getElementById('tbodyGastos');
+  tbody.innerHTML = filas.length ? '' :
+    '<tr><td colspan="13" class="text-center text-muted py-5">Sin gastos registrados.</td></tr>';
+
+  filas.forEach(g => {
+    const sym = g.doc_currency === 'USD' ? '$' : 'S/';
+    const monedaBadge = g.doc_currency === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">SOL</span>';
+    const estadoBadge = g.id_estado === 2
+      ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size:.63rem;">Aplicado</span>'
+      : '<span class="badge bg-success-subtle text-success" style="font-size:.63rem;">Activo</span>';
+    const tr = document.createElement('tr');
+    tr.style.fontSize = '.75rem';
+    if (g.id_estado === 2) tr.style.opacity = '.8';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${g.gasto_id}</td>
+      <td>${g.tipo_nombre ? `<span class="badge bg-light text-secondary border" style="font-size:.63rem;">${escHtml(g.tipo_nombre)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td class="fw-semibold">${escHtml(g.bp_name || g.card_code || '—')}</td>
+      <td class="font-monospace text-muted">${escHtml(g.nro_documento || '—')}</td>
+      <td class="text-muted">${g.doc_date     || '—'}</td>
+      <td class="text-muted">${g.doc_due_date || '—'}</td>
+      <td>${monedaBadge}</td>
+      <td class="text-end fw-semibold">${sym} ${(g.monto || 0).toFixed(2)}</td>
+      <td class="text-muted" style="font-size:.68rem;">${escHtml(g.banco_nombre || '—')}</td>
+      <td class="text-muted" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+          title="${escHtml(g.concepto)}">${escHtml(g.concepto || '—')}</td>
+      <td class="text-muted">${escHtml(g.user_nombre || '—')}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;" title="Ver / Editar"
+                onclick="abrirDrawer('view', ${g.gasto_id})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+
+  let sumaSOL = 0, sumaUSD = 0;
+  filas.forEach(g => {
+    if ((g.doc_currency || 'SOL') === 'USD') sumaUSD += (g.monto || 0);
+    else                                     sumaSOL += (g.monto || 0);
+  });
+  document.getElementById('sumaTotalSOL').textContent = 'S/ ' + sumaSOL.toFixed(2);
+  document.getElementById('sumaTotalUSD').textContent = '$ '  + sumaUSD.toFixed(2);
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Drawer ─────────────────────────────────────────────── */
+let _currentGasto = null;
+
+function abrirDrawer(modo, id) {
+  if (modo === 'view' && id != null) {
+    const g = GASTOS_DATA.find(x => x.gasto_id === id);
+    if (!g) return;
+    modoVer(g);
+  } else {
+    modoNuevo();
+  }
+  document.getElementById('gastoDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.getElementById('drawerBody').scrollTop = 0;
+}
+
+function cerrarDrawer() {
+  document.getElementById('gastoDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  _currentGasto = null;
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Modo NUEVO ─── */
+function modoNuevo() {
+  _currentGasto = null;
+  setBadge('NUEVO', 'bg-primary');
+  document.getElementById('drawerTitle').textContent    = 'Nuevo Gasto';
+  document.getElementById('btnGuardar').style.display  = '';
+  document.getElementById('btnGuardarTxt').textContent = 'Guardar';
+  document.getElementById('btnEditar').style.display   = 'none';
+  document.getElementById('btnAnular').style.display   = 'none';
+  document.getElementById('btnAplicar').style.display  = 'none';
+  limpiarForm();
+  setReadonly(false);
+  document.getElementById('f_doc_date').value     = TODAY;
+  document.getElementById('f_doc_due_date').value = TODAY;
+}
+
+/* ── Modo VER ─── */
+function modoVer(g) {
+  _currentGasto = g;
+  llenarForm(g);
+  setReadonly(true);
+  // Imagen siempre editable aunque el resto sea solo lectura
+  document.getElementById('imagenUploadWrap').style.display = '';
+  document.getElementById('f_imagen_file').disabled = false;
+  const btnQI = document.getElementById('btnQuitarImagen');
+  if (btnQI) btnQI.style.display = (g.imagen && g.id_estado !== 2) ? '' : 'none';
+  document.getElementById('drawerTitle').textContent  = `Gasto #${g.gasto_id}`;
+  document.getElementById('btnGuardar').style.display = 'none';
+  const btnAplicar = document.getElementById('btnAplicar');
+  if (g.id_estado === 2) {
+    setBadge('APLICADO', 'bg-success');
+    document.getElementById('btnEditar').style.display  = 'none';
+    document.getElementById('btnAnular').style.display  = 'none';
+    btnAplicar.style.display = 'none';
+  } else {
+    setBadge('VER', 'bg-secondary');
+    document.getElementById('btnEditar').style.display  = '';
+    document.getElementById('btnAnular').style.display  = '';
+    btnAplicar.style.display  = '';
+    btnAplicar.dataset.id = g.gasto_id;
+  }
+}
+
+/* ── Modo EDITAR ─── */
+function modoEditar() {
+  const g = _currentGasto;
+  if (!g) return;
+  setBadge('EDITAR', 'bg-warning text-dark');
+  document.getElementById('drawerTitle').textContent    = `Editando Gasto #${g.gasto_id}`;
+  document.getElementById('btnGuardar').style.display  = '';
+  document.getElementById('btnGuardarTxt').textContent = 'Guardar Cambios';
+  document.getElementById('btnEditar').style.display   = 'none';
+  document.getElementById('btnAnular').style.display   = 'none';
+  document.getElementById('btnAplicar').style.display  = 'none';
+  setReadonly(false);
+}
+
+/* ── Helpers ─── */
+function setBadge(txt, cls) {
+  const b = document.getElementById('drawerBadge');
+  b.textContent = txt; b.className = 'badge ' + cls;
+}
+
+function setReadonly(on) {
+  document.querySelectorAll(
+    '#drawerBody input:not(.always-readonly), #drawerBody select'
+  ).forEach(el => {
+    if (el.type === 'hidden') return;
+    if (el.type === 'file') { el.disabled = on; return; }
+    el.readOnly = on;
+    if (el.tagName === 'SELECT') el.disabled = on;
+  });
+  const btnQuitar = document.getElementById('btnQuitarImagen');
+  if (btnQuitar) btnQuitar.style.display = on ? 'none' : '';
+  const wrap = document.getElementById('imagenUploadWrap');
+  if (wrap) wrap.style.display = on ? 'none' : '';
+}
+
+function llenarForm(g) {
+  document.getElementById('f_gasto_id').value         = g.gasto_id;
+  document.getElementById('f_id_tipo_gasto').value    = g.id_tipo_gasto ?? '';
+  document.getElementById('f_card_code').value        = g.card_code;
+  document.getElementById('f_bp_nombre').value        = g.bp_name || '';
+  document.getElementById('f_nro_documento').value    = g.nro_documento;
+  document.getElementById('f_doc_date').value         = g.doc_date;
+  document.getElementById('f_doc_due_date').value     = g.doc_due_date;
+  document.getElementById('f_doc_currency').value     = g.doc_currency || 'SOL';
+  document.getElementById('f_tipo_cambio').value      = g.tipo_cambio ?? 1;
+  document.getElementById('f_monto').value            = g.monto != null ? parseFloat(g.monto).toFixed(2) : '';
+  document.getElementById('f_id_banco').value         = g.id_banco ?? '';
+  document.getElementById('f_referencia').value       = g.referencia;
+  document.getElementById('f_concepto').value         = g.concepto;
+  document.getElementById('f_journal_memo').value     = g.journal_memo;
+  // Imagen
+  if (g.imagen) {
+    const url = `/static/uploads/gastos/${g.imagen}`;
+    document.getElementById('f_imagen').value    = g.imagen;
+    document.getElementById('imgPreviewEl').src  = url;
+    document.getElementById('imagenLink').href   = url;
+    document.getElementById('imagenPreview').style.display = '';
+  } else {
+    quitarImagen();
+  }
+}
+
+function limpiarForm() {
+  document.getElementById('f_gasto_id').value      = '0';
+  document.getElementById('f_id_tipo_gasto').selectedIndex = 0;
+  document.getElementById('f_card_code').value     = '';
+  document.getElementById('f_bp_nombre').value     = '';
+  document.getElementById('f_nro_documento').value = '';
+  document.getElementById('f_doc_date').value      = '';
+  document.getElementById('f_doc_due_date').value  = '';
+  document.getElementById('f_doc_currency').value  = 'SOL';
+  document.getElementById('f_tipo_cambio').value   = '1';
+  document.getElementById('f_monto').value         = '';
+  document.getElementById('f_id_banco').selectedIndex = 0;
+  document.getElementById('f_referencia').value    = '';
+  document.getElementById('f_concepto').value      = '';
+  document.getElementById('f_journal_memo').value  = '';
+  quitarImagen();
+}
+
+/* ── Guardar (AJAX) ─────────────────────────────────────── */
+async function guardarGasto() {
+  const concepto = document.getElementById('f_concepto').value.trim();
+  const docDate  = document.getElementById('f_doc_date').value;
+  const monto    = parseFloat(document.getElementById('f_monto').value || 0);
+
+  if (!concepto) {
+    mostrarToast('warning', 'El campo Concepto es obligatorio.');
+    document.getElementById('f_concepto').focus();
+    return;
+  }
+  if (!docDate) {
+    mostrarToast('warning', 'La Fecha del Gasto es obligatoria.');
+    document.getElementById('f_doc_date').focus();
+    return;
+  }
+  if (monto <= 0) {
+    mostrarToast('warning', 'El Monto debe ser mayor a 0.');
+    document.getElementById('f_monto').focus();
+    return;
+  }
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  const payload = {
+    gasto_id:       parseInt(document.getElementById('f_gasto_id').value) || 0,
+    id_tipo_gasto:  document.getElementById('f_id_tipo_gasto').value || 0,
+    card_code:      document.getElementById('f_card_code').value.trim(),
+    nro_documento:  document.getElementById('f_nro_documento').value.trim(),
+    doc_date:       docDate,
+    doc_due_date:   document.getElementById('f_doc_due_date').value || '',
+    doc_currency:   document.getElementById('f_doc_currency').value,
+    tipo_cambio:    parseFloat(document.getElementById('f_tipo_cambio').value) || 1,
+    monto:          monto,
+    id_banco:       document.getElementById('f_id_banco').value || 0,
+    referencia:     document.getElementById('f_referencia').value.trim(),
+    concepto:       concepto,
+    journal_memo:   document.getElementById('f_journal_memo').value.trim(),
+    imagen:         document.getElementById('f_imagen').value || null,
+  };
+
+  try {
+    const resp = await fetch('{{ url_for("main.finanzas_gastos_guardar") }}', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      mostrarToast('success', res.message || 'Gasto guardado correctamente.');
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      mostrarToast('danger', res.message || 'Error al guardar.');
+    }
+  } catch (e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar';
+  }
+}
+
+/* ── Imagen ─────────────────────────────────────────────── */
+async function subirImagen(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  document.getElementById('imagenSpinner').style.display  = '';
+  document.getElementById('imagenPreview').style.display  = 'none';
+
+  const fd = new FormData();
+  fd.append('file',   file);
+  fd.append('modulo', 'gastos');
+
+  try {
+    const resp = await fetch('/api/upload-imagen', { method: 'POST', body: fd });
+    const res  = await resp.json();
+    if (res.success) {
+      document.getElementById('f_imagen').value   = res.filename;
+      document.getElementById('imgPreviewEl').src = res.url;
+      document.getElementById('imagenLink').href  = res.url;
+      document.getElementById('imagenPreview').style.display = '';
+      document.getElementById('btnQuitarImagen').style.display = '';
+      _mostrarGuardarImagen();
+    } else {
+      mostrarToast('danger', res.message || 'Error al subir imagen.');
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    document.getElementById('imagenSpinner').style.display = 'none';
+    input.value = '';
+  }
+}
+
+function quitarImagen() {
+  document.getElementById('f_imagen').value              = '';
+  document.getElementById('imgPreviewEl').src            = '';
+  document.getElementById('imagenLink').href             = '#';
+  document.getElementById('imagenPreview').style.display = 'none';
+  _mostrarGuardarImagen();
+}
+
+function _mostrarGuardarImagen() {
+  // Solo actúa cuando hay un gasto cargado (VER/APLICADO) y el botón está oculto
+  if (!_currentGasto) return;
+  const btnG = document.getElementById('btnGuardar');
+  if (btnG.style.display === 'none') {
+    btnG.style.display = '';
+    document.getElementById('btnGuardarTxt').textContent = 'Guardar imagen';
+  }
+}
+
+/* ── Aplicar ────────────────────────────────────────────── */
+function aplicarGasto() {
+  const id = parseInt(document.getElementById('btnAplicar').dataset.id, 10);
+  confirmarAccion(
+    `¿Confirma aplicar el Gasto #${id}? Se registrará en Estado de Cuenta Bancario.`,
+    async () => {
+      try {
+        const resp = await fetch(`/finanzas/gastos/${id}/aplicar`, { method: 'POST' });
+        const res  = await resp.json();
+        if (res.success) {
+          mostrarToast('success', res.message || 'Gasto aplicado correctamente.');
+          cerrarDrawer();
+          setTimeout(() => location.reload(), 900);
+        } else {
+          mostrarToast('danger', res.message || 'Error al aplicar el gasto.');
+        }
+      } catch(e) {
+        mostrarToast('danger', 'Error de conexión: ' + e.message);
+      }
+    },
+    { titulo: 'Aplicar Gasto', tipo: 'primary', txtBtn: 'Aplicar' }
+  );
+}
+
+/* ── Anular ─────────────────────────────────────────────── */
+function anularGasto() {
+  const g = _currentGasto;
+  if (!g) return;
+  confirmarAccion(
+    `¿Confirma anular el Gasto #${g.gasto_id}? Esta acción eliminará también su registro bancario.`,
+    async () => {
+      try {
+        const resp = await fetch(`/finanzas/gastos/${g.gasto_id}/anular`, { method: 'POST' });
+        const res  = await resp.json();
+        if (res.success) {
+          mostrarToast('success', res.message);
+          cerrarDrawer();
+          setTimeout(() => location.reload(), 900);
+        } else {
+          mostrarToast('danger', res.message || 'Error al anular.');
+        }
+      } catch (e) {
+        mostrarToast('danger', 'Error de conexión: ' + e.message);
+      }
+    },
+    { titulo: 'Anular Gasto', tipo: 'danger', txtBtn: 'Anular' }
+  );
+}
+
+/* ── Excel ──────────────────────────────────────────────── */
+function exportarExcel() {
+  function thLabel(th) {
+    for (const node of th.childNodes)
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+        return node.textContent.trim();
+    return th.textContent.replace(/\s+/g, ' ').trim();
+  }
+  const ths  = [...document.querySelectorAll('#tablaGastos thead th')];
+  const hdrs = ths.slice(0, -1).map(thLabel);
+  const filas = [];
+  document.querySelectorAll('#tbodyGastos tr').forEach(tr => {
+    const tds = [...tr.querySelectorAll('td')];
+    if (tds.length > 1)
+      filas.push(tds.slice(0, -1).map(td => td.textContent.replace(/\s+/g, ' ').trim()));
+  });
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  filas.forEach(f => { html += '<tr>' + f.map(c => `<td>${c}</td>`).join('') + '</tr>'; });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `gastos_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Init ───────────────────────────────────────────────── */
+renderTabla();
+</script>
+{% endblock %}

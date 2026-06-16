@@ -1,0 +1,1236 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} partes
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="partesData" type="application/json">{{ partes_json | safe }}</script>
+<script id="puntosData" type="application/json">{{ puntos_json | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     PARTES ABIERTOS — alerta prominente
+     ══════════════════════════════════════════════════════════ -->
+<div id="seccionAbiertos" class="mb-3" style="display:none;"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-clock-history text-primary me-1"></i> Parte Diario
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:240px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarParte"
+             placeholder="Buscar punto de venta, usuario…">
+    </div>
+    <div class="d-flex gap-2 ms-auto flex-wrap">
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirApertura()">
+        <i class="bi bi-unlock me-1"></i>Nueva Apertura
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:420px;">
+    <table class="table table-hover align-middle mb-0" id="tablaPartes">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px;">#</th>
+          <th style="min-width:130px; position:relative; white-space:nowrap;">
+            Punto de Venta
+            <button type="button" class="btn-col-filtro" id="btnFiltroPunto"
+                    onclick="toggleFiltro('punto', event)">
+              <i class="bi bi-funnel" id="iconFiltroPunto"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroPunto"
+                 style="display:none;" onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="min-width:130px; position:relative; white-space:nowrap;">
+            Usuario
+            <button type="button" class="btn-col-filtro" id="btnFiltroUsuario"
+                    onclick="toggleFiltro('usuario', event)">
+              <i class="bi bi-funnel" id="iconFiltroUsuario"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroUsuario"
+                 style="display:none;" onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:140px;">Apertura</th>
+          <th style="width:140px;">Cierre</th>
+          <th style="width:90px;">Duración</th>
+          <th class="text-end" style="width:105px;">M. Inicial</th>
+          <th class="text-end" style="width:105px;">M. Final</th>
+          <th class="text-center" style="width:80px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado', event)">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado"
+                 style="display:none;" onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:65px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyPartes"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="contadorVisible">{{ total }}</strong> partes</span>
+    <span class="ms-auto d-flex gap-3">
+      <span>Abiertos: <strong class="text-success" id="contAbiertos">0</strong></span>
+      <span>Cerrados: <strong class="text-secondary" id="contCerrados">0</strong></span>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="parte-drawer" id="parteDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">APERTURA</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nueva Apertura</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- ── Sección APERTURA ─────────────────────────────── -->
+    <div id="secApertura">
+      <div class="form-section-label">Datos de Apertura</div>
+      <div class="row g-3">
+
+        <div class="col-12">
+          <label class="form-label-sm">Punto de Venta <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" id="f_punto_venta">
+            <option value="">— Seleccionar —</option>
+          </select>
+        </div>
+
+        <div class="col-7">
+          <label class="form-label-sm">Fecha <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-sm" id="f_fecha_apertura" />
+        </div>
+        <div class="col-5">
+          <label class="form-label-sm">Hora</label>
+          <input type="time" class="form-control form-control-sm" id="f_hora_apertura" step="60" />
+        </div>
+
+        <div class="col-12">
+          <label class="form-label-sm">Monto Inicial (efectivo en caja)</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text">S/</span>
+            <input type="number" class="form-control text-end" id="f_monto_inicial"
+                   value="0" min="0" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label-sm">Observación</label>
+          <textarea class="form-control form-control-sm" id="f_obs_apertura"
+                    rows="2" placeholder="Opcional…"></textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Sección VER detalle ──────────────────────────── -->
+    <div id="secVer" style="display:none;">
+
+      <div class="form-section-label" id="labelVerApertura">Apertura</div>
+      <div class="row g-2 mb-3" id="rowVerApertura">
+        <div class="col-6">
+          <div class="info-label">Punto de Venta</div>
+          <div class="info-val fw-semibold" id="v_punto_venta">—</div>
+        </div>
+        <div class="col-6">
+          <div class="info-label">Usuario</div>
+          <div class="info-val" id="v_usuario">—</div>
+        </div>
+        <div class="col-6">
+          <div class="info-label">Fecha Apertura</div>
+          <div class="info-val font-monospace" id="v_fecha_apertura">—</div>
+        </div>
+        <div class="col-6">
+          <div class="info-label">Monto Inicial</div>
+          <div class="info-val fw-semibold" id="v_monto_inicial">—</div>
+        </div>
+        <div class="col-12" id="v_obs_apertura_wrap" style="display:none;">
+          <div class="info-label">Observación Apertura</div>
+          <div class="info-val text-muted" id="v_obs_apertura">—</div>
+        </div>
+      </div>
+
+      <!-- Editar apertura (solo si abierto) -->
+      <div id="secEditarApertura" style="display:none;">
+        <div class="form-section-label">Editar Apertura</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label-sm">Punto de Venta <span class="text-danger">*</span></label>
+            <select class="form-select form-select-sm" id="e_punto_venta"></select>
+          </div>
+          <div class="col-7">
+            <label class="form-label-sm">Fecha</label>
+            <input type="date" class="form-control form-control-sm" id="e_fecha_apertura" />
+          </div>
+          <div class="col-5">
+            <label class="form-label-sm">Hora</label>
+            <input type="time" class="form-control form-control-sm" id="e_hora_apertura" step="60" />
+          </div>
+          <div class="col-12">
+            <label class="form-label-sm">Monto Inicial</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">S/</span>
+              <input type="number" class="form-control text-end" id="e_monto_inicial"
+                     min="0" step="0.01" />
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label-sm">Observación</label>
+            <textarea class="form-control form-control-sm" id="e_obs_apertura" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cierre (solo si ya cerrado) -->
+      <div id="secVerCierre" style="display:none;">
+        <div class="form-section-label">Cierre</div>
+        <div class="row g-2 mb-3">
+          <div class="col-6">
+            <div class="info-label">Fecha Cierre</div>
+            <div class="info-val font-monospace" id="v_fecha_cierre">—</div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Duración</div>
+            <div class="info-val fw-semibold text-primary" id="v_duracion">—</div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Monto Final</div>
+            <div class="info-val fw-semibold text-success" id="v_monto_final">—</div>
+          </div>
+          <div class="col-6">
+            <div class="info-label">Diferencia</div>
+            <div class="info-val fw-bold" id="v_diferencia">—</div>
+          </div>
+          <div class="col-12" id="v_obs_cierre_wrap" style="display:none;">
+            <div class="info-label">Observación Cierre</div>
+            <div class="info-val text-muted" id="v_obs_cierre">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Formulario de cierre (solo si abierto) -->
+      <div id="secFormCierre" style="display:none;">
+        <div class="form-section-label">Cerrar Parte Diario</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label-sm">Monto Final (efectivo en caja)</label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">S/</span>
+              <input type="number" class="form-control text-end" id="f_monto_final"
+                     value="0" min="0" step="0.01" placeholder="0.00"
+                     oninput="calcularDiferencia()" />
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center
+                        rounded p-2 bg-light border" id="diferenciaWrap">
+              <span class="text-muted small">Diferencia (Final − Inicial):</span>
+              <span class="fw-bold" id="diferenciaPreview">S/ 0.00</span>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label-sm">Observación de Cierre</label>
+            <textarea class="form-control form-control-sm" id="f_obs_cierre"
+                      rows="2" placeholder="Opcional…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reporte del turno -->
+      <div id="seccionReporte" class="mt-3" style="display:none;"></div>
+
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <!-- Footer -->
+  <div class="drawer-footer" id="drawerFooter">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cerrar
+    </button>
+    <!-- modo apertura -->
+    <button type="button" class="btn btn-success btn-sm px-4" id="btnAperturar"
+            style="display:none;" onclick="aperturar()">
+      <i class="bi bi-unlock me-1"></i>Aperturar
+    </button>
+    <!-- modo ver -->
+    <button type="button" class="btn btn-outline-warning btn-sm" id="btnEditar"
+            style="display:none;" onclick="activarEdicion()">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </button>
+    <button type="button" class="btn btn-danger btn-sm px-3" id="btnCerrar"
+            style="display:none;" onclick="cerrarParte()">
+      <i class="bi bi-lock me-1"></i>Cerrar Parte
+    </button>
+    <button type="button" class="btn btn-danger btn-sm" id="btnPDF"
+            style="display:none;" disabled onclick="generarPDF()">
+      <i class="bi bi-file-pdf me-1"></i>PDF
+    </button>
+    <!-- modo edición -->
+    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCancelarEdicion"
+            style="display:none;" onclick="cancelarEdicion()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardarEdicion"
+            style="display:none;" onclick="guardarEdicion()">
+      <i class="bi bi-check-lg me-1"></i>Guardar
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-section-label {
+  font-size:.62rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.08em; color:#94a3b8;
+  border-bottom:1px solid #e2e8f0; padding-bottom:.2rem; margin-bottom:.6rem;
+}
+.form-label-sm  { display:block; font-size:.75rem; font-weight:600; color:#475569; margin-bottom:.15rem; }
+.info-label     { font-size:.7rem; color:#94a3b8; font-weight:600; margin-bottom:.1rem; }
+.info-val       { font-size:.82rem; }
+
+/* Overlay */
+.drawer-overlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(15,23,42,.45); backdrop-filter:blur(2px); z-index:1090;
+}
+.drawer-overlay.active { display:block; }
+
+/* Drawer */
+.parte-drawer {
+  position:fixed; top:0; right:0; bottom:0; width:440px; max-width:97vw;
+  background:#fff; box-shadow:-8px 0 32px rgba(0,0,0,.18);
+  z-index:1100; display:flex; flex-direction:column;
+  transform:translateX(100%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+.parte-drawer.open       { transform:translateX(0); }
+.parte-drawer.wide       { width:min(860px, 97vw); }
+.drawer-header {
+  display:flex; align-items:center; gap:.75rem;
+  padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0;
+  background:#f8fafc; flex-shrink:0;
+}
+.drawer-body {
+  flex:1; overflow-y:auto; padding:1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width:4px; }
+.drawer-body::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+.drawer-footer {
+  padding:.85rem 1.25rem; border-top:1px solid #e2e8f0;
+  background:#f8fafc; display:flex; justify-content:flex-end;
+  gap:.5rem; flex-shrink:0;
+}
+
+/* Filtros */
+.btn-col-filtro {
+  background:none; border:none; padding:0 2px;
+  cursor:pointer; color:#94a3b8; font-size:.72rem; vertical-align:middle;
+}
+.btn-col-filtro.active, .btn-col-filtro:hover { color:#2563eb; }
+.col-filtro-panel {
+  position:absolute; top:100%; left:0; z-index:300;
+  background:#fff; border:1px solid #e2e8f0; border-radius:6px;
+  box-shadow:0 4px 20px rgba(0,0,0,.14); min-width:170px;
+  font-size:.75rem; font-weight:400; text-transform:none; letter-spacing:0;
+}
+.filtro-panel-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:5px 10px; border-bottom:1px solid #f1f5f9; background:#f8fafc;
+}
+.filtro-action.danger { cursor:pointer; font-size:.7rem; color:#ef4444; }
+.filtro-opt {
+  display:flex; align-items:center; gap:6px;
+  padding:4px 10px; cursor:pointer; white-space:nowrap;
+}
+.filtro-opt:hover { background:#f1f5f9; }
+.filtro-opt input[type=checkbox] { accent-color:#2563eb; }
+
+/* Card partes abiertos */
+.parte-abierto-card {
+  border:2px solid #22c55e; border-radius:10px;
+  padding:.85rem 1.1rem; background:#f0fdf4;
+  display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+}
+.parte-abierto-card .punto-icon {
+  width:44px; height:44px; border-radius:50%;
+  background:#dcfce7; display:flex; align-items:center;
+  justify-content:center; flex-shrink:0;
+}
+
+/* Reporte parte diario */
+.reporte-label {
+  font-size:.6rem; font-weight:800; text-transform:uppercase;
+  letter-spacing:.12em; color:#94a3b8; text-align:center;
+  border-bottom:2px solid #e2e8f0; padding-bottom:.4rem; margin-bottom:.75rem;
+}
+.reporte-head {
+  background:linear-gradient(135deg,#1e40af 0%,#1d6f42 100%);
+  color:#fff; border-radius:10px 10px 0 0; padding:1rem 1.25rem;
+}
+#seccionReporte .table thead th { font-size:.7rem; white-space:nowrap; }
+#seccionReporte .table tbody td { font-size:.73rem; }
+.caja-total-box {
+  border:1px solid #e2e8f0; border-radius:8px;
+  padding:.6rem 1rem; text-align:center; min-width:130px; background:#f8fafc;
+}
+.caja-total-box .label { font-size:.65rem; color:#94a3b8; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+.caja-total-box .valor { font-size:1.05rem; font-weight:700; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const PARTES_DATA = JSON.parse(document.getElementById('partesData').textContent);
+const PUNTOS_DATA = JSON.parse(document.getElementById('puntosData').textContent);
+const USER_CODE   = '{{ user_code }}';
+
+const filtros = { punto: new Set(), usuario: new Set(), estado: new Set() };
+let busqueda     = '';
+let _currentId   = null;
+let _reporteData = null;
+
+/* ── Poblar select puntos de venta ──────────────────────── */
+(function () {
+  const sel = document.getElementById('f_punto_venta');
+  PUNTOS_DATA.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.nombre; sel.appendChild(o);
+  });
+})();
+
+/* ── Helpers ─────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function formatFecha(iso) {
+  if (!iso) return '—';
+  return iso.replace('T', ' ').substring(0, 16);
+}
+
+function calcDuracion(apertura, cierre) {
+  if (!apertura) return '—';
+  const fin = cierre ? new Date(cierre) : new Date();
+  const min = Math.floor((fin - new Date(apertura)) / 60000);
+  const h = Math.floor(min / 60), m = min % 60;
+  return `${h}h ${String(m).padStart(2,'0')}m`;
+}
+
+/* ── Sección partes abiertos (banner) ────────────────────── */
+function renderAbiertos() {
+  const abiertos = PARTES_DATA.filter(p => p.id_estado === 1);
+  const sec = document.getElementById('seccionAbiertos');
+  if (!abiertos.length) { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  sec.innerHTML = `
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <i class="bi bi-exclamation-circle-fill text-success"></i>
+      <span class="fw-semibold text-success" style="font-size:.85rem;">
+        ${abiertos.length} parte${abiertos.length > 1 ? 's' : ''} abierto${abiertos.length > 1 ? 's' : ''}
+      </span>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      ${abiertos.map(p => `
+        <div class="parte-abierto-card">
+          <div class="punto-icon">
+            <i class="bi bi-shop text-success fs-5"></i>
+          </div>
+          <div class="flex-grow-1">
+            <div class="fw-bold" style="font-size:.85rem;">${escHtml(p.punto_venta_nombre)}</div>
+            <div class="text-muted" style="font-size:.75rem;">
+              <i class="bi bi-person me-1"></i>${escHtml(p.user_nombre || p.user_code)}
+            </div>
+            <div class="text-muted" style="font-size:.72rem;">
+              <i class="bi bi-clock me-1"></i>Apertura: ${formatFecha(p.fecha_apertura)}
+              &nbsp;·&nbsp; ${calcDuracion(p.fecha_apertura, null)}
+            </div>
+          </div>
+          <div class="d-flex flex-column gap-1 align-items-end">
+            <span class="badge bg-success" style="font-size:.68rem;">ABIERTO</span>
+            <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                    style="font-size:.72rem;"
+                    onclick="abrirDrawer(${p.id_parte})">
+              <i class="bi bi-lock me-1"></i>Cerrar
+            </button>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+/* ── Render grilla ──────────────────────────────────────── */
+function renderTabla() {
+  const q = busqueda.toLowerCase();
+  const filas = PARTES_DATA.filter(p => {
+    if (filtros.punto.size   && !filtros.punto.has(p.punto_venta_nombre))    return false;
+    if (filtros.usuario.size && !filtros.usuario.has(p.user_nombre || p.user_code)) return false;
+    if (filtros.estado.size  && !filtros.estado.has(String(p.id_estado)))    return false;
+    if (q && !p.punto_venta_nombre.toLowerCase().includes(q) &&
+             !(p.user_nombre || p.user_code).toLowerCase().includes(q))      return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tbodyPartes');
+  tbody.innerHTML = filas.length ? '' :
+    '<tr><td colspan="10" class="text-center text-muted py-5">Sin partes registrados.</td></tr>';
+
+  filas.forEach(p => {
+    const estadoBadge = p.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:.63rem;">Abierto</span>'
+      : '<span class="badge bg-secondary-subtle text-secondary" style="font-size:.63rem;">Cerrado</span>';
+    const dur = p.id_estado === 1
+      ? `<span class="text-success fw-semibold">${calcDuracion(p.fecha_apertura, null)}</span>`
+      : `<span class="text-muted">${calcDuracion(p.fecha_apertura, p.fecha_cierre)}</span>`;
+    const mFinal = p.monto_final != null
+      ? `S/ ${p.monto_final.toFixed(2)}`
+      : '<span class="text-muted">—</span>';
+    const tr = document.createElement('tr');
+    tr.style.fontSize = '.75rem';
+    if (p.id_estado !== 1) tr.style.opacity = '.75';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${p.id_parte}</td>
+      <td class="fw-semibold">${escHtml(p.punto_venta_nombre || '—')}</td>
+      <td class="text-muted">${escHtml(p.user_nombre || p.user_code || '—')}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${formatFecha(p.fecha_apertura)}</td>
+      <td class="font-monospace text-muted" style="font-size:.72rem;">${formatFecha(p.fecha_cierre)}</td>
+      <td>${dur}</td>
+      <td class="text-end">S/ ${p.monto_inicial.toFixed(2)}</td>
+      <td class="text-end fw-semibold">${mFinal}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;"
+                onclick="abrirDrawer(${p.id_parte})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  let abiertos = 0, cerrados = 0;
+  filas.forEach(p => p.id_estado === 1 ? abiertos++ : cerrados++);
+  document.getElementById('contadorVisible').textContent = filas.length;
+  document.getElementById('contAbiertos').textContent    = abiertos;
+  document.getElementById('contCerrados').textContent    = cerrados;
+}
+
+/* ── Filtros ─────────────────────────────────────────────── */
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function toggleFiltro(col, e) {
+  e.stopPropagation();
+  const panel = document.getElementById('panelFiltro' + cap(col));
+  const open  = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!open) { construirFiltro(col, panel); panel.style.display = 'block'; }
+}
+
+function construirFiltro(col, panel) {
+  const campo = col === 'punto'   ? 'punto_venta_nombre'
+              : col === 'usuario' ? 'user_nombre'
+              :                     'id_estado';
+  const label = col === 'estado'  ? v => v === '1' ? 'Abierto' : 'Cerrado'
+              : col === 'usuario' ? v => PARTES_DATA.find(p => (p.user_nombre || p.user_code) === v)?.user_nombre || v
+              :                     v => v;
+  const vals = col === 'usuario'
+    ? [...new Set(PARTES_DATA.map(p => p.user_nombre || p.user_code || ''))].filter(Boolean).sort()
+    : [...new Set(PARTES_DATA.map(p => String(p[campo])))].filter(Boolean).sort();
+
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span style="font-size:.72rem; font-weight:600; color:#475569;">Filtrar</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${col}')">Limpiar</span>
+    </div>
+    ${vals.map(v => `
+      <label class="filtro-opt">
+        <input type="checkbox" value="${escHtml(v)}"
+               ${filtros[col].has(v) ? 'checked' : ''}
+               onchange="onFiltroChange('${col}', this)" />
+        ${escHtml(label(v))}
+      </label>`).join('')}`;
+}
+
+function onFiltroChange(col, cb) {
+  if (cb.checked) filtros[col].add(cb.value); else filtros[col].delete(cb.value);
+  document.getElementById('iconFiltro' + cap(col))
+    .classList.toggle('active', filtros[col].size > 0);
+  renderTabla();
+}
+
+function limpiarFiltro(col) {
+  filtros[col].clear(); cerrarTodosFiltros(); renderTabla();
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+document.getElementById('buscarParte').addEventListener('input', function () {
+  busqueda = this.value; renderTabla();
+});
+
+/* ── Drawer apertura ─────────────────────────────────────── */
+function abrirApertura() {
+  _currentId = null;
+  document.getElementById('drawerBadge').textContent = 'APERTURA';
+  document.getElementById('drawerBadge').className   = 'badge bg-success';
+  document.getElementById('drawerTitle').textContent  = 'Nueva Apertura';
+  document.getElementById('secApertura').style.display = '';
+  document.getElementById('secVer').style.display      = 'none';
+  document.getElementById('btnAperturar').style.display      = '';
+  document.getElementById('btnCerrar').style.display          = 'none';
+  document.getElementById('btnEditar').style.display          = 'none';
+  document.getElementById('btnPDF').style.display             = 'none';
+  document.getElementById('btnCancelarEdicion').style.display = 'none';
+  document.getElementById('btnGuardarEdicion').style.display  = 'none';
+  const _ahora = new Date();
+  const _pad   = n => String(n).padStart(2, '0');
+  const _fecha = `${_ahora.getFullYear()}-${_pad(_ahora.getMonth()+1)}-${_pad(_ahora.getDate())}`;
+  const _hora  = `${_pad(_ahora.getHours())}:${_pad(_ahora.getMinutes())}`;
+  document.getElementById('f_punto_venta').value    = '';
+  document.getElementById('f_fecha_apertura').value = _fecha;
+  document.getElementById('f_hora_apertura').value  = _hora;
+  document.getElementById('f_monto_inicial').value  = '0';
+  document.getElementById('f_obs_apertura').value   = '';
+  document.getElementById('parteDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('f_punto_venta').focus(), 300);
+}
+
+/* ── Drawer VER ──────────────────────────────────────────── */
+function abrirDrawer(id) {
+  const p = PARTES_DATA.find(x => x.id_parte === id);
+  if (!p) return;
+  _currentId = id;
+
+  const esAbierto = p.id_estado === 1;
+  document.getElementById('drawerBadge').textContent = esAbierto ? 'ABIERTO' : 'CERRADO';
+  document.getElementById('drawerBadge').className   = esAbierto ? 'badge bg-success' : 'badge bg-secondary';
+  document.getElementById('drawerTitle').textContent  =
+    `${p.punto_venta_nombre} — Parte #${id}`;
+
+  document.getElementById('secApertura').style.display = 'none';
+  document.getElementById('secVer').style.display      = '';
+
+  document.getElementById('v_punto_venta').textContent   = p.punto_venta_nombre || '—';
+  document.getElementById('v_usuario').textContent        = p.user_nombre || p.user_code || '—';
+  document.getElementById('v_fecha_apertura').textContent = formatFecha(p.fecha_apertura);
+  document.getElementById('v_monto_inicial').textContent  = `S/ ${p.monto_inicial.toFixed(2)}`;
+
+  const obsAp = p.observacion_apertura;
+  document.getElementById('v_obs_apertura_wrap').style.display = obsAp ? '' : 'none';
+  document.getElementById('v_obs_apertura').textContent = obsAp || '';
+
+  if (esAbierto) {
+    document.getElementById('secVerCierre').style.display  = 'none';
+    document.getElementById('secFormCierre').style.display = '';
+    document.getElementById('f_monto_final').value = '0';
+    document.getElementById('f_obs_cierre').value  = '';
+    calcularDiferencia();
+    document.getElementById('btnCerrar').style.display          = '';
+    document.getElementById('btnEditar').style.display           = '';
+    document.getElementById('btnAperturar').style.display        = 'none';
+    document.getElementById('btnCancelarEdicion').style.display  = 'none';
+    document.getElementById('btnGuardarEdicion').style.display   = 'none';
+  } else {
+    document.getElementById('secVerCierre').style.display  = '';
+    document.getElementById('secFormCierre').style.display = 'none';
+    document.getElementById('v_fecha_cierre').textContent  = formatFecha(p.fecha_cierre);
+    document.getElementById('v_duracion').textContent      = calcDuracion(p.fecha_apertura, p.fecha_cierre);
+    document.getElementById('v_monto_final').textContent   =
+      p.monto_final != null ? `S/ ${p.monto_final.toFixed(2)}` : '—';
+    const dif = p.monto_final != null ? p.monto_final - p.monto_inicial : null;
+    const difEl = document.getElementById('v_diferencia');
+    if (dif != null) {
+      difEl.textContent  = `S/ ${dif >= 0 ? '+' : ''}${dif.toFixed(2)}`;
+      difEl.style.color  = dif >= 0 ? '#16a34a' : '#dc2626';
+    } else {
+      difEl.textContent = '—';
+    }
+    const obsCi = p.observacion_cierre;
+    document.getElementById('v_obs_cierre_wrap').style.display = obsCi ? '' : 'none';
+    document.getElementById('v_obs_cierre').textContent = obsCi || '';
+    document.getElementById('btnCerrar').style.display          = 'none';
+    document.getElementById('btnEditar').style.display          = 'none';
+    document.getElementById('btnAperturar').style.display       = 'none';
+    document.getElementById('btnCancelarEdicion').style.display = 'none';
+    document.getElementById('btnGuardarEdicion').style.display  = 'none';
+  }
+  // PDF siempre visible en VER, deshabilitado hasta que cargue el reporte
+  document.getElementById('btnPDF').style.display = '';
+  document.getElementById('btnPDF').disabled      = true;
+  _reporteData = null;
+
+  document.getElementById('parteDrawer').classList.add('open', 'wide');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  fetchReporte(id);
+}
+
+function cerrarDrawer() {
+  const drawer = document.getElementById('parteDrawer');
+  drawer.classList.remove('open', 'wide');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  document.getElementById('btnPDF').style.display = 'none';
+  _reporteData = null;
+  ocultarReporte();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Calcular diferencia preview ─────────────────────────── */
+function calcularDiferencia() {
+  const p   = _currentId ? PARTES_DATA.find(x => x.id_parte === _currentId) : null;
+  const ini = p ? p.monto_inicial : 0;
+  const fin = parseFloat(document.getElementById('f_monto_final').value) || 0;
+  const dif = fin - ini;
+  const el  = document.getElementById('diferenciaPreview');
+  el.textContent = `S/ ${dif >= 0 ? '+' : ''}${dif.toFixed(2)}`;
+  el.style.color = dif >= 0 ? '#16a34a' : '#dc2626';
+}
+
+/* ── Aperturar ───────────────────────────────────────────── */
+function aperturar() {
+  const id_punto_venta = parseInt(document.getElementById('f_punto_venta').value) || 0;
+  if (!id_punto_venta) {
+    mostrarToast('warning', 'Seleccione un punto de venta.');
+    document.getElementById('f_punto_venta').focus();
+    return;
+  }
+  const fecha       = document.getElementById('f_fecha_apertura').value;
+  const hora        = document.getElementById('f_hora_apertura').value || '00:00';
+  if (!fecha) {
+    mostrarToast('warning', 'Ingrese la fecha de apertura.');
+    document.getElementById('f_fecha_apertura').focus();
+    return;
+  }
+  const fecha_apertura = `${fecha}T${hora}:00`;
+  const monto_inicial  = parseFloat(document.getElementById('f_monto_inicial').value) || 0;
+  const observacion    = document.getElementById('f_obs_apertura').value.trim();
+  const puntoNombre    = PUNTOS_DATA.find(p => p.id == id_punto_venta)?.nombre || '';
+
+  confirmarAccion(
+    `¿Aperturar el parte diario en "${puntoNombre}" el ${fecha} ${hora} con S/ ${monto_inicial.toFixed(2)} de efectivo inicial?`,
+    () => {
+      const btn = document.getElementById('btnAperturar');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Aperturando…';
+
+      fetch('/ventas/parte-diario/aperturar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_punto_venta, monto_inicial, observacion, fecha_apertura }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-unlock me-1"></i>Aperturar';
+          if (data.success) {
+            mostrarToast('success', data.message);
+            cerrarDrawer();
+            setTimeout(() => location.reload(), 1200);
+          } else {
+            mostrarToast('danger', data.message || 'Error al aperturar.');
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-unlock me-1"></i>Aperturar';
+          mostrarToast('danger', 'Error de conexión.');
+        });
+    },
+    { titulo: 'Aperturar Parte', tipo: 'success', txtBtn: 'Aperturar' }
+  );
+}
+
+/* ── Cerrar parte ────────────────────────────────────────── */
+function cerrarParte() {
+  if (!_currentId) return;
+  const p           = PARTES_DATA.find(x => x.id_parte === _currentId);
+  const monto_final = parseFloat(document.getElementById('f_monto_final').value) || 0;
+  const observacion = document.getElementById('f_obs_cierre').value.trim();
+  const dif         = monto_final - (p?.monto_inicial || 0);
+  const difTxt      = `${dif >= 0 ? '+' : ''}S/ ${dif.toFixed(2)}`;
+
+  confirmarAccion(
+    `¿Cerrar el parte #${_currentId} de "${p?.punto_venta_nombre}"? ` +
+    `Monto final: S/ ${monto_final.toFixed(2)} (${difTxt}).`,
+    () => {
+      const btn = document.getElementById('btnCerrar');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cerrando…';
+
+      fetch(`/ventas/parte-diario/${_currentId}/cerrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ monto_final, observacion }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-lock me-1"></i>Cerrar Parte';
+          if (data.success) {
+            mostrarToast('success', data.message);
+            cerrarDrawer();
+            setTimeout(() => location.reload(), 1200);
+          } else {
+            mostrarToast('danger', data.message || 'Error al cerrar.');
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-lock me-1"></i>Cerrar Parte';
+          mostrarToast('danger', 'Error de conexión.');
+        });
+    },
+    { titulo: 'Cerrar Parte Diario', tipo: 'danger', txtBtn: 'Cerrar' }
+  );
+}
+
+/* ── Excel ───────────────────────────────────────────────── */
+function exportarExcel() {
+  const hdrs = ['#','Punto de Venta','Usuario','Apertura','Cierre','Duración',
+                'M. Inicial','M. Final','Estado'];
+  const filas = PARTES_DATA.map(p => [
+    p.id_parte, p.punto_venta_nombre, p.user_nombre || p.user_code,
+    formatFecha(p.fecha_apertura), formatFecha(p.fecha_cierre),
+    calcDuracion(p.fecha_apertura, p.fecha_cierre),
+    p.monto_inicial.toFixed(2),
+    p.monto_final != null ? p.monto_final.toFixed(2) : '',
+    p.id_estado === 1 ? 'Abierto' : 'Cerrado',
+  ]);
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body>
+    <table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  filas.forEach(f => {
+    html += '<tr>';
+    f.forEach(c => { html += `<td>${c}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `parte_diario_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Reporte Parte Diario ────────────────────────────────── */
+function fetchReporte(id) {
+  const sec = document.getElementById('seccionReporte');
+  sec.style.display = '';
+  sec.innerHTML = `
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center py-5">
+        <span class="spinner-border text-primary me-2"></span>
+        <span class="text-muted">Cargando reporte del turno…</span>
+      </div>
+    </div>`;
+  fetch(`/ventas/parte-diario/${id}/reporte`)
+    .then(r => {
+      if (!r.ok) {
+        return r.text().then(txt => {
+          let msg = `Error HTTP ${r.status}`;
+          try { msg = JSON.parse(txt).message || msg; } catch (_) {}
+          throw new Error(msg);
+        });
+      }
+      return r.json();
+    })
+    .then(data => {
+      if (data.success) renderReporte(data);
+      else sec.innerHTML = `
+        <div class="alert alert-warning d-flex align-items-center gap-2">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <span>${escHtml(data.message)}</span>
+        </div>`;
+    })
+    .catch(err => {
+      sec.innerHTML = `
+        <div class="alert alert-danger d-flex align-items-center gap-2">
+          <i class="bi bi-x-circle-fill"></i>
+          <div>
+            <strong>Error al cargar el reporte</strong>
+            <div class="small font-monospace mt-1">${escHtml(err.message)}</div>
+          </div>
+        </div>`;
+    });
+}
+
+function ocultarReporte() {
+  const sec = document.getElementById('seccionReporte');
+  sec.style.display = 'none';
+  sec.innerHTML = '';
+}
+
+function renderReporte(data) {
+  _reporteData = data;
+  document.getElementById('btnPDF').disabled = false;
+  const { parte, resumen, facturas } = data;
+
+  const totalVenta   = facturas.reduce((s, f) => s + f.doc_total, 0);
+  const totalCobrado = facturas.reduce((s, f) => s + f.monto_cobrado, 0);
+  const nTrans       = facturas.length;
+
+  // ── Resumen por medio de pago (cabecera pivot) ──────────
+  const payMethods = resumen.map(r => r.payment_name);
+  const thMedios   = payMethods.map(m =>
+    `<th class="text-end text-nowrap">${escHtml(m)}</th>`).join('');
+  const tdMedios   = payMethods.map(m => {
+    const r = resumen.find(x => x.payment_name === m);
+    return `<td class="text-end fw-semibold">S/ ${(r ? r.total_cobrado : 0).toFixed(2)}</td>`;
+  }).join('');
+
+  // ── Filas detalle ────────────────────────────────────────
+  const filas = facturas.length ? facturas.map(f => `
+    <tr>
+      <td class="text-center">
+        <span class="badge bg-light text-dark border" style="font-size:.65rem;">${escHtml(f.tipo_doc)}</span>
+      </td>
+      <td class="font-monospace" style="font-size:.7rem;">${escHtml(f.folio)}</td>
+      <td class="text-muted font-monospace" style="font-size:.7rem;">${escHtml(f.nro_doc)}</td>
+      <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+          title="${escHtml(f.bp_name)}">${escHtml(f.bp_name)}</td>
+      <td><span class="badge bg-primary-subtle text-primary border border-primary-subtle"
+               style="font-size:.65rem;">${escHtml(f.payment_name)}</span></td>
+      <td class="text-muted">${escHtml(f.nro_operacion)}</td>
+      <td class="text-muted text-nowrap">${f.fecha}</td>
+      <td class="text-end">${f.doc_currency} ${f.doc_total.toFixed(2)}</td>
+      <td class="text-end fw-semibold text-success">${f.doc_currency} ${f.monto_cobrado.toFixed(2)}</td>
+    </tr>`).join('')
+  : '<tr><td colspan="9" class="text-center text-muted py-4">Sin transacciones en este período.</td></tr>';
+
+  // ── Fechas display ───────────────────────────────────────
+  const fAp = parte.fecha_apertura ? parte.fecha_apertura.replace('T',' ').slice(0,16) : '—';
+  const fCi = parte.fecha_cierre   ? parte.fecha_cierre.replace('T',' ').slice(0,16)   : 'En curso';
+
+  document.getElementById('seccionReporte').innerHTML = `
+
+    <!-- RESUMEN DEL DÍA -->
+    <div class="reporte-label mt-2">Resumen del Día</div>
+    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+      <div>
+        <span class="fw-semibold" style="font-size:.82rem;">${escHtml(parte.user_nombre)}</span>
+        <span class="badge bg-light text-muted border ms-2" style="font-size:.62rem;">General</span>
+      </div>
+      <div class="text-end small text-muted">
+        Saldo Inicial: <span class="fw-bold text-dark">S/ ${parte.monto_inicial.toFixed(2)}</span>
+      </div>
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="table table-bordered table-sm align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:55px;">Parte</th>
+            <th style="width:100px;">S. Inicial</th>
+            ${thMedios}
+            <th class="text-end">Tot. Venta</th>
+            <th class="text-end bg-success-subtle text-success">COBRADO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="fw-semibold">${parte.id_parte}</td>
+            <td>S/ ${parte.monto_inicial.toFixed(2)}</td>
+            ${tdMedios}
+            <td class="text-end fw-bold">S/ ${totalVenta.toFixed(2)}</td>
+            <td class="text-end fw-bold text-success bg-success-subtle">S/ ${totalCobrado.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- DETALLE FACTURAS -->
+    <div class="reporte-label">Detalle de Transacciones</div>
+    <div class="table-responsive">
+      <table class="table table-hover table-sm align-middle">
+        <thead class="table-light">
+          <tr>
+            <th class="text-center">Tipo</th>
+            <th>Folio</th>
+            <th>Nro Doc</th>
+            <th style="min-width:120px;">Nombre</th>
+            <th>Medio Pago</th>
+            <th>Nro Oper.</th>
+            <th>Fecha</th>
+            <th class="text-end">Total</th>
+            <th class="text-end">Cobrado</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+        <tfoot class="table-light">
+          <tr class="fw-bold">
+            <td colspan="7" class="text-end text-muted pe-2">TOTAL</td>
+            <td class="text-end">S/ ${totalVenta.toFixed(2)}</td>
+            <td class="text-end text-success">S/ ${totalCobrado.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- CAJAS TOTALES -->
+    <div class="d-flex gap-2 mt-2 flex-wrap">
+      <div class="caja-total-box flex-fill">
+        <div class="label">Total Cobrado</div>
+        <div class="valor text-success">S/ ${totalCobrado.toFixed(2)}</div>
+      </div>
+      <div class="caja-total-box flex-fill">
+        <div class="label">Total Venta</div>
+        <div class="valor text-primary">S/ ${totalVenta.toFixed(2)}</div>
+      </div>
+      <div class="caja-total-box flex-fill">
+        <div class="label">N° Trans.</div>
+        <div class="valor">${nTrans}</div>
+      </div>
+      <div class="caja-total-box flex-fill">
+        <div class="label">Diferencia</div>
+        <div class="valor" style="color:${(totalCobrado - parte.monto_inicial) >= 0 ? '#16a34a' : '#dc2626'}">
+          S/ ${(totalCobrado - parte.monto_inicial) >= 0 ? '+' : ''}${(totalCobrado - parte.monto_inicial).toFixed(2)}
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ── Editar apertura ─────────────────────────────────────── */
+function activarEdicion() {
+  const p = PARTES_DATA.find(x => x.id_parte === _currentId);
+  if (!p) return;
+  // Pre-llenar campos (parseo manual para evitar conversión UTC)
+  const [datePart, timePart] = (p.fecha_apertura || '').split('T');
+  const [hh, mm] = (timePart || '00:00').split(':');
+  const sel = document.getElementById('e_punto_venta');
+  sel.innerHTML = '';
+  PUNTOS_DATA.forEach(pv => {
+    const o = document.createElement('option');
+    o.value = pv.id; o.textContent = pv.nombre;
+    if (pv.id == p.id_punto_venta) o.selected = true;
+    sel.appendChild(o);
+  });
+  document.getElementById('e_fecha_apertura').value = datePart || '';
+  document.getElementById('e_hora_apertura').value  = `${hh}:${mm}`;
+  document.getElementById('e_monto_inicial').value  = p.monto_inicial.toFixed(2);
+  document.getElementById('e_obs_apertura').value   = p.observacion_apertura || '';
+  // UI
+  document.getElementById('labelVerApertura').style.display = 'none';
+  document.getElementById('rowVerApertura').style.display   = 'none';
+  document.getElementById('secFormCierre').style.display    = 'none';
+  document.getElementById('seccionReporte').style.display   = 'none';
+  document.getElementById('secEditarApertura').style.display = '';
+  document.getElementById('btnEditar').style.display          = 'none';
+  document.getElementById('btnCerrar').style.display          = 'none';
+  document.getElementById('btnPDF').style.display             = 'none';
+  document.getElementById('btnCancelarEdicion').style.display = '';
+  document.getElementById('btnGuardarEdicion').style.display  = '';
+}
+
+function cancelarEdicion() {
+  document.getElementById('secEditarApertura').style.display  = 'none';
+  document.getElementById('labelVerApertura').style.display   = '';
+  document.getElementById('rowVerApertura').style.display     = '';
+  document.getElementById('secFormCierre').style.display      = '';
+  if (_reporteData) document.getElementById('seccionReporte').style.display = '';
+  document.getElementById('btnEditar').style.display          = '';
+  document.getElementById('btnCerrar').style.display          = '';
+  document.getElementById('btnPDF').style.display             = '';
+  document.getElementById('btnCancelarEdicion').style.display = 'none';
+  document.getElementById('btnGuardarEdicion').style.display  = 'none';
+}
+
+function guardarEdicion() {
+  if (!_currentId) return;
+  const id_punto_venta = parseInt(document.getElementById('e_punto_venta').value) || 0;
+  const fecha          = document.getElementById('e_fecha_apertura').value;
+  const hora           = document.getElementById('e_hora_apertura').value || '00:00';
+  if (!id_punto_venta) { mostrarToast('warning', 'Seleccione un punto de venta.'); return; }
+  if (!fecha)          { mostrarToast('warning', 'Ingrese la fecha de apertura.'); return; }
+  const fecha_apertura = `${fecha}T${hora}:00`;
+  const monto_inicial  = parseFloat(document.getElementById('e_monto_inicial').value) || 0;
+  const observacion    = document.getElementById('e_obs_apertura').value.trim();
+  const btn = document.getElementById('btnGuardarEdicion');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+  fetch(`/ventas/parte-diario/${_currentId}/actualizar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id_punto_venta, fecha_apertura, monto_inicial, observacion }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar';
+      if (d.success) { mostrarToast('success', d.message); cerrarDrawer(); setTimeout(() => location.reload(), 1200); }
+      else mostrarToast('danger', d.message || 'Error al guardar.');
+    })
+    .catch(() => { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar'; mostrarToast('danger', 'Error de conexión.'); });
+}
+
+/* ── PDF ─────────────────────────────────────────────────── */
+function generarPDF() {
+  if (!_reporteData) { mostrarToast('warning', 'El reporte aún está cargando.'); return; }
+  const { parte, resumen, facturas } = _reporteData;
+  const totalVenta   = facturas.reduce((s, f) => s + f.doc_total,    0);
+  const totalCobrado = facturas.reduce((s, f) => s + f.monto_cobrado, 0);
+  const dif          = totalCobrado - parte.monto_inicial;
+  const fAp = (parte.fecha_apertura || '').replace('T',' ').slice(0,16);
+  const fCi = parte.fecha_cierre ? parte.fecha_cierre.replace('T',' ').slice(0,16) : 'En curso';
+
+  const thMedios = resumen.map(r => `<th style="padding:4px 6px;">${escHtml(r.payment_name)}</th>`).join('');
+  const tdMedios = resumen.map(r => `<td style="padding:4px 6px; text-align:right;">S/ ${r.total_cobrado.toFixed(2)}</td>`).join('');
+
+  const filasPDF = facturas.length ? facturas.map((f, i) => `
+    <tr style="background:${i%2===0?'#fff':'#f9f9f9'};">
+      <td style="padding:3px 5px;">${escHtml(f.tipo_doc)}</td>
+      <td style="padding:3px 5px; font-family:monospace; font-size:9px;">${escHtml(f.folio)}</td>
+      <td style="padding:3px 5px; font-family:monospace; font-size:9px;">${escHtml(f.nro_doc)}</td>
+      <td style="padding:3px 5px; max-width:110px; overflow:hidden;">${escHtml(f.bp_name)}</td>
+      <td style="padding:3px 5px;">${escHtml(f.payment_name)}</td>
+      <td style="padding:3px 5px;">${escHtml(f.nro_operacion)}</td>
+      <td style="padding:3px 5px; white-space:nowrap;">${f.fecha}</td>
+      <td style="padding:3px 5px; text-align:right;">${f.doc_currency} ${f.doc_total.toFixed(2)}</td>
+      <td style="padding:3px 5px; text-align:right; font-weight:600; color:#1d6f42;">${f.doc_currency} ${f.monto_cobrado.toFixed(2)}</td>
+    </tr>`).join('')
+  : '<tr><td colspan="9" style="text-align:center; padding:8px; color:#888;">Sin transacciones.</td></tr>';
+
+  const html = `
+  <div style="font-family:Arial,sans-serif; font-size:10px; color:#222; padding:0;">
+    <!-- Encabezado -->
+    <div style="background:#1e40af; color:#fff; padding:12px 16px; border-radius:6px 6px 0 0; margin-bottom:12px;">
+      <div style="font-size:13px; font-weight:bold;">PARTE DIARIO #${parte.id_parte}</div>
+      <div style="font-size:11px; margin-top:2px;">${escHtml(parte.punto_venta_nombre)}</div>
+      <div style="font-size:9px; opacity:.85; margin-top:4px; display:flex; gap:16px; flex-wrap:wrap;">
+        <span>Cajero: <b>${escHtml(parte.user_nombre)}</b></span>
+        <span>Apertura: <b>${fAp}</b></span>
+        <span>Cierre: <b>${fCi}</b></span>
+        <span>S. Inicial: <b>S/ ${parte.monto_inicial.toFixed(2)}</b></span>
+      </div>
+    </div>
+
+    <!-- Resumen del día -->
+    <div style="font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#94a3b8; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px;">Resumen del Día</div>
+    <table style="width:100%; border-collapse:collapse; font-size:9px; margin-bottom:14px;">
+      <thead>
+        <tr style="background:#1d6f42; color:#fff;">
+          <th style="padding:4px 6px; text-align:left;">Parte</th>
+          <th style="padding:4px 6px; text-align:left;">S. Inicial</th>
+          ${thMedios}
+          <th style="padding:4px 6px; text-align:right;">Total Venta</th>
+          <th style="padding:4px 6px; text-align:right;">COBRADO</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:4px 6px; border-bottom:1px solid #eee;">${parte.id_parte}</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #eee;">S/ ${parte.monto_inicial.toFixed(2)}</td>
+          ${tdMedios}
+          <td style="padding:4px 6px; border-bottom:1px solid #eee; text-align:right; font-weight:bold;">S/ ${totalVenta.toFixed(2)}</td>
+          <td style="padding:4px 6px; border-bottom:1px solid #eee; text-align:right; font-weight:bold; color:#1d6f42;">S/ ${totalCobrado.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Detalle -->
+    <div style="font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#94a3b8; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px;">Detalle de Transacciones</div>
+    <table style="width:100%; border-collapse:collapse; font-size:8.5px;">
+      <thead>
+        <tr style="background:#2563eb; color:#fff;">
+          <th style="padding:3px 5px;">Tipo</th>
+          <th style="padding:3px 5px;">Folio</th>
+          <th style="padding:3px 5px;">Nro Doc</th>
+          <th style="padding:3px 5px;">Nombre</th>
+          <th style="padding:3px 5px;">Medio Pago</th>
+          <th style="padding:3px 5px;">Nro Oper.</th>
+          <th style="padding:3px 5px;">Fecha</th>
+          <th style="padding:3px 5px; text-align:right;">Total</th>
+          <th style="padding:3px 5px; text-align:right;">Cobrado</th>
+        </tr>
+      </thead>
+      <tbody>${filasPDF}</tbody>
+      <tfoot>
+        <tr style="background:#f1f5f9; font-weight:bold;">
+          <td colspan="7" style="padding:4px 6px; text-align:right; color:#64748b;">TOTAL</td>
+          <td style="padding:4px 6px; text-align:right;">S/ ${totalVenta.toFixed(2)}</td>
+          <td style="padding:4px 6px; text-align:right; color:#1d6f42;">S/ ${totalCobrado.toFixed(2)}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Totales -->
+    <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+      <div style="border:1px solid #e2e8f0; border-radius:6px; padding:6px 12px; text-align:center; min-width:95px;">
+        <div style="font-size:7px; color:#94a3b8; font-weight:700; text-transform:uppercase;">Total Cobrado</div>
+        <div style="font-size:12px; font-weight:bold; color:#1d6f42;">S/ ${totalCobrado.toFixed(2)}</div>
+      </div>
+      <div style="border:1px solid #e2e8f0; border-radius:6px; padding:6px 12px; text-align:center; min-width:95px;">
+        <div style="font-size:7px; color:#94a3b8; font-weight:700; text-transform:uppercase;">N° Transac.</div>
+        <div style="font-size:12px; font-weight:bold;">${facturas.length}</div>
+      </div>
+      <div style="border:1px solid #e2e8f0; border-radius:6px; padding:6px 12px; text-align:center; min-width:95px;">
+        <div style="font-size:7px; color:#94a3b8; font-weight:700; text-transform:uppercase;">Diferencia</div>
+        <div style="font-size:12px; font-weight:bold; color:${dif>=0?'#16a34a':'#dc2626'};">
+          S/ ${dif>=0?'+':''}${dif.toFixed(2)}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  document.body.appendChild(el);
+  html2pdf().set({
+    margin:      [8, 8, 8, 8],
+    filename:    `parte_diario_${parte.id_parte}_${(parte.fecha_apertura||'').slice(0,10)}.pdf`,
+    image:       { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape' },
+  }).from(el).save().then(() => document.body.removeChild(el));
+}
+
+/* ── Init ────────────────────────────────────────────────── */
+renderAbiertos();
+renderTabla();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+{% endblock %}

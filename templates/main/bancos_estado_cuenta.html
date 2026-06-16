@@ -1,0 +1,584 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} registros
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="movData"    type="application/json">{{ movimientos_json | safe }}</script>
+<script id="bancosData" type="application/json">{{ bancos_json       | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-bank text-primary me-1"></i> Estado de Cuenta Bancario
+    </h6>
+
+    <!-- Banco selector (server-side) -->
+    <select class="form-select form-select-sm" id="selBanco" style="max-width:200px;"
+            onchange="window.location='{{ url_for('main.bancos_estado_cuenta') }}?id_banco='+this.value">
+      <option value="0">— Todos los bancos —</option>
+    </select>
+
+    <div class="input-group input-group-sm" style="max-width:240px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarInput"
+             placeholder="Comprobante, referencia…">
+    </div>
+
+    <div class="ms-auto">
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaEstado">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px; position:relative; white-space:nowrap;">
+            ID
+            <button type="button" class="btn-col-filtro" id="btnSort_id"
+                    onclick="sortColumna('id', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_id"></i>
+            </button>
+          </th>
+          <th style="min-width:130px;">Comprobante</th>
+          <th style="width:95px;">Cod. Socio</th>
+          <th style="min-width:160px; position:relative; white-space:nowrap;">
+            Socio de Negocio
+            <button type="button" class="btn-col-filtro" id="btnSort_socio"
+                    onclick="sortColumna('socio', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_socio"></i>
+            </button>
+          </th>
+          <th style="min-width:140px; position:relative; white-space:nowrap;">
+            Banco
+            <button type="button" class="btn-col-filtro" id="btnFiltroBanco"
+                    onclick="toggleFiltro('banco', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroBanco"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroBanco" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Fecha Pago
+            <button type="button" class="btn-col-filtro" id="btnSort_fecha"
+                    onclick="sortColumna('fecha', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_fecha"></i>
+            </button>
+          </th>
+          <th class="text-center" style="width:68px; position:relative; white-space:nowrap;">
+            Mon.
+            <button type="button" class="btn-col-filtro" id="btnFiltroMoneda"
+                    onclick="toggleFiltro('moneda', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroMoneda"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroMoneda" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-end" style="width:120px; position:relative; white-space:nowrap;">
+            Monto Aplicado
+            <button type="button" class="btn-col-filtro" id="btnSort_monto"
+                    onclick="sortColumna('monto', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_monto"></i>
+            </button>
+          </th>
+          <th style="min-width:120px;">Referencia</th>
+          <th style="min-width:150px;">Concepto</th>
+          <th class="text-center" style="width:80px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:70px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyEstado"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="contadorVisible">{{ total }}</strong> registros</span>
+    <span class="ms-auto">
+      Suma SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
+      &nbsp;|&nbsp;
+      Suma USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="bec-drawer" id="becDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-secondary">VER</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Detalle Movimiento</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- Socio / Comprobante -->
+    <div class="form-section-label">Documento</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-4">
+        <label class="form-label-sm">ID Movimiento</label>
+        <input type="text" class="form-control form-control-sm bg-light font-monospace" id="d_id" readonly>
+      </div>
+      <div class="col-sm-8">
+        <label class="form-label-sm">Comprobante</label>
+        <input type="text" class="form-control form-control-sm bg-light font-monospace fw-bold" id="d_nro_documento" readonly>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Cód. Socio</label>
+        <input type="text" class="form-control form-control-sm bg-light font-monospace" id="d_card_code" readonly>
+      </div>
+      <div class="col-sm-8">
+        <label class="form-label-sm">Socio de Negocio</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_card_name" readonly>
+      </div>
+    </div>
+
+    <!-- Banco / Fechas -->
+    <div class="form-section-label">Banco y Fechas</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <label class="form-label-sm">Banco</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_nombre_banco" readonly>
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-sm">Fecha Pago</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_fecha_pago" readonly>
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-sm">Moneda</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_moneda_pago" readonly>
+      </div>
+    </div>
+
+    <!-- Monto -->
+    <div class="form-section-label">Movimiento</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-5">
+        <label class="form-label-sm">Monto Aplicado</label>
+        <input type="text" class="form-control form-control-sm bg-light text-end fw-bold" id="d_monto_aplicado" readonly>
+      </div>
+      <div class="col-sm-7">
+        <label class="form-label-sm">Referencia</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_referencia" readonly>
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Concepto</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_concepto" readonly>
+      </div>
+    </div>
+
+    <!-- Sistema -->
+    <div class="form-section-label">Sistema</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-6">
+        <label class="form-label-sm">Usuario</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_user_code" readonly>
+      </div>
+      <div class="col-sm-6">
+        <label class="form-label-sm">Estado</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_estado" readonly>
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Fecha Registro</label>
+        <input type="text" class="form-control form-control-sm bg-light" id="d_fecha_registro" readonly>
+      </div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cerrar
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm {
+  display: block; font-size: .75rem; font-weight: 600;
+  color: #475569; margin-bottom: .15rem;
+}
+.form-section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #64748b;
+  border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-bottom: .6rem;
+}
+
+/* ── Overlay ────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer ─────────────────────────────────────────────── */
+.bec-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(480px, 97vw);
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.bec-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+
+/* ── Filtros ─────────────────────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px; margin-left: 1px;
+  color: #94a3b8; cursor: pointer; font-size: .72rem; vertical-align: middle;
+}
+.btn-col-filtro:hover, .btn-col-filtro.active { color: #3b82f6; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; min-width: 190px; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 0;
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px 6px; font-size: .72rem; font-weight: 600; color: #475569;
+  border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+}
+.filtro-action { cursor: pointer; font-size: .68rem; color: #3b82f6; }
+.filtro-action.danger { color: #ef4444; }
+.filtro-opt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px; font-size: .73rem; cursor: pointer;
+}
+.filtro-opt:hover { background: #f8fafc; }
+.filtro-opt input[type=checkbox] { accent-color: #3b82f6; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const MOV_DATA    = JSON.parse(document.getElementById('movData').textContent);
+const BANCOS_DATA = JSON.parse(document.getElementById('bancosData').textContent);
+const SEL_BANCO   = {{ selected_banco }};
+let busqueda = '';
+
+/* ── Poblar select banco ────────────────────────────────── */
+(function () {
+  const sel = document.getElementById('selBanco');
+  BANCOS_DATA.forEach(b => {
+    const o = document.createElement('option');
+    o.value = b.id_banco; o.textContent = b.nombre;
+    if (b.id_banco === SEL_BANCO) o.selected = true;
+    sel.appendChild(o);
+  });
+})();
+
+/* ── Ordenamiento ───────────────────────────────────────── */
+const _sortState = {};
+const _sortGetters = {
+  id:    m => m.id,
+  socio: m => (m.card_name || '').toLowerCase(),
+  fecha: m => m.fecha_pago || '',
+  monto: m => m.monto_aplicado,
+};
+
+function sortColumna(key, e) {
+  e.stopPropagation();
+  Object.keys(_sortState).forEach(k => {
+    if (k !== key) {
+      const pi = document.getElementById('iconSort_' + k);
+      const pb = document.getElementById('btnSort_'  + k);
+      if (pi) pi.className = 'bi bi-arrow-down-up';
+      if (pb) pb.classList.remove('active');
+      delete _sortState[k];
+    }
+  });
+  _sortState[key] = _sortState[key] === 'asc' ? 'desc' : 'asc';
+  const dir  = _sortState[key];
+  const icon = document.getElementById('iconSort_' + key);
+  const btn  = document.getElementById('btnSort_'  + key);
+  if (icon) icon.className = dir === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+  if (btn)  btn.classList.add('active');
+  renderTabla();
+}
+
+/* ── Filtros ────────────────────────────────────────────── */
+const filtros = { banco: new Set(), moneda: new Set(), estado: new Set() };
+
+function toggleFiltro(col, e) {
+  e.stopPropagation();
+  const key   = col.charAt(0).toUpperCase() + col.slice(1);
+  const panel = document.getElementById('panelFiltro' + key);
+  const open  = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!open) { construirFiltro(col, panel); panel.style.display = 'block'; }
+}
+
+function construirFiltro(col, panel) {
+  let vals, labelFn;
+  if (col === 'banco') {
+    vals    = [...new Set(MOV_DATA.map(m => m.nombre_banco || ''))].filter(Boolean).sort();
+    labelFn = v => v;
+  } else if (col === 'moneda') {
+    vals    = [...new Set(MOV_DATA.map(m => m.moneda_pago || ''))].sort();
+    labelFn = v => v;
+  } else if (col === 'estado') {
+    vals    = ['1', '0'];
+    labelFn = v => v === '1' ? 'Activo' : 'Anulado';
+  }
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span>Filtrar</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${col}')">Limpiar</span>
+    </div>
+    ${vals.map(v => `
+      <label class="filtro-opt">
+        <input type="checkbox" value="${escHtml(v)}"
+               ${filtros[col].has(v) ? 'checked' : ''}
+               onchange="onFiltroChange('${col}', this)" />
+        ${escHtml(labelFn(v))}
+      </label>`).join('')}`;
+}
+
+function onFiltroChange(col, cb) {
+  if (cb.checked) filtros[col].add(cb.value); else filtros[col].delete(cb.value);
+  const key = col.charAt(0).toUpperCase() + col.slice(1);
+  document.getElementById('iconFiltro' + key).classList.toggle('active', filtros[col].size > 0);
+  renderTabla();
+}
+
+function limpiarFiltro(col) {
+  filtros[col].clear();
+  cerrarTodosFiltros();
+  renderTabla();
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+document.getElementById('buscarInput').addEventListener('input', function () {
+  busqueda = this.value.toLowerCase();
+  renderTabla();
+});
+
+/* ── Render ──────────────────────────────────────────────── */
+function renderTabla() {
+  let filas = MOV_DATA.filter(m => {
+    if (filtros.banco.size  && !filtros.banco.has(m.nombre_banco || ''))  return false;
+    if (filtros.moneda.size && !filtros.moneda.has(m.moneda_pago  || '')) return false;
+    if (filtros.estado.size && !filtros.estado.has(String(m.id_estado)))  return false;
+    if (busqueda &&
+        !(m.nro_documento || '').toLowerCase().includes(busqueda) &&
+        !(m.card_code     || '').toLowerCase().includes(busqueda) &&
+        !(m.card_name     || '').toLowerCase().includes(busqueda) &&
+        !(m.referencia    || '').toLowerCase().includes(busqueda) &&
+        !(m.concepto      || '').toLowerCase().includes(busqueda) &&
+        !(m.nombre_banco  || '').toLowerCase().includes(busqueda)) return false;
+    return true;
+  });
+
+  // Ordenar
+  const sortKey = Object.keys(_sortState)[0];
+  if (sortKey) {
+    const dir    = _sortState[sortKey];
+    const getter = _sortGetters[sortKey];
+    const isNum  = sortKey === 'id' || sortKey === 'monto';
+    filas.sort((a, b) => {
+      const va = getter(a), vb = getter(b);
+      if (isNum) return dir === 'asc' ? va - vb : vb - va;
+      return dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  const tbody = document.getElementById('tbodyEstado');
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    document.getElementById('sumaTotalSOL').textContent    = 'S/ 0.00';
+    document.getElementById('sumaTotalUSD').textContent    = '$ 0.00';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  let sumaSOL = 0, sumaUSD = 0;
+
+  filas.forEach(m => {
+    if ((m.moneda_pago || 'SOL') === 'USD') sumaUSD += m.monto_aplicado;
+    else                                    sumaSOL += m.monto_aplicado;
+
+    const sym         = m.moneda_pago === 'USD' ? '$' : 'S/';
+    const montoColor  = m.monto_aplicado >= 0 ? 'text-success' : 'text-danger';
+    const estadoBadge = m.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success" style="font-size:.63rem;">Activo</span>'
+      : '<span class="badge bg-danger-subtle text-danger"   style="font-size:.63rem;">Anulado</span>';
+    const monedaBadge = m.moneda_pago === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border"       style="font-size:.63rem;">SOL</span>';
+
+    const tr = document.createElement('tr');
+    tr.style.fontSize = '.75rem';
+    if (m.id_estado !== 1) tr.style.opacity = '.55';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${m.id}</td>
+      <td class="fw-semibold font-monospace">${escHtml(m.nro_documento || '—')}</td>
+      <td class="font-monospace text-muted">${escHtml(m.card_code || '—')}</td>
+      <td>${escHtml(m.card_name || '—')}</td>
+      <td class="text-muted" style="font-size:.68rem;">${escHtml(m.nombre_banco || '—')}</td>
+      <td class="text-muted">${m.fecha_pago || '—'}</td>
+      <td class="text-center">${monedaBadge}</td>
+      <td class="text-end fw-semibold ${montoColor}">${sym} ${m.monto_aplicado.toFixed(2)}</td>
+      <td class="text-muted font-monospace" style="font-size:.68rem;">${escHtml(m.referencia || '—')}</td>
+      <td class="text-muted" style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+          title="${escHtml(m.concepto)}">${escHtml(m.concepto || '—')}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;" title="Ver detalle"
+                onclick="abrirDrawer(${m.id})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+  document.getElementById('sumaTotalSOL').textContent    = 'S/ ' + sumaSOL.toFixed(2);
+  document.getElementById('sumaTotalUSD').textContent    = '$ '  + sumaUSD.toFixed(2);
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Drawer ──────────────────────────────────────────────── */
+function abrirDrawer(id) {
+  const m = MOV_DATA.find(x => x.id === id);
+  if (!m) return;
+
+  const sym        = m.moneda_pago === 'USD' ? '$' : 'S/';
+  const montoColor = m.monto_aplicado >= 0 ? '#16a34a' : '#dc2626';
+
+  document.getElementById('drawerTitle').textContent = `Movimiento #${m.id}`;
+  const badge = document.getElementById('drawerBadge');
+  badge.textContent = m.id_estado === 1 ? 'ACTIVO' : 'ANULADO';
+  badge.className   = m.id_estado === 1 ? 'badge bg-success' : 'badge bg-danger';
+
+  function setVal(elId, val) {
+    const el = document.getElementById(elId);
+    if (el) el.value = val ?? '';
+  }
+
+  setVal('d_id',              m.id);
+  setVal('d_nro_documento',   m.nro_documento);
+  setVal('d_card_code',       m.card_code);
+  setVal('d_card_name',       m.card_name);
+  setVal('d_nombre_banco',    m.nombre_banco);
+  setVal('d_fecha_pago',      m.fecha_pago);
+  setVal('d_moneda_pago',     m.moneda_pago);
+  setVal('d_referencia',      m.referencia);
+  setVal('d_concepto',        m.concepto);
+  setVal('d_user_code',       m.user_code);
+  setVal('d_estado',          m.id_estado === 1 ? 'Activo' : 'Anulado');
+  setVal('d_fecha_registro',  m.fecha_registro);
+
+  const montoEl = document.getElementById('d_monto_aplicado');
+  montoEl.value = `${sym} ${m.monto_aplicado.toFixed(2)}`;
+  montoEl.style.color = montoColor;
+
+  document.getElementById('becDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+}
+
+function cerrarDrawer() {
+  document.getElementById('becDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Excel ───────────────────────────────────────────────── */
+function exportarExcel() {
+  function thLabel(th) {
+    for (const node of th.childNodes)
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+        return node.textContent.trim();
+    return th.textContent.replace(/\s+/g, ' ').trim();
+  }
+  const ths  = [...document.querySelectorAll('#tablaEstado thead th')];
+  const hdrs = ths.slice(0, -1).map(thLabel);
+  const filas = [];
+  document.querySelectorAll('#tbodyEstado tr').forEach(tr => {
+    const tds = [...tr.querySelectorAll('td')];
+    if (tds.length > 1)
+      filas.push(tds.slice(0, -1).map(td => td.textContent.replace(/\s+/g, ' ').trim()));
+  });
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  filas.forEach(f => { html += '<tr>' + f.map(c => `<td>${c}</td>`).join('') + '</tr>'; });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `estado_cuenta_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Init ────────────────────────────────────────────────── */
+renderTabla();
+</script>
+{% endblock %}

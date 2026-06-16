@@ -1,0 +1,1024 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} notas de crédito
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="ncData"      type="application/json">{{ nc_json      | safe }}</script>
+<script id="motivosData" type="application/json">{{ motivos_json | safe }}</script>
+<script id="tiposData"   type="application/json">{{ tipos_json   | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-file-earmark-minus text-primary me-1"></i> Notas de Crédito
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarNC" placeholder="Serie, cliente…" oninput="renderTabla()">
+    </div>
+    <div class="d-flex gap-2 ms-auto flex-wrap">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirNuevo()">
+        <i class="bi bi-plus-lg me-1"></i>Nueva NC
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:60px;">#</th>
+          <th style="width:90px; position:relative; white-space:nowrap;">
+            Tipo
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo',event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:110px;">NC</th>
+          <th style="width:120px;">Fac. Ref.</th>
+          <th style="min-width:180px; position:relative; white-space:nowrap;">
+            Cliente
+            <button type="button" class="btn-col-filtro" id="btnFiltroCliente"
+                    onclick="toggleFiltro('cliente',event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroCliente"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroCliente" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Fecha
+            <button type="button" class="btn-col-filtro" id="btnFiltroFecha"
+                    onclick="toggleFiltroFecha(event)" title="Filtrar por fecha">
+              <i class="bi bi-funnel" id="iconFiltroFecha"></i>
+            </button>
+            <div class="col-filtro-panel filtro-fecha-panel" id="panelFiltroFecha"
+                 style="display:none;" onclick="event.stopPropagation()">
+              <div class="filtro-panel-header">
+                <span style="font-size:.72rem;font-weight:600;color:#475569;">Rango de fechas</span>
+                <span class="filtro-action danger" onclick="limpiarFiltroFecha(event)">Limpiar</span>
+              </div>
+              <div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
+                <div>
+                  <div style="font-size:.68rem;color:#64748b;margin-bottom:2px;">Desde</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaDesde" oninput="renderTabla()">
+                </div>
+                <div>
+                  <div style="font-size:.68rem;color:#64748b;margin-bottom:2px;">Hasta</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaHasta" oninput="renderTabla()">
+                </div>
+              </div>
+              <div class="filtro-panel-footer">
+                <button type="button" class="btn btn-sm btn-primary w-100 py-0" style="font-size:.73rem;"
+                        onclick="cerrarTodosFiltros()">Aplicar</button>
+              </div>
+            </div>
+          </th>
+          <th style="width:55px;">Mon.</th>
+          <th class="text-end" style="width:100px;">Total</th>
+          <th style="min-width:160px;">Motivo</th>
+          <th style="width:80px; position:relative; white-space:nowrap;">
+            Usuario
+            <button type="button" class="btn-col-filtro" id="btnFiltroUsuario"
+                    onclick="toggleFiltro('usuario',event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroUsuario"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroUsuario" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:90px; position:relative; white-space:nowrap;">
+            SUNAT
+            <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
+                    onclick="toggleFiltro('sunat',event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroSunat"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroSunat" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:90px; position:relative; white-space:nowrap;">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado',event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:60px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyNC"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY + DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<div id="ncOverlay" class="nc-overlay" onclick="cerrarDrawer()"></div>
+
+<aside id="ncDrawer" class="nc-drawer">
+  <!-- Cabecera -->
+  <div class="d-flex align-items-center justify-content-between p-3 border-bottom">
+    <h6 class="mb-0 fw-semibold" id="drawerTitulo">Nota de Crédito</h6>
+    <button type="button" class="btn-close" onclick="cerrarDrawer()"></button>
+  </div>
+
+  <!-- Cuerpo -->
+  <div class="nc-drawer-body p-3" id="drawerBody">
+
+    <!-- ──── MODO VER ──── -->
+    <div id="secVer">
+      <!-- Encabezado -->
+      <div class="row g-2 mb-3">
+        <div class="col-6">
+          <div class="detail-label">Tipo</div>
+          <div class="detail-val fw-semibold" id="vTipo">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Número</div>
+          <div class="detail-val fw-bold text-primary font-monospace" id="vNumero">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Fecha</div>
+          <div class="detail-val" id="vFecha">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Moneda</div>
+          <div class="detail-val" id="vMoneda">—</div>
+        </div>
+        <div class="col-12">
+          <div class="detail-label">Cliente</div>
+          <div class="detail-val fw-semibold" id="vCliente">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Factura Referenciada</div>
+          <div class="detail-val font-monospace text-secondary" id="vFacturaRef">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Total</div>
+          <div class="detail-val fw-bold" id="vTotal">—</div>
+        </div>
+        <div class="col-12">
+          <div class="detail-label">Motivo</div>
+          <div class="detail-val" id="vMotivo">—</div>
+        </div>
+        <div class="col-12" id="rowVComentarios">
+          <div class="detail-label">Comentarios</div>
+          <div class="detail-val text-muted" id="vComentarios">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">Estado</div>
+          <div id="vEstado">—</div>
+        </div>
+        <div class="col-6">
+          <div class="detail-label">SUNAT</div>
+          <div id="vSunatEstado">—</div>
+        </div>
+        <div class="col-12">
+          <div class="detail-label">Registrado por</div>
+          <div class="detail-val text-muted" id="vUsuario">—</div>
+        </div>
+      </div>
+
+      <!-- Ítems -->
+      <div class="fw-semibold mb-2" style="font-size:.8rem;">
+        <i class="bi bi-list-ul me-1"></i>Ítems
+      </div>
+      <div class="table-responsive mb-3">
+        <table class="table table-sm table-bordered align-middle mb-0" style="font-size:.73rem;">
+          <thead class="table-light">
+            <tr>
+              <th>Código</th>
+              <th>Descripción</th>
+              <th class="text-end">Cant.</th>
+              <th class="text-end">Precio</th>
+              <th class="text-end">Total</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyVerItems">
+            <tr><td colspan="5" class="text-center text-muted py-2">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ──── MODO NUEVO/EDITAR ──── -->
+    <div id="secNuevo" style="display:none;">
+      <div class="row g-2">
+        <div class="col-6">
+          <label class="form-label form-label-sm">Tipo *</label>
+          <select class="form-select form-select-sm" id="fTipo" onchange="onTipoChange(this.value, this.options[this.selectedIndex].text)">
+            <option value="">Seleccionar…</option>
+          </select>
+        </div>
+        <div class="col-3">
+          <label class="form-label form-label-sm">Serie</label>
+          <input type="text" class="form-control form-control-sm font-monospace bg-light" id="fSerie"
+                 readonly tabindex="-1" placeholder="Auto">
+        </div>
+        <div class="col-3">
+          <label class="form-label form-label-sm">Número</label>
+          <input type="number" class="form-control form-control-sm text-end bg-light" id="fNumero"
+                 readonly tabindex="-1" placeholder="Auto">
+        </div>
+        <!-- Factura referenciada: buscador por serie + número -->
+        <div class="col-12">
+          <label class="form-label form-label-sm">Factura Referenciada</label>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control font-monospace text-uppercase"
+                   id="fRefSerie" placeholder="Serie" style="max-width:90px;"
+                   onkeydown="if(event.key==='Enter'){buscarFactura();}">
+            <span class="input-group-text px-1">-</span>
+            <input type="number" class="form-control"
+                   id="fRefNumero" placeholder="Número" style="max-width:110px;" min="1"
+                   onkeydown="if(event.key==='Enter'){buscarFactura();}">
+            <button type="button" class="btn btn-outline-secondary" id="btnBuscarFac"
+                    onclick="buscarFactura()" title="Buscar factura">
+              <i class="bi bi-search"></i>
+            </button>
+            <button type="button" class="btn btn-outline-danger py-0 px-2" id="btnLimpiarFac"
+                    onclick="limpiarRefFactura()" title="Quitar referencia" style="display:none;">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <input type="hidden" id="fInvoiceId" value="0">
+        </div>
+
+        <!-- Panel info factura encontrada -->
+        <div class="col-12" id="refInfoPanel" style="display:none;">
+          <div class="p-2 rounded border" style="background:#f0fdf4; border-color:#86efac !important; font-size:.76rem;">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <strong id="refFolioLabel" class="font-monospace text-success"></strong>
+              <span class="text-muted">·</span>
+              <span id="refTipoLabel" class="text-muted"></span>
+            </div>
+            <div class="row g-1">
+              <div class="col-6"><span class="text-muted">Cliente:</span> <strong id="refClienteLabel"></strong></div>
+              <div class="col-3"><span class="text-muted">Moneda:</span> <span id="refMonedaLabel"></span></div>
+              <div class="col-3"><span class="text-muted">Fecha:</span> <span id="refFechaLabel"></span></div>
+              <div class="col-12"><span class="text-muted">Total:</span> <strong id="refTotalLabel" class="text-primary"></strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-8">
+          <label class="form-label form-label-sm">Cód. Cliente *</label>
+          <input type="text" class="form-control form-control-sm" id="fCardCode" placeholder="C001…">
+        </div>
+        <div class="col-4">
+          <label class="form-label form-label-sm">Moneda</label>
+          <select class="form-select form-select-sm bg-light" id="fMoneda" disabled>
+            <option value="">—</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label class="form-label form-label-sm">Fecha *</label>
+          <input type="date" class="form-control form-control-sm" id="fFecha">
+        </div>
+        <div class="col-6">
+          <label class="form-label form-label-sm">Total</label>
+          <input type="number" class="form-control form-control-sm text-end" id="fTotal"
+                 step="0.01" min="0" readonly tabindex="-1">
+        </div>
+        <div class="col-12">
+          <label class="form-label form-label-sm">Motivo *</label>
+          <select class="form-select form-select-sm" id="fMotivo">
+            <option value="">Seleccionar motivo…</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label form-label-sm">Comentarios</label>
+          <textarea class="form-control form-control-sm" id="fComments" rows="2"></textarea>
+        </div>
+      </div>
+
+      <!-- ítems -->
+      <div class="d-flex align-items-center justify-content-between mt-3 mb-2">
+        <div class="fw-semibold" style="font-size:.8rem;">
+          <i class="bi bi-list-ul me-1"></i>Ítems
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="agregarItemFila()">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered align-middle mb-1" style="font-size:.72rem;">
+          <thead class="table-light">
+            <tr>
+              <th style="width:80px;">Código</th>
+              <th>Descripción</th>
+              <th style="width:55px;" class="text-end">Cant.</th>
+              <th style="width:80px;" class="text-end">Precio</th>
+              <th style="width:90px;" class="text-end">Total</th>
+              <th style="width:65px;">Tax</th>
+              <th style="width:28px;"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyNuevoItems"></tbody>
+        </table>
+      </div>
+      <div class="text-end fw-bold mt-1" style="font-size:.82rem;">
+        Total: <span id="spanTotalNuevo" class="text-primary">0.00</span>
+      </div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <!-- Pie -->
+  <div class="nc-drawer-footer border-top p-3 d-flex gap-2 justify-content-end flex-wrap">
+    <button type="button" class="btn btn-sm btn-secondary" onclick="cerrarDrawer()">Cerrar</button>
+    <button type="button" class="btn btn-sm btn-outline-info" id="btnSunatTicket" style="display:none;"
+            onclick="abrirEnlaceNC('ticket')" title="Ver comprobante (Ticket PDF)">
+      <i class="bi bi-printer me-1"></i>Ticket
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-danger" id="btnSunatA4" style="display:none;"
+            onclick="abrirEnlaceNC('a4')" title="Ver comprobante A4 PDF">
+      <i class="bi bi-file-earmark-pdf me-1"></i>A4
+    </button>
+    <button type="button" class="btn btn-sm btn-warning text-dark" id="btnSunat" style="display:none;"
+            onclick="enviarSunatNC()">
+      <i class="bi bi-send me-1"></i>SUNAT
+    </button>
+    <button type="button" class="btn btn-sm btn-danger" id="btnAnular" style="display:none;"
+            onclick="anularNC()">
+      <i class="bi bi-x-circle me-1"></i>Anular
+    </button>
+    <button type="button" class="btn btn-sm btn-primary" id="btnGuardar" style="display:none;"
+            onclick="guardarNC()">
+      <i class="bi bi-floppy me-1"></i>Guardar
+    </button>
+  </div>
+</aside>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Drawer ─────────────────────────────────────────────── */
+.nc-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 1040;
+}
+.nc-drawer {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; right: 0;
+  height: 100dvh;
+  width: min(780px, 97vw);
+  background: #fff;
+  box-shadow: -4px 0 24px rgba(0,0,0,.12);
+  z-index: 1045;
+  transform: translateX(100%);
+  transition: transform .25s ease;
+  overflow: hidden;
+}
+.nc-drawer.open { transform: translateX(0); }
+.nc-drawer-body { flex: 1; overflow-y: auto; }
+.nc-drawer-footer { background: #f8fafc; }
+
+/* ── Detalle ─────────────────────────────────────────────── */
+.detail-label { font-size:.68rem; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px; }
+.detail-val   { font-size:.82rem; color:#1e293b; }
+
+/* ── Filtros ─────────────────────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px;
+  color: #94a3b8; cursor: pointer; vertical-align: middle;
+  font-size: .75rem;
+}
+.btn-col-filtro:hover { color: #0d6efd; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; min-width: 180px;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  z-index: 900; padding: 4px 0;
+}
+.filtro-fecha-panel { min-width: 220px; }
+.filtro-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px 2px; font-size: .72rem; font-weight: 600; color: #475569;
+}
+.filtro-panel-footer { padding: 6px 10px; }
+.filtro-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; cursor: pointer; font-size: .74rem; color: #334155;
+}
+.filtro-item:hover { background: #f1f5f9; }
+.filtro-item input[type=checkbox] { cursor: pointer; }
+.filtro-action { cursor: pointer; font-size: .7rem; color: #64748b; }
+.filtro-action:hover { text-decoration: underline; }
+.filtro-action.danger { color: #ef4444; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const NC_DATA   = JSON.parse(document.getElementById('ncData').textContent);
+const MOTIVOS   = JSON.parse(document.getElementById('motivosData').textContent); // [{code, description}]
+const TIPOS     = JSON.parse(document.getElementById('tiposData').textContent);   // [{idtype, invoice_type}]
+const USER_CODE = '{{ user_code }}';
+
+// ── filtros activos ────────────────────────────────────────
+const filtros = { tipo: new Set(), cliente: new Set(), usuario: new Set(), sunat: new Set(), estado: new Set() };
+let filtroFechaDesde = '', filtroFechaHasta = '';
+let _currentId = null;
+
+// ── helpers ──────────────────────────────────────────────
+function fmtMoney(v, cur='PEN') {
+  if (v == null) return '—';
+  return parseFloat(v).toLocaleString('es-PE', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' ' + cur;
+}
+function fmtFecha(s) {
+  if (!s) return '—';
+  const d = s.slice(0,10).split('-');
+  return d[2]+'/'+d[1]+'/'+d[0];
+}
+function sunatBadge(estado) {
+  const map = {
+    'ACEPTADO':  ['success',  'ACEPTADO'],
+    'RECHAZADO': ['danger',   'RECHAZADO'],
+    'PENDIENTE': ['warning',  'PENDIENTE'],
+    'EN_PROCESO':['info',     'EN PROCESO'],
+  };
+  const [cls, lbl] = map[estado] || ['secondary', estado || '—'];
+  return `<span class="badge bg-${cls}-subtle text-${cls} border border-${cls}-subtle">${lbl}</span>`;
+}
+function estadoBadge(id) {
+  return id == 1
+    ? '<span class="badge bg-success-subtle text-success border border-success-subtle">Vigente</span>'
+    : '<span class="badge bg-danger-subtle text-danger border border-danger-subtle">Anulada</span>';
+}
+
+// ── Tabla ─────────────────────────────────────────────────
+function renderTabla() {
+  const q    = (document.getElementById('buscarNC').value || '').toLowerCase();
+  const fD   = document.getElementById('filtroFechaDesde').value;
+  const fH   = document.getElementById('filtroFechaHasta').value;
+  const tbody = document.getElementById('tbodyNC');
+
+  const filas = NC_DATA.filter(nc => {
+    if (filtros.tipo.size    && !filtros.tipo.has(nc.nc_type))          return false;
+    if (filtros.cliente.size && !filtros.cliente.has(nc.bp_name))       return false;
+    if (filtros.usuario.size && !filtros.usuario.has(nc.user_nombre))   return false;
+    if (filtros.sunat.size   && !filtros.sunat.has(nc.sunat_estado))    return false;
+    if (filtros.estado.size  && !filtros.estado.has(String(nc.id_estado))) return false;
+    if (fD && nc.doc_date < fD) return false;
+    if (fH && nc.doc_date > fH) return false;
+    if (q) {
+      const hay = [nc.nc_serie, String(nc.nc_number||''), nc.card_code, nc.bp_name, nc.motivo_desc]
+        .join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  tbody.innerHTML = filas.length ? filas.map(nc => `
+    <tr style="font-size:.74rem; cursor:pointer;" onclick="abrirDrawer(${nc.id_nc})">
+      <td class="ps-3 text-muted">${nc.id_nc}</td>
+      <td class="text-muted">${nc.nc_type||'—'}</td>
+      <td class="font-monospace fw-bold text-primary">${nc.nc_serie||''}${nc.nc_number ? '-'+nc.nc_number : ''}</td>
+      <td class="font-monospace text-secondary">${nc.ref_serie && nc.ref_number ? nc.ref_serie+'-'+nc.ref_number : '—'}</td>
+      <td class="fw-semibold">${nc.bp_name||nc.card_code||'—'}</td>
+      <td class="text-muted">${fmtFecha(nc.doc_date)}</td>
+      <td class="text-muted">${nc.doc_currency||'PEN'}</td>
+      <td class="text-end fw-semibold">${(nc.doc_total||0).toLocaleString('es-PE',{minimumFractionDigits:2})}</td>
+      <td class="text-muted" title="${nc.motivo_code||''}">${nc.motivo_desc||'—'}</td>
+      <td class="text-muted">${nc.user_nombre||nc.user_code||'—'}</td>
+      <td class="text-center">${sunatBadge(nc.sunat_estado)}</td>
+      <td class="text-center">${estadoBadge(nc.id_estado)}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="event.stopPropagation();abrirDrawer(${nc.id_nc})">
+          <i class="bi bi-eye"></i>
+        </button>
+      </td>
+    </tr>`).join('') :
+    '<tr><td colspan="13" class="text-center text-muted py-4">Sin resultados</td></tr>';
+}
+
+// ── Filtros multiselect ───────────────────────────────────
+function buildFiltroPanel(key, items, panelId) {
+  const panel = document.getElementById(panelId);
+  const sel   = filtros[key];
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span style="font-size:.72rem;font-weight:600;color:#475569;">${items.length} opciones</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${key}',event)">Limpiar</span>
+    </div>` +
+    items.map(v => `
+      <label class="filtro-item">
+        <input type="checkbox" ${sel.has(v)?'checked':''} onchange="onFiltroChange('${key}','${v.replace(/'/g,"\\'")}',this.checked)">
+        <span>${v||'(vacío)'}</span>
+      </label>`).join('') +
+    `<div class="filtro-panel-footer">
+       <button type="button" class="btn btn-sm btn-primary w-100 py-0" style="font-size:.73rem;"
+               onclick="cerrarTodosFiltros()">Aplicar</button>
+     </div>`;
+}
+function toggleFiltro(key, ev) {
+  ev.stopPropagation();
+  const panelIds = { tipo:'panelFiltroTipo', cliente:'panelFiltroCliente',
+                     usuario:'panelFiltroUsuario', sunat:'panelFiltroSunat', estado:'panelFiltroEstado' };
+  const dataSets = {
+    tipo:    [...new Set(NC_DATA.map(d=>d.nc_type).filter(Boolean))].sort(),
+    cliente: [...new Set(NC_DATA.map(d=>d.bp_name).filter(Boolean))].sort(),
+    usuario: [...new Set(NC_DATA.map(d=>d.user_nombre).filter(Boolean))].sort(),
+    sunat:   [...new Set(NC_DATA.map(d=>d.sunat_estado))].sort(),
+    estado:  ['1','0'],
+  };
+  const panel = document.getElementById(panelIds[key]);
+  const vis   = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!vis) { buildFiltroPanel(key, dataSets[key], panelIds[key]); panel.style.display = 'block'; }
+}
+function toggleFiltroFecha(ev) {
+  ev.stopPropagation();
+  const p = document.getElementById('panelFiltroFecha');
+  const v = p.style.display !== 'none'; cerrarTodosFiltros(); if (!v) p.style.display = 'block';
+}
+function limpiarFiltroFecha(ev) {
+  if (ev) ev.stopPropagation();
+  document.getElementById('filtroFechaDesde').value = '';
+  document.getElementById('filtroFechaHasta').value = '';
+  renderTabla();
+}
+function onFiltroChange(key, val, checked) {
+  if (checked) filtros[key].add(val); else filtros[key].delete(val); renderTabla();
+}
+function limpiarFiltro(key, ev) {
+  if (ev) ev.stopPropagation(); filtros[key].clear(); renderTabla();
+}
+function cerrarTodosFiltros() {
+  ['panelFiltroTipo','panelFiltroCliente','panelFiltroUsuario',
+   'panelFiltroSunat','panelFiltroEstado','panelFiltroFecha'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+// ── Drawer VER ────────────────────────────────────────────
+async function abrirDrawer(id) {
+  _currentId = id;
+  const nc = NC_DATA.find(x => x.id_nc === id);
+  if (!nc) return;
+
+  document.getElementById('secVer').style.display   = '';
+  document.getElementById('secNuevo').style.display = 'none';
+  document.getElementById('drawerTitulo').textContent = `NC #${id}`;
+  const yaAceptada = (nc.sunat_estado || '').toUpperCase() === 'ACEPTADO';
+  document.getElementById('btnSunat').style.display   = (nc.id_estado == 1 && !yaAceptada) ? '' : 'none';
+  document.getElementById('btnAnular').style.display  = nc.id_estado == 1 ? '' : 'none';
+  document.getElementById('btnGuardar').style.display = 'none';
+  // Botones Ticket y A4: visibles en VER, habilitados solo si tienen URL
+  _actualizarBotonesNC(nc);
+
+  document.getElementById('vTipo').textContent      = nc.nc_type || '—';
+  document.getElementById('vNumero').textContent    = (nc.nc_serie||'') + (nc.nc_number ? '-'+nc.nc_number : '');
+  document.getElementById('vFecha').textContent     = fmtFecha(nc.doc_date);
+  document.getElementById('vMoneda').textContent    = nc.doc_currency || 'PEN';
+  document.getElementById('vCliente').textContent   = nc.bp_name || nc.card_code || '—';
+  document.getElementById('vTotal').textContent     = fmtMoney(nc.doc_total, nc.doc_currency);
+  document.getElementById('vMotivo').textContent    = nc.motivo_desc || nc.motivo_code || '—';
+  document.getElementById('vFacturaRef').textContent =
+    nc.ref_serie && nc.ref_number ? nc.ref_serie+'-'+nc.ref_number : '—';
+  document.getElementById('vComentarios').textContent = nc.comments || '—';
+  document.getElementById('rowVComentarios').style.display = nc.comments ? '' : 'none';
+  document.getElementById('vEstado').innerHTML    = estadoBadge(nc.id_estado);
+  document.getElementById('vSunatEstado').innerHTML = sunatBadge(nc.sunat_estado);
+  document.getElementById('vUsuario').textContent = nc.user_nombre || nc.user_code || '—';
+
+  // Cargar ítems
+  const tbody = document.getElementById('tbodyVerItems');
+  tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-2">Cargando…</td></tr>';
+  try {
+    const r = await fetch(`/ventas/notas-credito/${id}/items`);
+    const d = await r.json();
+    if (d.success && d.items.length) {
+      tbody.innerHTML = d.items.map(it => `
+        <tr>
+          <td class="font-monospace">${it.item_code||'—'}</td>
+          <td>${it.description||'—'}</td>
+          <td class="text-end">${parseFloat(it.quantity||0).toLocaleString('es-PE',{minimumFractionDigits:2})}</td>
+          <td class="text-end">${parseFloat(it.price_after_vat||0).toLocaleString('es-PE',{minimumFractionDigits:4})}</td>
+          <td class="text-end">${(it.quantity*it.price_after_vat).toLocaleString('es-PE',{minimumFractionDigits:2})}</td>
+        </tr>`).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-2">Sin ítems</td></tr>';
+    }
+  } catch { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-2">Error al cargar</td></tr>'; }
+
+  mostrarDrawer();
+}
+
+function abrirNuevo() {
+  _currentId = null;
+  document.getElementById('secVer').style.display   = 'none';
+  document.getElementById('secNuevo').style.display = '';
+  document.getElementById('drawerTitulo').textContent = 'Nueva Nota de Crédito';
+  document.getElementById('btnAnular').style.display  = 'none';
+  document.getElementById('btnGuardar').style.display = '';
+
+  // Reset form
+  ['fTipo','fSerie','fNumero','fInvoiceId','fCardCode','fComments'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value='';
+  });
+  const selMon = document.getElementById('fMoneda');
+  selMon.innerHTML = '<option value="">—</option>';
+  selMon.disabled  = true;
+  document.getElementById('fMotivo').value  = '';
+  document.getElementById('fTotal').value   = '0.00';
+  // Fecha hoy
+  const hoy = new Date();
+  document.getElementById('fFecha').value =
+    hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0');
+  // Llenar tipos desde BD (array [{idtype, invoice_type}]) — value = idtype
+  const selTipo = document.getElementById('fTipo');
+  if (selTipo.options.length <= 1) {
+    TIPOS.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.idtype; opt.textContent = t.invoice_type;
+      selTipo.appendChild(opt);
+    });
+  }
+  // Limpiar serie, número y referencia al abrir nuevo
+  document.getElementById('fSerie').value             = '';
+  document.getElementById('fNumero').value            = '';
+  document.getElementById('fInvoiceId').value         = '0';
+  document.getElementById('fRefSerie').value          = '';
+  document.getElementById('fRefNumero').value         = '';
+  document.getElementById('refInfoPanel').style.display   = 'none';
+  document.getElementById('btnLimpiarFac').style.display  = 'none';
+  // Llenar motivos desde BD (array [{code, description}])
+  const sel = document.getElementById('fMotivo');
+  if (sel.options.length <= 1) {
+    MOTIVOS.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.code; opt.textContent = m.description;
+      sel.appendChild(opt);
+    });
+  }
+  // Limpiar ítems
+  document.getElementById('tbodyNuevoItems').innerHTML = '';
+  document.getElementById('spanTotalNuevo').textContent = '0.00';
+  mostrarDrawer();
+}
+
+function mostrarDrawer() {
+  document.getElementById('ncOverlay').style.display = '';
+  document.getElementById('ncDrawer').classList.add('open');
+}
+function cerrarDrawer() {
+  document.getElementById('ncDrawer').classList.remove('open');
+  document.getElementById('ncOverlay').style.display = 'none';
+  document.getElementById('btnSunatA4').style.display     = 'none';
+  document.getElementById('btnSunatTicket').style.display = 'none';
+  _currentId = null;
+}
+
+// ── Ítems en formulario nuevo ─────────────────────────────
+let _itemIdx = 0;
+function agregarItemFila(code='', desc='', qty=1, precio=0, tax='', wh='') {
+  const idx = _itemIdx++;
+  const tr  = document.createElement('tr');
+  tr.id     = 'itemRow_'+idx;
+  tr.innerHTML = `
+    <td><input type="text" class="form-control form-control-sm p-1 font-monospace" style="width:75px;"
+               id="iCode${idx}" value="${code}"></td>
+    <td><input type="text" class="form-control form-control-sm p-1"
+               id="iDesc${idx}" value="${desc}"></td>
+    <td><input type="number" class="form-control form-control-sm p-1 text-end" style="width:52px;"
+               id="iQty${idx}" value="${qty}" min="0" step="0.01" oninput="recalcFila(${idx})"></td>
+    <td><input type="number" class="form-control form-control-sm p-1 text-end" style="width:78px;"
+               id="iPrecio${idx}" value="${precio}" min="0" step="0.0001" oninput="recalcFila(${idx})"></td>
+    <td class="text-end fw-semibold" id="iSubtotal${idx}">${(qty*precio).toLocaleString('es-PE',{minimumFractionDigits:2})}</td>
+    <td><input type="text" class="form-control form-control-sm p-1 font-monospace" style="width:62px;"
+               id="iTax${idx}" value="${tax}" placeholder="IGV"></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                onclick="eliminarItemFila(${idx})"><i class="bi bi-trash3"></i></button></td>`;
+  document.getElementById('tbodyNuevoItems').appendChild(tr);
+  recalcTotal();
+}
+function recalcFila(idx) {
+  const q = parseFloat(document.getElementById('iQty'+idx).value)||0;
+  const p = parseFloat(document.getElementById('iPrecio'+idx).value)||0;
+  document.getElementById('iSubtotal'+idx).textContent =
+    (q*p).toLocaleString('es-PE',{minimumFractionDigits:2});
+  recalcTotal();
+}
+function eliminarItemFila(idx) {
+  const tr = document.getElementById('itemRow_'+idx);
+  if (tr) tr.remove();
+  recalcTotal();
+}
+function recalcTotal() {
+  const rows = document.getElementById('tbodyNuevoItems').querySelectorAll('tr');
+  let total = 0;
+  rows.forEach(tr => {
+    const idx = tr.id.replace('itemRow_','');
+    const q = parseFloat(document.getElementById('iQty'+idx)?.value)||0;
+    const p = parseFloat(document.getElementById('iPrecio'+idx)?.value)||0;
+    total += q*p;
+  });
+  document.getElementById('fTotal').value = total.toFixed(2);
+  document.getElementById('spanTotalNuevo').textContent = total.toLocaleString('es-PE',{minimumFractionDigits:2});
+}
+function getItemsArray() {
+  const rows = document.getElementById('tbodyNuevoItems').querySelectorAll('tr');
+  return Array.from(rows).map(tr => {
+    const idx = tr.id.replace('itemRow_','');
+    return {
+      item_code:       (document.getElementById('iCode'+idx)?.value||'').trim(),
+      description:     (document.getElementById('iDesc'+idx)?.value||'').trim(),
+      quantity:        parseFloat(document.getElementById('iQty'+idx)?.value)||0,
+      price_after_vat: parseFloat(document.getElementById('iPrecio'+idx)?.value)||0,
+      tax_code:        (document.getElementById('iTax'+idx)?.value||'').trim(),
+      warehouse_code:  '',
+    };
+  }).filter(it => it.description || it.item_code);
+}
+
+// ── Buscar factura de referencia ──────────────────────────────
+async function buscarFactura() {
+  const serie  = document.getElementById('fRefSerie').value.trim().toUpperCase();
+  const numero = document.getElementById('fRefNumero').value.trim();
+  if (!serie || !numero) return mostrarToast('warning', 'Ingrese la serie y el número de la factura.');
+
+  const btn = document.getElementById('btnBuscarFac');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  try {
+    const r = await fetch(`/api/nc-buscar-factura?serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`);
+    const d = await r.json();
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i>';
+
+    if (!d.success) { mostrarToast('warning', d.message); return; }
+
+    // Guardar invoice_id
+    document.getElementById('fInvoiceId').value = d.invoice_id;
+
+    // Mostrar panel info
+    document.getElementById('refFolioLabel').textContent  = `${d.invoice_serie}-${d.invoice_number}`;
+    document.getElementById('refTipoLabel').textContent   = d.invoice_type || '';
+    document.getElementById('refClienteLabel').textContent = d.bp_name || d.card_code || '';
+    document.getElementById('refMonedaLabel').textContent  = d.doc_currency || 'PEN';
+    document.getElementById('refFechaLabel').textContent   = fmtFecha(d.doc_date);
+    document.getElementById('refTotalLabel').textContent   =
+      (d.doc_total||0).toLocaleString('es-PE',{minimumFractionDigits:2}) + ' ' + (d.doc_currency||'PEN');
+    document.getElementById('refInfoPanel').style.display  = '';
+    document.getElementById('btnLimpiarFac').style.display = '';
+
+    // Autocompletar campos del formulario
+    document.getElementById('fCardCode').value = d.card_code || '';
+    // Moneda: cargar solo la del invoice
+    const selMoneda = document.getElementById('fMoneda');
+    const moneda    = (d.doc_currency || '').trim().toUpperCase();
+    selMoneda.innerHTML = `<option value="${moneda}">${moneda}</option>`;
+    selMoneda.value     = moneda;
+    selMoneda.disabled  = true;
+    if (d.doc_date) document.getElementById('fFecha').value = d.doc_date.slice(0,10);
+
+    // Cargar ítems en la tabla
+    if (d.items && d.items.length) {
+      document.getElementById('tbodyNuevoItems').innerHTML = '';
+      _itemIdx = 0;
+      d.items.forEach(it => agregarItemFila(
+        it.item_code || '',
+        it.item_name || '',
+        it.quantity  || 1,
+        it.price_after_vat || 0,
+        it.tax_code  || '',
+        it.warehouse_code || ''
+      ));
+    }
+  } catch (e) {
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-search"></i>';
+    mostrarToast('danger', 'Error al buscar: ' + e.message);
+  }
+}
+
+function limpiarRefFactura() {
+  document.getElementById('fInvoiceId').value            = '0';
+  document.getElementById('fRefSerie').value             = '';
+  document.getElementById('fRefNumero').value            = '';
+  document.getElementById('refInfoPanel').style.display  = 'none';
+  document.getElementById('btnLimpiarFac').style.display = 'none';
+  const sel = document.getElementById('fMoneda');
+  sel.innerHTML = '<option value="">—</option>';
+  sel.disabled  = true;
+}
+
+// ── onChange tipo: llama API y autocompleta serie + número ───
+async function onTipoChange(idtype, tipoTexto) {
+  const fSerie  = document.getElementById('fSerie');
+  const fNumero = document.getElementById('fNumero');
+  fSerie.value  = '';
+  fNumero.value = '';
+  if (!idtype) return;
+  fSerie.placeholder  = 'Cargando…';
+  fNumero.placeholder = 'Cargando…';
+  try {
+    const r = await fetch(`/api/nc-doc-number/${idtype}`);
+    const d = await r.json();
+    if (d.success) {
+      fSerie.value        = d.invoice_serie;
+      fNumero.value       = d.next_number;
+      fSerie.placeholder  = 'Auto';
+      fNumero.placeholder = 'Auto';
+    } else {
+      fSerie.placeholder  = 'Sin serie';
+      fNumero.placeholder = '—';
+      mostrarToast('warning', d.message || 'No se encontró serie para este tipo.');
+    }
+  } catch {
+    fSerie.placeholder  = 'Error';
+    fNumero.placeholder = 'Error';
+    mostrarToast('danger', 'Error al obtener numeración.');
+  }
+}
+
+// ── Guardar NC ────────────────────────────────────────────
+async function guardarNC() {
+  const idtype = document.getElementById('fTipo').value;
+  const serie  = document.getElementById('fSerie').value.trim();
+  const num    = parseInt(document.getElementById('fNumero').value)||0;
+  const sel    = document.getElementById('fTipo');
+  const tipo   = sel.options[sel.selectedIndex]?.text || '';
+  const card   = document.getElementById('fCardCode').value.trim();
+  const fecha  = document.getElementById('fFecha').value;
+  const mot    = document.getElementById('fMotivo').value;
+  if (!idtype) return mostrarToast('warning','Seleccione el tipo de documento.');
+  if (!serie)  return mostrarToast('warning','Seleccione el tipo para obtener la serie.');
+  if (!num)    return mostrarToast('warning','No se pudo obtener el número correlativo.');
+  if (!card)   return mostrarToast('warning','Ingrese el código de cliente.');
+  if (!fecha)  return mostrarToast('warning','Seleccione la fecha.');
+  if (!mot)    return mostrarToast('warning','Seleccione el motivo.');
+
+  const payload = {
+    invoice_id:   parseInt(document.getElementById('fInvoiceId').value)||0,
+    nc_serie:     serie,
+    nc_number:    num,
+    nc_type:      tipo,
+    idtype:       parseInt(idtype),
+    card_code:    card,
+    doc_date:     fecha,
+    doc_currency: document.getElementById('fMoneda').value,
+    doc_total:    parseFloat(document.getElementById('fTotal').value)||0,
+    motivo_code:  mot,
+    comments:     document.getElementById('fComments').value.trim(),
+    items:        getItemsArray(),
+  };
+
+  try {
+    const btn = document.getElementById('btnGuardar');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    const r = await fetch('/ventas/notas-credito/nueva', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    btn.disabled = false; btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+    if (d.success) {
+      mostrarToast('success', d.message);
+      cerrarDrawer();
+      setTimeout(()=>location.reload(), 900);
+    } else {
+      mostrarToast('danger', d.message);
+    }
+  } catch (e) {
+    document.getElementById('btnGuardar').disabled = false;
+    document.getElementById('btnGuardar').innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+    mostrarToast('danger','Error de conexión: '+e.message);
+  }
+}
+
+// ── Botones Ticket / A4 ───────────────────────────────────
+let _ncLinks = { a4: '', ticket: '' };
+
+function _actualizarBotonesNC(nc) {
+  _ncLinks.a4     = nc.sunat_a4     || '';
+  _ncLinks.ticket = nc.sunat_ticket || '';
+
+  const btnA4     = document.getElementById('btnSunatA4');
+  const btnTicket = document.getElementById('btnSunatTicket');
+
+  // Siempre visibles en modo VER
+  btnA4.style.display     = '';
+  btnTicket.style.display = '';
+  // Habilitados solo si existe la URL
+  btnA4.disabled     = !_ncLinks.a4;
+  btnTicket.disabled = !_ncLinks.ticket;
+}
+
+function abrirEnlaceNC(tipo) {
+  const url = _ncLinks[tipo];
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+// ── Enviar a SUNAT ────────────────────────────────────────
+async function enviarSunatNC() {
+  if (!_currentId) return;
+  const btn = document.getElementById('btnSunat');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+  try {
+    const r = await fetch(`/api/sunat/nc/enviar/${_currentId}`, { method: 'POST' });
+    const d = await r.json();
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>SUNAT';
+
+    if (d.success) {
+      mostrarToast('success', d.message);
+      // Actualizar badge SUNAT en el drawer
+      document.getElementById('vSunatEstado').innerHTML = sunatBadge(d.sunat_estado);
+      // Ocultar botón SUNAT si fue aceptado
+      if ((d.sunat_estado || '').toUpperCase() === 'ACEPTADO') {
+        btn.style.display = 'none';
+      }
+      // Actualizar dato local y refrescar botones A4/Ticket
+      const nc = NC_DATA.find(x => x.id_nc === _currentId);
+      if (nc) {
+        nc.sunat_estado  = d.sunat_estado;
+        nc.sunat_hash    = d.sunat_hash;
+        nc.sunat_xml     = d.sunat_xml;
+        nc.sunat_cdr     = d.sunat_cdr;
+        nc.sunat_ticket  = d.sunat_ticket;
+        nc.sunat_a4      = d.sunat_a4;
+        _actualizarBotonesNC(nc);
+      }
+      renderTabla();
+    } else {
+      mostrarToast('danger', d.message);
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>SUNAT';
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  }
+}
+
+// ── Anular NC ─────────────────────────────────────────────
+function anularNC() {
+  confirmarAccion('¿Anular esta nota de crédito? Esta acción no se puede deshacer.', async () => {
+    try {
+      const r = await fetch(`/ventas/notas-credito/${_currentId}/anular`, {method:'POST'});
+      const d = await r.json();
+      if (d.success) {
+        mostrarToast('success', d.message);
+        cerrarDrawer();
+        setTimeout(()=>location.reload(), 900);
+      } else {
+        mostrarToast('danger', d.message);
+      }
+    } catch (e) { mostrarToast('danger','Error: '+e.message); }
+  });
+}
+
+// ── Excel ─────────────────────────────────────────────────
+function exportarExcel() {
+  const filas = NC_DATA.map(nc => ({
+    'ID':            nc.id_nc,
+    'Tipo':          nc.nc_type,
+    'Serie':         nc.nc_serie,
+    'Número':        nc.nc_number,
+    'Fac. Ref.':     nc.ref_serie && nc.ref_number ? nc.ref_serie+'-'+nc.ref_number : '',
+    'Cliente':       nc.bp_name || nc.card_code,
+    'Fecha':         nc.doc_date,
+    'Moneda':        nc.doc_currency,
+    'Total':         nc.doc_total,
+    'Motivo':        (nc.motivo_code ? nc.motivo_code+' — ' : '') + (nc.motivo_desc || MOTIVOS[nc.motivo_code] || ''),
+    'SUNAT':         nc.sunat_estado,
+    'Estado':        nc.id_estado == 1 ? 'Vigente' : 'Anulada',
+    'Usuario':       nc.user_nombre || nc.user_code,
+    'Registrado':    nc.fecha_registro,
+  }));
+  if (!filas.length) return mostrarToast('warning','Sin datos para exportar.');
+  const cols  = Object.keys(filas[0]);
+  const tsv   = [cols.join('\t'), ...filas.map(f=>cols.map(c=>f[c]??'').join('\t'))].join('\n');
+  const blob  = new Blob([tsv], {type:'text/tab-separated-values'});
+  const a     = document.createElement('a');
+  a.href      = URL.createObjectURL(blob);
+  a.download  = 'notas_credito.xls';
+  a.click();
+}
+
+// ── Init ─────────────────────────────────────────────────
+renderTabla();
+</script>
+{% endblock %}

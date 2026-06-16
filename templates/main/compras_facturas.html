@@ -1,0 +1,1000 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} facturas
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="facturasData"      type="application/json">{{ facturas_json       | safe }}</script>
+<script id="tiposData"         type="application/json">{{ tipos_json          | safe }}</script>
+<script id="sociosData"        type="application/json">{{ socios_json         | safe }}</script>
+<script id="itemsData"         type="application/json">{{ items_json          | safe }}</script>
+<script id="invoiceTypesData"  type="application/json">{{ invoice_types_json  | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-receipt text-primary me-1"></i> Facturas de Compra
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar proveedor, número…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nueva Factura
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaFacturas">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:55px; position:relative; white-space:nowrap;">
+            #
+            <button type="button" class="btn-col-filtro" id="btnSort_id"
+                    onclick="sortColumna('id', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_id"></i>
+            </button>
+          </th>
+          <th style="width:95px;">Cod. Proveedor</th>
+          <th style="min-width:160px; position:relative; white-space:nowrap;">
+            Proveedor
+            <button type="button" class="btn-col-filtro" id="btnSort_proveedor"
+                    onclick="sortColumna('proveedor', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_proveedor"></i>
+            </button>
+            <button type="button" class="btn-col-filtro" id="btnFiltroSocio"
+                    onclick="toggleFiltro('socio', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroSocio"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroSocio" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="min-width:130px; position:relative; white-space:nowrap;">
+            Tipo Compra
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:110px;">Tipo Doc.</th>
+          <th style="min-width:120px;">Nº Documento</th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Fecha
+            <button type="button" class="btn-col-filtro" id="btnSort_fecha"
+                    onclick="sortColumna('fecha', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_fecha"></i>
+            </button>
+          </th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Vencimiento
+            <button type="button" class="btn-col-filtro" id="btnSort_venc"
+                    onclick="sortColumna('venc', event)" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_venc"></i>
+            </button>
+          </th>
+          <th style="min-width:120px;">Almacén</th>
+          <th style="width:75px; position:relative; white-space:nowrap;">
+            Moneda
+            <button type="button" class="btn-col-filtro" id="btnFiltroMoneda"
+                    onclick="toggleFiltro('moneda', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroMoneda"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroMoneda" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-end" style="width:100px;">Total</th>
+          <th style="width:85px; position:relative; white-space:nowrap;">
+            SUNAT
+            <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
+                    onclick="toggleFiltro('sunat', event)" title="Filtrar">
+              <i class="bi bi-funnel" id="iconFiltroSunat"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroSunat" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:75px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyFacturas"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="contadorVisible">{{ total }}</strong> facturas</span>
+    <span class="ms-auto">
+      Suma SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
+      &nbsp;|&nbsp;
+      Suma USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="articulos-drawer" id="facturaDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nueva Factura de Compra</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()" title="Cerrar">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body" id="drawerBody">
+    <input type="hidden" id="f_invoice_id" value="0">
+
+    <!-- Proveedor -->
+    <div class="form-section-label">Proveedor</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-4">
+        <label class="form-label-sm">Cód. Proveedor <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_card_code" list="listaSocios" placeholder="Código…"
+               autocomplete="off" oninput="onSocioSelect(this)">
+        <datalist id="listaSocios"></datalist>
+      </div>
+      <div class="col-sm-8">
+        <label class="form-label-sm">Nombre del Proveedor</label>
+        <input type="text" class="form-control form-control-sm bg-light always-readonly"
+               id="f_bp_nombre" readonly>
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Tipo de Compra</label>
+        <select class="form-select form-select-sm" id="f_id_tipo_compra">
+          <option value="">-- Seleccione --</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Comprobante -->
+    <div class="form-section-label">Comprobante</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-4">
+        <label class="form-label-sm">Tipo</label>
+        <select class="form-select form-select-sm" id="f_invoice_type">
+          <option value="">-- Seleccione --</option>
+        </select>
+      </div>
+      <div class="col-sm-3">
+        <label class="form-label-sm">Serie</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_invoice_serie" placeholder="E001" maxlength="10">
+      </div>
+      <div class="col-sm-5">
+        <label class="form-label-sm">Número</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_invoice_number" placeholder="00000001" maxlength="20">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Moneda</label>
+        <select class="form-select form-select-sm" id="f_doc_currency">
+          <option value="SOL">SOL — Soles</option>
+          <option value="USD">USD — Dólares</option>
+        </select>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">N° Referencia</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_num_at_card" placeholder="OC-001">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Almacén</label>
+        <select class="form-select form-select-sm" id="f_invoice_wh">
+          <option value="">— Seleccionar —</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Fechas -->
+    <div class="form-section-label">Fechas</div>
+    <div class="row g-2 mb-3">
+      <div class="col-sm-4">
+        <label class="form-label-sm">Emisión <span class="text-danger">*</span></label>
+        <input type="date" class="form-control form-control-sm" id="f_doc_date">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Impuesto</label>
+        <input type="date" class="form-control form-control-sm" id="f_tax_date">
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">Vencimiento</label>
+        <input type="date" class="form-control form-control-sm" id="f_doc_due_date">
+      </div>
+    </div>
+
+    <!-- Notas -->
+    <div class="form-section-label">Notas</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <label class="form-label-sm">Memo</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_journal_memo" placeholder="Descripción del diario">
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Comentarios</label>
+        <textarea class="form-control form-control-sm" id="f_comments" rows="2"></textarea>
+      </div>
+    </div>
+
+    <!-- ── Ítems editable (modo NUEVO/EDITAR) ── -->
+    <div id="seccionDetalle">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <div class="form-section-label mb-0">Líneas de Detalle</div>
+        <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;" onclick="agregarLinea()">
+          <i class="bi bi-plus-lg"></i> Agregar Ítem
+        </button>
+      </div>
+      <datalist id="listaItems"></datalist>
+      <div class="table-responsive rounded border" style="max-height:300px; overflow-y:auto;">
+        <table class="table table-sm align-middle mb-0" style="font-size:.75rem; min-width:680px;">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="ps-2" style="width:28px;">#</th>
+              <th style="min-width:100px;">Código</th>
+              <th style="min-width:120px;">Descripción</th>
+              <th style="width:70px;">Cant.</th>
+              <th style="width:85px;">P. s/IGV</th>
+              <th style="width:85px;">P. c/IGV</th>
+              <th style="width:65px;">Unidad</th>
+              <th style="width:55px;">Imp.</th>
+              <th class="text-end" style="width:80px;">Subtotal</th>
+              <th style="width:32px;"></th>
+            </tr>
+          </thead>
+          <tbody id="lineasDetalle"></tbody>
+        </table>
+      </div>
+      <div class="mt-2 pe-1">
+        <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+          <span class="text-muted small">Sub total compras:</span>
+          <span class="fw-semibold" id="subtotalComprasDisplay">0.0000</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+          <span class="text-muted small">IGV:</span>
+          <span class="fw-semibold" id="igvDisplay">0.0000</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2">
+          <span class="text-muted small">Total:</span>
+          <span class="fw-bold" id="totalDisplay">S/ 0.00</span>
+        </div>
+      </div>
+    </div><!-- /seccionDetalle -->
+
+    <!-- ── Ítems solo lectura (modo VER) ── -->
+    <div id="seccionItemsVer" style="display:none;">
+      <div class="form-section-label">Líneas de Detalle</div>
+      <div class="table-responsive rounded border" style="max-height:320px; overflow-y:auto;">
+        <table class="table table-sm align-middle mb-0" style="font-size:.75rem; min-width:600px;">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="ps-2" style="width:28px;">#</th>
+              <th style="min-width:90px;">Código</th>
+              <th style="min-width:130px;">Descripción</th>
+              <th class="text-end" style="width:65px;">Cant.</th>
+              <th class="text-end" style="width:80px;">P. s/IGV</th>
+              <th class="text-end" style="width:80px;">P. c/IGV</th>
+              <th style="width:60px;">Unidad</th>
+              <th style="width:55px;">Imp.</th>
+              <th class="text-end" style="width:80px;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyItemsVer"></tbody>
+        </table>
+      </div>
+      <div class="d-flex justify-content-end align-items-center gap-2 mt-2 pe-1">
+        <span class="text-muted small">Total registrado:</span>
+        <span class="fw-bold" id="verTotalDisplay">—</span>
+      </div>
+    </div><!-- /seccionItemsVer -->
+
+    <input type="hidden" id="f_doc_total" value="0">
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-outline-warning btn-sm" id="btnEditar"
+            style="display:none;" onclick="modoEditar()">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar" onclick="guardarFactura()">
+      <i class="bi bi-check-lg me-1"></i><span id="btnGuardarTxt">Guardar</span>
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm { font-size: .78rem; font-weight: 600; margin-bottom: .2rem; }
+.form-section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #64748b;
+  border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-bottom: .6rem;
+}
+
+/* ── Overlay ────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer deslizante derecha → izquierda ──────────────── */
+.articulos-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 700px; max-width: 97vw;
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+
+/* ── Líneas de detalle ──────────────────────────────────── */
+.btn-del-linea {
+  border: none; background: none; color: #ef4444;
+  padding: .1rem .3rem; border-radius: 4px; cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+
+/* ── Filtro columna ─── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px; margin-left: 2px;
+  color: #94a3b8; cursor: pointer; font-size: .72rem; vertical-align: middle;
+}
+.btn-col-filtro:hover, .btn-col-filtro.active { color: #3b82f6; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; min-width: 180px; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 0;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px 6px; font-size: .72rem; font-weight: 600; color: #475569;
+  border-bottom: 1px solid #f1f5f9; margin-bottom: 4px;
+}
+.filtro-action { cursor: pointer; font-size: .68rem; color: #3b82f6; }
+.filtro-action.danger { color: #ef4444; }
+.filtro-opt {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 10px; font-size: .73rem; cursor: pointer;
+}
+.filtro-opt:hover { background: #f8fafc; }
+.filtro-opt input[type=checkbox] { accent-color: #3b82f6; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const FACTURAS_DATA      = JSON.parse(document.getElementById('facturasData').textContent);
+const TIPOS_DATA         = JSON.parse(document.getElementById('tiposData').textContent);
+const SOCIOS_DATA        = JSON.parse(document.getElementById('sociosData').textContent);
+const ITEMS_DATA         = JSON.parse(document.getElementById('itemsData').textContent);
+const INVOICE_TYPES_DATA = JSON.parse(document.getElementById('invoiceTypesData').textContent);
+const TODAY              = '{{ today }}';
+
+/* ── Cargar almacenes ───────────────────────────────────────── */
+let whsDefault = '';
+const whsMap = {};
+fetch('/api/warehouses')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_wh');
+    data.forEach(w => {
+      whsMap[w.whs_code.trim()] = w.whs_name;
+      const o = document.createElement('option');
+      o.value = w.whs_code; o.textContent = w.whs_name;
+      sel.appendChild(o);
+    });
+    if (data.length) whsDefault = data[0].whs_code;
+    renderTabla();
+  });
+
+/* ── Mapa de socios ─────────────────────────────────────────── */
+const sociosMap = {};
+SOCIOS_DATA.forEach(s => { sociosMap[s.card_code] = s; });
+
+/* ── Poblar catálogos ────────────────────────────────────────── */
+function poblarCatalogos() {
+  const selTipo = document.getElementById('f_id_tipo_compra');
+  TIPOS_DATA.forEach(t => selTipo.add(new Option(t.nombre, t.id_tipo)));
+
+  const selInvType = document.getElementById('f_invoice_type');
+  INVOICE_TYPES_DATA.forEach(t => selInvType.add(new Option(t.invoice_type, t.idtype)));
+
+  const dlSocios = document.getElementById('listaSocios');
+  SOCIOS_DATA.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.card_code;
+    o.label = s.card_name;
+    dlSocios.appendChild(o);
+  });
+
+  const dlItems = document.getElementById('listaItems');
+  ITEMS_DATA.forEach(i => {
+    const o = document.createElement('option');
+    o.value = i.item_code; o.label = i.item_name;
+    dlItems.appendChild(o);
+  });
+}
+
+/* ── Selección de socio ─────────────────────────────────────── */
+function onSocioSelect(inp) {
+  const s = sociosMap[inp.value];
+  document.getElementById('f_bp_nombre').value = s ? (s.card_name || '') : '';
+}
+
+/* ── Mapa de ítems ──────────────────────────────────────────── */
+const itemsMap = {};
+ITEMS_DATA.forEach(d => { itemsMap[d.item_code] = d; });
+
+/* ── Líneas de detalle ──────────────────────────────────────── */
+let lineaNum = 0;
+
+function agregarLinea(it) {
+  lineaNum++;
+  const tr = document.createElement('tr');
+  tr.className = 'linea-detalle';
+  tr.innerHTML = `
+    <td class="ps-2 text-muted">${lineaNum}</td>
+    <td><input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+               list="listaItems" placeholder="Código…" autocomplete="off"
+               oninput="onItemSelect(this)" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-item-name bg-light always-readonly"
+               placeholder="Descripción" readonly /></td>
+    <td><input type="number" class="form-control form-control-sm inp-qty"
+               value="1" min="0.0001" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light always-readonly"
+               readonly placeholder="0.0000" /></td>
+    <td><input type="number" class="form-control form-control-sm inp-price"
+               value="0.00" min="0" step="0.01" oninput="recalcularSinIGV(this); actualizarTotal()" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light always-readonly"
+               readonly /></td>
+    <td><input type="text" class="form-control form-control-sm inp-taxcode"
+               placeholder="IGV" maxlength="10" /></td>
+    <td class="text-end fw-semibold inp-subtotal-display">0.00</td>
+    <td><button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+          <i class="bi bi-trash"></i></button></td>`;
+  document.getElementById('lineasDetalle').appendChild(tr);
+
+  if (it) {
+    tr.querySelector('.inp-item-code').value = it.item_code || '';
+    tr.querySelector('.inp-item-name').value = it.item_name || '';
+    tr.querySelector('.inp-qty').value        = it.quantity  || 1;
+    const precio = parseFloat(it.price_after_vat) || 0;
+    tr.querySelector('.inp-price').value      = precio.toFixed(2);
+    tr.querySelector('.inp-avg-price').value  = (precio / 1.18).toFixed(4);
+    tr.querySelector('.inp-taxcode').value    = it.tax_code || '';
+    const d = itemsMap[it.item_code] || {};
+    tr.querySelector('.inp-unit-msr').value   = d.buy_unit_msr || '';
+  } else {
+    tr.querySelector('.inp-item-code').focus();
+  }
+  actualizarTotal();
+}
+
+function eliminarLinea(btn) { btn.closest('tr').remove(); actualizarTotal(); }
+
+function onItemSelect(inp) {
+  const d   = itemsMap[inp.value];
+  const row = inp.closest('tr');
+  row.querySelector('.inp-item-name').value = d ? (d.item_name   || '') : '';
+  row.querySelector('.inp-unit-msr').value  = d ? (d.buy_unit_msr || '') : '';
+  if (d && d.tax_code_ap) row.querySelector('.inp-taxcode').value = d.tax_code_ap;
+  row.querySelector('.inp-price').value     = '0.00';
+  row.querySelector('.inp-avg-price').value = '0.0000';
+  actualizarTotal();
+}
+
+function recalcularSinIGV(inp) {
+  const row   = inp.closest('tr');
+  const price = parseFloat(inp.value) || 0;
+  row.querySelector('.inp-avg-price').value = (price / 1.18).toFixed(4);
+}
+
+function actualizarTotal() {
+  const sym = document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+  let total = 0, subtotalCompras = 0;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty      = parseFloat(row.querySelector('.inp-qty').value)       || 0;
+    const price    = parseFloat(row.querySelector('.inp-price').value)     || 0;
+    const avgPrice = parseFloat(row.querySelector('.inp-avg-price').value) || 0;
+    const sub      = qty * price;
+    total           += sub;
+    subtotalCompras += qty * avgPrice;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+  document.getElementById('subtotalComprasDisplay').textContent = subtotalCompras.toFixed(4);
+  document.getElementById('igvDisplay').textContent             = (subtotalCompras * 0.18).toFixed(4);
+  document.getElementById('totalDisplay').textContent           = sym + ' ' + total.toFixed(2);
+  document.getElementById('f_doc_total').value                  = total.toFixed(4);
+}
+
+/* ── Drawer ──────────────────────────────────────────────────── */
+let _currentFactura = null;
+
+function abrirDrawer(modo, id) {
+  if (modo === 'view' && id != null) {
+    const f = FACTURAS_DATA.find(x => x.invoice_id === id);
+    if (!f) return;
+    modoVer(f);
+  } else {
+    modoNuevo();
+  }
+  document.getElementById('facturaDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.getElementById('drawerBody').scrollTop = 0;
+}
+
+function cerrarDrawer() {
+  document.getElementById('facturaDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  _currentFactura = null;
+}
+
+/* ── Modo NUEVO ─── */
+function modoNuevo() {
+  _currentFactura = null;
+  setBadge('NUEVO', 'bg-primary');
+  document.getElementById('drawerTitle').textContent    = 'Nueva Factura de Compra';
+  document.getElementById('btnGuardar').style.display  = '';
+  document.getElementById('btnGuardarTxt').textContent = 'Guardar';
+  document.getElementById('btnEditar').style.display   = 'none';
+  document.getElementById('seccionDetalle').style.display  = '';
+  document.getElementById('seccionItemsVer').style.display = 'none';
+  limpiarForm();
+  setReadonly(false);
+  document.getElementById('f_doc_date').value     = TODAY;
+  document.getElementById('f_tax_date').value     = TODAY;
+  document.getElementById('f_doc_due_date').value = TODAY;
+}
+
+/* ── Modo VER ─── */
+function modoVer(f) {
+  _currentFactura = f;
+  setBadge('VER', 'bg-secondary');
+  document.getElementById('drawerTitle').textContent   = `Factura #${f.invoice_id}`;
+  document.getElementById('btnGuardar').style.display  = 'none';
+  document.getElementById('btnEditar').style.display   = '';
+  document.getElementById('seccionDetalle').style.display  = 'none';
+  document.getElementById('seccionItemsVer').style.display = '';
+
+  llenarCabecera(f);
+  setReadonly(true);
+
+  // Tabla solo lectura
+  const sym   = (f.doc_currency === 'USD') ? '$' : 'S/';
+  const tbody = document.getElementById('tbodyItemsVer');
+  tbody.innerHTML = '';
+  (f.items || []).forEach((it, idx) => {
+    const sinIGV = (parseFloat(it.price_after_vat) / 1.18);
+    const sub    = parseFloat(it.quantity) * parseFloat(it.price_after_vat);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="ps-2 text-muted small">${idx + 1}</td>
+      <td class="font-monospace small fw-bold text-primary">${escHtml(it.item_code)}</td>
+      <td class="small">${escHtml(it.item_name || '')}</td>
+      <td class="text-end small">${parseFloat(it.quantity || 0).toFixed(2)}</td>
+      <td class="text-end small">${sinIGV.toFixed(4)}</td>
+      <td class="text-end small">${parseFloat(it.price_after_vat || 0).toFixed(2)}</td>
+      <td class="small text-muted">${escHtml(itemsMap[it.item_code]?.buy_unit_msr || '')}</td>
+      <td class="small text-muted">${escHtml(it.tax_code || '')}</td>
+      <td class="text-end small fw-semibold">${sub.toFixed(2)}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('verTotalDisplay').textContent =
+    sym + ' ' + (f.doc_total || 0).toFixed(2);
+}
+
+/* ── Modo EDITAR ─── */
+function modoEditar() {
+  const f = _currentFactura;
+  if (!f) return;
+  setBadge('EDITAR', 'bg-warning text-dark');
+  document.getElementById('drawerTitle').textContent    = `Editando Factura #${f.invoice_id}`;
+  document.getElementById('btnGuardar').style.display  = '';
+  document.getElementById('btnGuardarTxt').textContent = 'Guardar Cambios';
+  document.getElementById('btnEditar').style.display   = 'none';
+  document.getElementById('seccionDetalle').style.display  = '';
+  document.getElementById('seccionItemsVer').style.display = 'none';
+
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  const lineas = f.items || [];
+  (lineas.length ? lineas : [null]).forEach(it => agregarLinea(it || undefined));
+
+  setReadonly(false);
+  actualizarTotal();
+}
+
+/* ── Helpers ─── */
+function setBadge(txt, cls) {
+  const b = document.getElementById('drawerBadge');
+  b.textContent = txt; b.className = 'badge ' + cls;
+}
+
+function setReadonly(on) {
+  document.querySelectorAll(
+    '#drawerBody input:not(.always-readonly), #drawerBody select, #drawerBody textarea'
+  ).forEach(el => {
+    if (el.type === 'hidden') return;
+    el.readOnly = on;
+    if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') el.disabled = on;
+  });
+}
+
+function llenarCabecera(f) {
+  document.getElementById('f_invoice_id').value       = f.invoice_id;
+  document.getElementById('f_card_code').value        = f.card_code;
+  document.getElementById('f_bp_nombre').value        = f.bp_name || '';
+  document.getElementById('f_id_tipo_compra').value   = f.id_tipo_compra ?? '';
+  document.getElementById('f_invoice_type').value     = f.invoice_type || '';
+  document.getElementById('f_invoice_serie').value    = f.invoice_serie;
+  document.getElementById('f_invoice_number').value   = f.invoice_number;
+  document.getElementById('f_doc_currency').value     = f.doc_currency || 'SOL';
+  document.getElementById('f_num_at_card').value      = f.num_at_card;
+  document.getElementById('f_invoice_wh').value       = f.invoice_wh;
+  document.getElementById('f_doc_date').value         = f.doc_date;
+  document.getElementById('f_tax_date').value         = f.tax_date;
+  document.getElementById('f_doc_due_date').value     = f.doc_due_date;
+  document.getElementById('f_journal_memo').value     = f.journal_memo;
+  document.getElementById('f_comments').value         = f.comments;
+}
+
+function limpiarForm() {
+  document.getElementById('f_invoice_id').value     = '0';
+  document.getElementById('f_card_code').value      = '';
+  document.getElementById('f_bp_nombre').value      = '';
+  document.getElementById('f_id_tipo_compra').value = '';
+  document.getElementById('f_invoice_type').selectedIndex = 0;
+  document.getElementById('f_invoice_serie').value  = '';
+  document.getElementById('f_invoice_number').value = '';
+  document.getElementById('f_doc_currency').value   = 'SOL';
+  document.getElementById('f_num_at_card').value    = '';
+  document.getElementById('f_invoice_wh').value     = whsDefault;
+  document.getElementById('f_doc_date').value       = '';
+  document.getElementById('f_tax_date').value       = '';
+  document.getElementById('f_doc_due_date').value   = '';
+  document.getElementById('f_journal_memo').value   = '';
+  document.getElementById('f_comments').value       = '';
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  agregarLinea();
+}
+
+/* ── Guardar (AJAX) ──────────────────────────────────────────── */
+async function guardarFactura() {
+  const cardCode = document.getElementById('f_card_code').value.trim();
+  const docDate  = document.getElementById('f_doc_date').value;
+
+  if (!cardCode) {
+    mostrarToast('warning', 'Debe seleccionar un Proveedor.');
+    return;
+  }
+  if (!docDate) {
+    mostrarToast('warning', 'La Fecha de Emisión es obligatoria.');
+    return;
+  }
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  const payload = {
+    invoice_id:     parseInt(document.getElementById('f_invoice_id').value) || 0,
+    card_code:      cardCode || null,
+    id_tipo_compra: document.getElementById('f_id_tipo_compra').value || null,
+    invoice_type:   document.getElementById('f_invoice_type').value,
+    invoice_serie:  document.getElementById('f_invoice_serie').value.trim(),
+    invoice_number: document.getElementById('f_invoice_number').value.trim(),
+    doc_date:       docDate || null,
+    tax_date:       document.getElementById('f_tax_date').value     || null,
+    doc_due_date:   document.getElementById('f_doc_due_date').value || null,
+    doc_currency:   document.getElementById('f_doc_currency').value,
+    doc_total:      parseFloat(document.getElementById('f_doc_total').value) || 0,
+    invoice_wh:     document.getElementById('f_invoice_wh').value.trim(),
+    num_at_card:    document.getElementById('f_num_at_card').value.trim(),
+    journal_memo:   document.getElementById('f_journal_memo').value.trim(),
+    comments:       document.getElementById('f_comments').value.trim(),
+    items: [...document.querySelectorAll('#lineasDetalle .linea-detalle')].map(row => ({
+      item_code:       row.querySelector('.inp-item-code').value.trim(),
+      quantity:        parseFloat(row.querySelector('.inp-qty').value)   || 0,
+      price_after_vat: parseFloat(row.querySelector('.inp-price').value) || 0,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+    })).filter(it => it.item_code),
+  };
+
+  try {
+    const resp = await fetch('{{ url_for("main.compras_facturas_guardar") }}', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      mostrarToast('success', res.message || 'Factura guardada correctamente.');
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      mostrarToast('danger', res.message || 'Error al guardar.');
+    }
+  } catch (e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar';
+  }
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+/* ── Ordenamiento ────────────────────────────────────────────── */
+const _sortState = {};
+const _sortGetters = {
+  id:        f => f.invoice_id,
+  proveedor: f => (f.bp_name || f.card_code || '').toLowerCase(),
+  fecha:     f => f.doc_date     || '',
+  venc:      f => f.doc_due_date || '',
+};
+
+function sortColumna(key, e) {
+  e.stopPropagation();
+  Object.keys(_sortState).forEach(k => {
+    if (k !== key) {
+      const pi = document.getElementById('iconSort_' + k);
+      const pb = document.getElementById('btnSort_'  + k);
+      if (pi) pi.className = 'bi bi-arrow-down-up';
+      if (pb) pb.classList.remove('active');
+      delete _sortState[k];
+    }
+  });
+  _sortState[key] = _sortState[key] === 'asc' ? 'desc' : 'asc';
+  const dir  = _sortState[key];
+  const icon = document.getElementById('iconSort_' + key);
+  const btn  = document.getElementById('btnSort_'  + key);
+  if (icon) icon.className = dir === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+  if (btn)  btn.classList.add('active');
+  renderTabla();
+}
+
+/* ── Render grilla ───────────────────────────────────────────── */
+const filtros = { socio: new Set(), tipo: new Set(), moneda: new Set(), sunat: new Set() };
+let busqueda  = '';
+
+function renderTabla() {
+  const q     = busqueda.toLowerCase();
+  const tbody = document.getElementById('tbodyFacturas');
+
+  const filas = FACTURAS_DATA.filter(f => {
+    if (filtros.socio.size  && !filtros.socio.has(f.card_code))                   return false;
+    if (filtros.tipo.size   && !filtros.tipo.has(String(f.id_tipo_compra ?? ''))) return false;
+    if (filtros.moneda.size && !filtros.moneda.has(f.doc_currency))                return false;
+    if (filtros.sunat.size  && !filtros.sunat.has(f.sunat_estado))                 return false;
+    if (q && !f.bp_name.toLowerCase().includes(q) &&
+             !f.card_code.toLowerCase().includes(q) &&
+             !f.invoice_number.toLowerCase().includes(q) &&
+             !(f.invoice_serie + '-' + f.invoice_number).toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const sortKey = Object.keys(_sortState)[0];
+  if (sortKey) {
+    const dir    = _sortState[sortKey];
+    const getter = _sortGetters[sortKey];
+    const isNum  = sortKey === 'id';
+    filas.sort((a, b) => {
+      const va = getter(a), vb = getter(b);
+      if (isNum) return dir === 'asc' ? va - vb : vb - va;
+      return dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  tbody.innerHTML = filas.length ? '' :
+    '<tr><td colspan="13" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+
+  const tipoDocMap = Object.fromEntries(INVOICE_TYPES_DATA.map(t => [t.idtype, t.invoice_type]));
+
+  filas.forEach(f => {
+    const sym     = f.doc_currency === 'USD' ? '$' : 'S/';
+    const tipoDoc = tipoDocMap[f.invoice_type] || f.invoice_type;
+    const docNum  = [f.invoice_serie, f.invoice_number].filter(Boolean).join('-') || '—';
+    const monedaBadge = f.doc_currency === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">SOL</span>';
+    const sunatBadge = f.sunat_estado
+      ? `<span class="badge bg-secondary-subtle text-secondary" style="font-size:.63rem;">${escHtml(f.sunat_estado)}</span>`
+      : '<span class="text-muted">—</span>';
+
+    const tr = document.createElement('tr');
+    tr.style.fontSize = '.75rem';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${f.invoice_id}</td>
+      <td class="font-monospace text-muted">${escHtml(f.card_code)}</td>
+      <td class="fw-semibold">${escHtml(f.bp_name || f.card_code)}</td>
+      <td>${f.tipo_nombre ? escHtml(f.tipo_nombre) : '<span class="text-muted">—</span>'}</td>
+      <td>${tipoDoc ? `<span class="badge bg-light text-secondary border" style="font-size:.63rem;">${escHtml(tipoDoc)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td class="font-monospace fw-semibold">${escHtml(docNum)}</td>
+      <td class="text-muted">${f.doc_date || '—'}</td>
+      <td class="text-muted">${f.doc_due_date || '—'}</td>
+      <td class="text-muted">${escHtml(whsMap[(f.invoice_wh || '').trim()] || f.invoice_wh || '—')}</td>
+      <td>${monedaBadge}</td>
+      <td class="text-end fw-semibold">${sym} ${(f.doc_total || 0).toFixed(2)}</td>
+      <td>${sunatBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;" title="Ver / Editar"
+                onclick="abrirDrawer('view', ${f.invoice_id})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+
+  let sumaSOL = 0, sumaUSD = 0;
+  filas.forEach(f => {
+    if ((f.doc_currency || 'SOL') === 'USD') sumaUSD += (f.doc_total || 0);
+    else                                      sumaSOL += (f.doc_total || 0);
+  });
+  document.getElementById('sumaTotalSOL').textContent = 'S/ ' + sumaSOL.toFixed(2);
+  document.getElementById('sumaTotalUSD').textContent = '$ '  + sumaUSD.toFixed(2);
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Filtros columna ─────────────────────────────────────────── */
+function toggleFiltro(col, e) {
+  e.stopPropagation();
+  const key   = col.charAt(0).toUpperCase() + col.slice(1);
+  const panel = document.getElementById('panelFiltro' + key);
+  const open  = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!open) {
+    construirFiltro(col, panel);
+    panel.style.display = 'block';
+    document.getElementById('iconFiltro' + key).classList.add('active');
+  }
+}
+
+function construirFiltro(col, panel) {
+  let vals, labelFn;
+  if (col === 'socio') {
+    vals    = [...new Set(FACTURAS_DATA.map(f => f.card_code))].sort();
+    labelFn = v => FACTURAS_DATA.find(f => f.card_code === v)?.bp_name || v;
+  } else if (col === 'tipo') {
+    vals    = [...new Set(FACTURAS_DATA.map(f => String(f.id_tipo_compra ?? '')))].sort();
+    labelFn = v => FACTURAS_DATA.find(f => String(f.id_tipo_compra ?? '') === v)?.tipo_nombre || (v === '' ? '(Sin tipo)' : v);
+  } else if (col === 'moneda') {
+    vals    = [...new Set(FACTURAS_DATA.map(f => f.doc_currency))].sort();
+    labelFn = v => v;
+  } else if (col === 'sunat') {
+    vals    = [...new Set(FACTURAS_DATA.map(f => f.sunat_estado))].sort();
+    labelFn = v => v || '(Sin estado)';
+  }
+
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span>Filtrar</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${col}')">Limpiar</span>
+    </div>
+    ${vals.map(v => `
+      <label class="filtro-opt">
+        <input type="checkbox" value="${escHtml(v)}"
+               ${filtros[col].has(v) ? 'checked' : ''}
+               onchange="onFiltroChange('${col}', this)" />
+        ${escHtml(labelFn(v))}
+      </label>`).join('')}`;
+}
+
+function onFiltroChange(col, cb) {
+  if (cb.checked) filtros[col].add(cb.value); else filtros[col].delete(cb.value);
+  const key = col.charAt(0).toUpperCase() + col.slice(1);
+  document.getElementById('iconFiltro' + key).classList.toggle('active', filtros[col].size > 0);
+  renderTabla();
+}
+
+function limpiarFiltro(col) {
+  filtros[col].clear();
+  cerrarTodosFiltros();
+  renderTabla();
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+
+document.addEventListener('click', cerrarTodosFiltros);
+
+document.getElementById('buscarFactura').addEventListener('input', function () {
+  busqueda = this.value;
+  renderTabla();
+});
+
+/* ── Excel ───────────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#','Proveedor','Código','Tipo Compra','Tipo Doc','Documento','Fecha','Moneda','Total','SUNAT']];
+  FACTURAS_DATA.forEach(f => {
+    const docNum = [f.invoice_serie, f.invoice_number].filter(Boolean).join('-');
+    filas.push([f.invoice_id, f.bp_name || f.card_code, f.card_code,
+      f.tipo_nombre, f.invoice_type, docNum, f.doc_date, f.doc_currency,
+      f.doc_total, f.sunat_estado]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Facturas Compra');
+  XLSX.writeFile(wb, 'facturas_compra.xlsx');
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+poblarCatalogos();
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

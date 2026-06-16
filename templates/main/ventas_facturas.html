@@ -1,0 +1,1557 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ fact_rows | length }} facturas
+  </span>
+{% endblock %}
+
+{% block content %}
+
+{# ── Datos para el drawer ─────────────────────────────────── #}
+<script id="facturasData" type="application/json">{{ facturas_json     | safe }}</script>
+<script id="sociosData"   type="application/json">{{ socios_json_data  | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-receipt text-primary me-1"></i> Facturas de Venta
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar N° doc, socio…">
+    </div>
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i>Nueva Factura
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaFacturas">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:70px; position:relative; white-space:nowrap;">
+            ID
+            <button type="button" class="btn-col-filtro" id="btnSort_id"
+                    onclick="sortColumna(event, 0, 'num', 'id')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_id"></i>
+            </button>
+          </th>
+          <th style="width:100px;">Cód. Socio</th>
+          <th style="min-width:160px; position:relative; white-space:nowrap;">
+            Socio de Negocio
+            <button type="button" class="btn-col-filtro" id="btnSort_socio"
+                    onclick="sortColumna(event, 2, 'text', 'socio')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_socio"></i>
+            </button>
+          </th>
+          <th style="width:90px; position:relative; white-space:nowrap;">
+            Tipo
+            <button type="button" class="btn-col-filtro" id="btnSort_tipo"
+                    onclick="sortColumna(event, 3, 'text', 'tipo')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_tipo"></i>
+            </button>
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo', event)" title="Filtrar por tipo">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:80px; position:relative; white-space:nowrap;">
+            Serie
+            <button type="button" class="btn-col-filtro" id="btnSort_serie"
+                    onclick="sortColumna(event, 4, 'text', 'serie')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_serie"></i>
+            </button>
+          </th>
+          <th style="width:120px; position:relative; white-space:nowrap;">
+            N° Factura
+            <button type="button" class="btn-col-filtro" id="btnSort_nfactura"
+                    onclick="sortColumna(event, 5, 'text', 'nfactura')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_nfactura"></i>
+            </button>
+          </th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Fecha Doc.
+            <button type="button" class="btn-col-filtro" id="btnSort_fechaDoc"
+                    onclick="sortColumna(event, 6, 'date', 'fechaDoc')" title="Ordenar por fecha">
+              <i class="bi bi-arrow-down-up" id="iconSort_fechaDoc"></i>
+            </button>
+            <button type="button" class="btn-col-filtro" id="btnFiltroFechaDoc"
+                    onclick="toggleFiltroFecha(event)" title="Filtrar por fecha documento">
+              <i class="bi bi-funnel" id="iconFiltroFechaDoc"></i>
+            </button>
+            <div class="col-filtro-panel filtro-fecha-panel" id="panelFiltroFechaDoc"
+                 style="display:none;" onclick="event.stopPropagation()">
+              <div class="filtro-panel-header">
+                <span style="font-size:.72rem; font-weight:600; color:#475569;">Rango de fechas</span>
+                <span class="filtro-action danger" onclick="limpiarFiltroFecha(event)">Limpiar</span>
+              </div>
+              <div style="padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Desde</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaDocDesde"
+                         oninput="onFiltroFechaChange()" />
+                </div>
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Hasta</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaDocHasta"
+                         oninput="onFiltroFechaChange()" />
+                </div>
+              </div>
+              <div class="filtro-panel-footer">
+                <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+                        style="font-size:.73rem;" onclick="cerrarTodosFiltros()">
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          </th>
+          <th style="width:90px;">Fecha Imp.</th>
+          <th style="width:100px; position:relative; white-space:nowrap;">
+            Vencimiento
+            <button type="button" class="btn-col-filtro" id="btnSort_venc"
+                    onclick="sortColumna(event, 8, 'date', 'venc')" title="Ordenar">
+              <i class="bi bi-arrow-down-up" id="iconSort_venc"></i>
+            </button>
+            <button type="button" class="btn-col-filtro" id="btnFiltroVencimiento"
+                    onclick="toggleFiltroVenc(event)" title="Filtrar por vencimiento">
+              <i class="bi bi-funnel" id="iconFiltroVencimiento"></i>
+            </button>
+            <div class="col-filtro-panel filtro-fecha-panel" id="panelFiltroVencimiento"
+                 style="display:none;" onclick="event.stopPropagation()">
+              <div class="filtro-panel-header">
+                <span style="font-size:.72rem; font-weight:600; color:#475569;">Rango de fechas</span>
+                <span class="filtro-action danger" onclick="limpiarFiltroVenc(event)">Limpiar</span>
+              </div>
+              <div style="padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Desde</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroVencDesde"
+                         oninput="onFiltroVencChange()" />
+                </div>
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Hasta</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroVencHasta"
+                         oninput="onFiltroVencChange()" />
+                </div>
+              </div>
+              <div class="filtro-panel-footer">
+                <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+                        style="font-size:.73rem;" onclick="cerrarTodosFiltros()">
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          </th>
+          <th style="width:50px;">Mon.</th>
+          <th class="text-end" style="width:105px;">Total</th>
+          <th style="min-width:120px; position:relative; white-space:nowrap;">
+            Almacén
+            <button type="button" class="btn-col-filtro" id="btnFiltroAlmacen"
+                    onclick="toggleFiltro('almacen', event)" title="Filtrar por almacén">
+              <i class="bi bi-funnel" id="iconFiltroAlmacen"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroAlmacen" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:140px;">Referencia</th>
+          <th style="width:80px; position:relative; white-space:nowrap;">
+            Usuario
+            <button type="button" class="btn-col-filtro" id="btnFiltroUsuario"
+                    onclick="toggleFiltro('usuario', event)" title="Filtrar por usuario">
+              <i class="bi bi-funnel" id="iconFiltroUsuario"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroUsuario" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:90px; position:relative; white-space:nowrap;">
+            SUNAT
+            <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
+                    onclick="toggleFiltro('sunat', event)" title="Filtrar por estado SUNAT">
+              <i class="bi bi-funnel" id="iconFiltroSunat"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroSunat" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:70px;">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyFacturas">
+        {% for f in fact_rows %}
+        <tr class="factura-row" data-id="{{ f.invoice_id }}" style="font-size:.75rem;">
+          <td class="ps-3 text-muted">{{ f.invoice_id }}</td>
+          <td class="font-monospace">{{ f.card_code }}</td>
+          <td class="fw-semibold">{{ f.bp_name or f.card_code }}</td>
+          <td class="text-muted">{{ f.invoice_type or '—' }}</td>
+          <td class="font-monospace">{{ f.invoice_serie or '—' }}</td>
+          <td class="font-monospace fw-bold text-primary">{{ f.invoice_number or '—' }}</td>
+          <td class="text-muted">{{ f.doc_date.strftime('%d/%m/%Y') if f.doc_date else '—' }}</td>
+          <td class="text-muted">{{ f.tax_date.strftime('%d/%m/%Y') if f.tax_date else '—' }}</td>
+          <td class="text-muted">{{ f.doc_due_date.strftime('%d/%m/%Y') if f.doc_due_date else '—' }}</td>
+          <td class="text-muted">{{ f.doc_currency or '—' }}</td>
+          <td class="text-end fw-semibold">
+            {{ '%.2f' | format(f.doc_total | float) if f.doc_total is not none else '—' }}
+          </td>
+          <td>
+            <div class="text-muted" style="font-size:.68rem;">{{ f.whs_name or '' }}</div>
+          </td>
+          <td class="text-muted font-monospace" style="font-size:.72rem;">{{ f.journal_memo or '—' }}</td>
+          <td>
+            <div>{{ f.user_nombres or f.user_code or '—' }}</div>
+
+          </td>
+          <td class="text-center">
+            {% if f.sunat_estado %}
+              <span class="badge bg-success-subtle text-success" style="font-size:.63rem;">{{ f.sunat_estado }}</span>
+            {% else %}
+              <span class="badge bg-secondary-subtle text-secondary" style="font-size:.63rem;">Pendiente</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                    onclick="abrirDrawer('view', parseInt(this.closest('tr').dataset.id))"
+                    title="Ver factura" style="font-size:.72rem;">
+              <i class="bi bi-eye-fill me-1"></i>Ver
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="16" class="text-center text-muted py-5">Sin facturas registradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+    <span>Total: <strong id="contadorVisible">{{ fact_rows | length }}</strong> facturas</span>
+    <span class="ms-auto">
+      Suma SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
+      &nbsp;|&nbsp;
+      Suma USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="facturas-drawer" id="facturasDrawer">
+
+  <!-- Cabecera del drawer -->
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVA</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nueva Factura</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <!-- Formulario -->
+  <form id="formFactura" method="POST"
+        action="{{ url_for('main.ventas_facturas_nueva') }}" novalidate>
+    <input type="hidden" name="items_json"      id="items_json_hidden">
+    <input type="hidden" name="invoice_id_edit" id="f_invoice_id_edit" value="">
+    <input type="hidden" name="invoice_idtype"  id="f_invoice_idtype"  value="">
+
+    <div class="drawer-body">
+
+      <!-- ── Cabecera del documento ──────────────────────── -->
+      <div class="form-section-label">Cabecera del Documento</div>
+      <div class="row g-2 mb-3">
+
+        <!-- Fila 1: ID | Cód. Socio | Socio de Negocio -->
+        <div class="col-sm-2">
+          <label class="form-label-sm">ID</label>
+          <input type="text" class="form-control form-control-sm font-monospace bg-light always-readonly"
+                 id="f_invoice_id" placeholder="Auto" readonly />
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label-sm">Cód. Socio <span class="text-danger new-only">*</span></label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="card_code" id="f_card_code"
+                 list="listSocios" placeholder="Código…" autocomplete="off"
+                 oninput="onSocioSelect(this)" />
+          <datalist id="listSocios"></datalist>
+        </div>
+        <div class="col-sm-7">
+          <label class="form-label-sm">Socio de Negocio</label>
+          <input type="text" class="form-control form-control-sm bg-light always-readonly"
+                 id="bp_nombre_display" readonly />
+        </div>
+
+        <!-- Fila 2: Tipo | Serie | N° Factura | Moneda -->
+         <div class="col-sm-3">
+          <label class="form-label-sm">Almacén</label>
+          <select class="form-select form-select-sm" name="invoice_wh" id="f_invoice_wh" onchange="cargarSeries()">
+            <option value="">— Seleccionar —</option>
+          </select>
+        </div>
+
+        <div class="col-sm-3">
+          <label class="form-label-sm">Tipo</label>
+          <select class="form-select form-select-sm" name="invoice_type" id="f_invoice_type" onchange="cargarSeries()">
+            <option value="">— Tipo —</option>
+          </select>
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label-sm">Serie <span class="text-danger new-only">*</span></label>
+          <select class="form-select form-select-sm font-monospace"
+                  name="invoice_serie" id="f_invoice_serie" required
+                  onchange="onSerieSelect()">
+            <option value="">— Serie —</option>
+          </select>
+        </div>
+        
+        <div class="col-sm-2">
+          <label class="form-label-sm">N° Factura</label>
+          <input type="text" class="form-control form-control-sm font-monospace bg-light always-readonly"
+                 id="f_invoice_number" placeholder="(auto)" readonly />
+        </div>
+        <div class="col-sm-2">
+          <label class="form-label-sm">Moneda</label>
+          <select class="form-select form-select-sm" name="doc_currency" id="f_doc_currency">
+            <option value="SOL">SOL</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+
+        <!-- Fila 3: Fechas -->
+        <div class="col-sm-4">
+          <label class="form-label-sm">Fecha Doc.</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_date" id="f_doc_date" value="{{ today }}" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Fecha Imp.</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="tax_date" id="f_tax_date" value="{{ today }}" />
+        </div>
+        <div class="col-sm-4">
+          <label class="form-label-sm">Vencimiento</label>
+          <input type="date" class="form-control form-control-sm"
+                 name="doc_due_date" id="f_doc_due_date" value="{{ today }}" />
+        </div>
+
+        <!-- Fila 4: Total | Almacén | POS | N° Documento -->
+        <div class="col-sm-3">
+          <label class="form-label-sm">Total</label>
+          <input type="text" class="form-control form-control-sm bg-light text-end fw-bold always-readonly"
+                 id="f_doc_total" readonly />
+        </div>
+        
+        <div class="col-sm-2">
+          <label class="form-label-sm">POS <span class="text-danger new-only">*</span></label>
+          <input type="number" class="form-control form-control-sm"
+                 name="invoice_pos" id="f_invoice_pos" min="1" placeholder="1" required />
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label-sm">N° Documento</label>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 name="num_at_card" id="f_num_at_card" placeholder="F001-00000001" />
+        </div>
+         <div class="col-sm-4">
+          <label class="form-label-sm">Estado SUNAT</label>
+          <input type="text" class="form-control form-control-sm bg-light always-readonly"
+                 id="f_sunat_estado" placeholder="Pendiente" readonly />
+        </div>
+
+        <!-- Fila 5: Usuario | SUNAT -->
+        <div class="col-sm-6">
+          <label class="form-label-sm">Usuario</label>
+          <select class="form-select form-select-sm" name="invoice_user" id="f_user_display">
+            {% for u in usuarios %}
+              <option value="{{ u.id_usuario }}"
+                {% if u.id_usuario == current_user.id_usuario %}selected{% endif %}>
+                {{ u.nombres }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+       <div class="col-6">
+          <label class="form-label-sm">Referencia / Diario</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="journal_memo" id="f_journal_memo" placeholder="Referencia interna" />
+        </div>
+
+        <!-- Fila 6: Comentarios | Referencia -->
+        <div class="col-12">
+          <label class="form-label-sm">Comentarios</label>
+          <input type="text" class="form-control form-control-sm"
+                 name="comments" id="f_comments" placeholder="Observaciones del documento" />
+        </div>
+        
+
+      </div><!-- /cabecera row -->
+
+      <!-- ── Líneas de detalle (solo modo NUEVA) ─────────── -->
+      <div id="seccionDetalle">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="form-section-label mb-0">Líneas de Detalle</div>
+          <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                  style="font-size:.72rem;" onclick="agregarLinea()">
+            <i class="bi bi-plus-lg"></i> Agregar Ítem
+          </button>
+        </div>
+
+        <div class="table-responsive rounded border" style="max-height:510px; overflow-y:auto;">
+          <table class="table table-sm align-middle mb-0" id="tablaDetalle"
+                 style="font-size:.75rem; min-width:820px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-2" style="width:28px;">#</th>
+                <th style="min-width:110px;">Código</th>
+                <th style="min-width:130px;">Descripción</th>
+                <th style="width:75px;">Cant.</th>
+                <th style="width:90px;">P. s/IGV</th>
+                <th style="width:90px;">P. c/IGV</th>
+                <th style="width:70px;">Unidad</th>
+                <th style="width:60px;">Imp.</th>
+                <th class="text-end" style="width:90px;">Subtotal</th>
+                <th style="width:32px;"></th>
+              </tr>
+            </thead>
+            <tbody id="lineasDetalle"></tbody>
+          </table>
+        </div>
+
+        <div class="mt-2 pe-1">
+          <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+            <span class="text-muted small">Sub total ventas:</span>
+            <span class="fw-semibold" id="subtotalVentasDisplay">0.0000</span>
+          </div>
+          <div class="d-flex justify-content-end align-items-center gap-2 mb-1">
+            <span class="text-muted small">IGV:</span>
+            <span class="fw-semibold" id="igvDisplay">0.0000</span>
+          </div>
+          <div class="d-flex justify-content-end align-items-center gap-2">
+            <span class="text-muted small">Total:</span>
+            <span class="fw-bold" id="totalDisplay">S/ 0.00</span>
+          </div>
+        </div>
+      </div><!-- /seccionDetalle -->
+
+      <!-- ── Detalle ítems (solo modo VER) ─────────────────── -->
+      <div id="seccionItemsVer" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <div class="form-section-label mb-0">Líneas de Detalle</div>
+          <span class="text-muted small" id="resumen_total_label"></span>
+        </div>
+        <div class="table-responsive rounded border" style="max-height:540px; overflow-y:auto;">
+          <table class="table table-sm align-middle mb-0"
+                 style="font-size:.75rem; min-width:760px;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th class="ps-2" style="width:28px;">#</th>
+                <th style="min-width:100px;">Código</th>
+                <th style="min-width:140px;">Descripción</th>
+                <th class="text-end" style="width:70px;">Cant.</th>
+                <th class="text-end" style="width:90px;">P. s/IGV</th>
+                <th class="text-end" style="width:90px;">P. c/IGV</th>
+                <th style="width:70px;">Unidad</th>
+                <th style="width:65px;">Cód. Imp.</th>
+                <th class="text-end" style="width:90px;">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyItemsVer"></tbody>
+          </table>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-2 pe-1">
+          <span class="text-muted small">Sub total ventas:</span>
+          <span class="fw-semibold" id="resumen_subtotal">—</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-1 pe-1">
+          <span class="text-muted small">IGV:</span>
+          <span class="fw-semibold" id="resumen_igv">—</span>
+        </div>
+        <div class="d-flex justify-content-end align-items-center gap-2 mt-1 pe-1">
+          <span class="text-muted small">Total registrado:</span>
+          <span class="fw-bold" id="resumen_total">—</span>
+        </div>
+      </div>
+
+    </div><!-- /drawer-body -->
+
+    <!-- Footer -->
+    <div class="drawer-footer" id="drawerFooter">
+      <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+        <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="button" class="btn btn-outline-dark btn-sm" id="btnImprimirPDF"
+              style="display:none;" onclick="imprimirFactura()">
+        <i class="bi bi-printer me-1"></i>Imprimir PDF
+      </button>
+      <button type="button" class="btn btn-outline-warning btn-sm" id="btnEditar"
+              style="display:none;" onclick="modoEditar()">
+        <i class="bi bi-pencil me-1"></i>Editar
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="btnSunatXml"
+              style="display:none;" onclick="abrirEnlace('xml')" title="Descargar XML">
+        <i class="bi bi-file-earmark-code me-1"></i>XML
+      </button>
+      <button type="button" class="btn btn-outline-danger btn-sm" id="btnSunatTicket"
+              style="display:none;" onclick="abrirEnlace('ticket')">
+        <i class="bi bi-receipt me-1"></i>SUNAT Ticket
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnSunatA4"
+              style="display:none;" onclick="abrirEnlace('a4')">
+        <i class="bi bi-file-earmark-pdf me-1"></i>SUNAT A4
+      </button>
+      <button type="button" class="btn btn-sm px-3 text-white" id="btnEnviarSunat"
+              style="display:none; background:#c0392b;"
+              onclick="enviarSunat()">
+        <i class="bi bi-send-fill me-1"></i>SUNAT
+      </button>
+      <button type="submit" class="btn btn-primary btn-sm px-4" id="btnGuardar">
+        <i class="bi bi-check-lg me-1"></i>
+        <span id="btnGuardarTxt">Registrar Factura</span>
+      </button>
+    </div>
+  </form>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Form helpers ────────────────────────────────────────── */
+.form-section-label {
+  font-size: .62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: .2rem; margin-bottom: .5rem;
+}
+.form-label-sm {
+  display: block; font-size: .75rem; font-weight: 600;
+  color: #475569; margin-bottom: .15rem;
+}
+.factura-row.selected { background: #eff6ff; }
+
+/* ── Overlay ─────────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer — ancho extendido para tabla de detalle ─────── */
+.facturas-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: min(860px, 96vw);
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.facturas-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .85rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex; justify-content: flex-end; gap: .5rem; flex-shrink: 0;
+}
+
+/* ── Tabla de detalle interna ────────────────────────────── */
+#tablaDetalle input, #tablaDetalle select {
+  font-size: .73rem; padding: .18rem .35rem; height: auto;
+}
+.btn-del-linea {
+  border: none; background: none; color: #ef4444;
+  padding: .1rem .3rem; border-radius: 4px; cursor: pointer;
+}
+.btn-del-linea:hover { background: #fee2e2; }
+
+/* ── Filtros de columna ──────────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px;
+  cursor: pointer; color: #94a3b8; font-size: .72rem;
+  vertical-align: middle; line-height: 1;
+}
+.btn-col-filtro.active { color: #2563eb; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.14);
+  min-width: 170px; font-size: .75rem;
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+  overflow: hidden;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; border-bottom: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+.filtro-action {
+  cursor: pointer; font-size: .7rem; color: #64748b;
+}
+.filtro-action:hover { color: #2563eb; text-decoration: underline; }
+.filtro-action.danger:hover { color: #ef4444; }
+.filtro-opciones { max-height: 220px; overflow-y: auto; padding: 4px 0; }
+.filtro-opcion {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; cursor: pointer; white-space: nowrap;
+  color: #334155; user-select: none;
+}
+.filtro-opcion:hover { background: #f1f5f9; }
+.filtro-opcion.selected { color: #2563eb; }
+.filtro-opcion .filtro-chk { font-size: .8rem; flex-shrink: 0; }
+.filtro-panel-footer {
+  padding: 6px 10px; border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+.filtro-fecha-panel { min-width: 210px; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Datos maestros ──────────────────────────────────────── */
+const FACTURAS_DATA      = JSON.parse(document.getElementById('facturasData').textContent);
+const INVOICE_SERIES_URL = "{{ url_for('main.api_invoice_series') }}";
+const SOCIOS_DATA   = JSON.parse(document.getElementById('sociosData').textContent);
+
+const facturasMap = {};
+FACTURAS_DATA.forEach(d => facturasMap[d.invoice_id] = d);
+let itemsMap = {};
+let _currentFactura = null;
+const sociosMap = {};
+SOCIOS_DATA.forEach(d => sociosMap[d.card_code] = d);
+
+/* ── Cargar almacenes desde API ─────────────────────────────── */
+fetch('/api/warehouses')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('f_invoice_wh');
+    data.forEach(w => {
+      const o = document.createElement('option');
+      o.value = w.whs_code; o.textContent = w.whs_name;
+      sel.appendChild(o);
+    });
+    WHS_OPTIONS = data.map(w =>
+      `<option value="${w.whs_code}">${w.whs_name}</option>`
+    ).join('');
+    if (data.length) { whsDefault = data[0].whs_code; }
+  })
+  .catch(err => console.error('[warehouses] ERROR fetch:', err));
+
+cargarTipos();
+
+/* ── Poblar datalist socios ───────────────────────────────── */
+(function () {
+  const ls = document.getElementById('listSocios');
+  SOCIOS_DATA.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.card_code; o.label = s.card_name; ls.appendChild(o);
+  });
+  const li = document.createElement('datalist');
+  li.id = 'listItems';
+  document.body.appendChild(li);
+})();
+
+/* ── Cargar ítems desde API ──────────────────────────────── */
+function cargarItems(card_code) {
+  return fetch(`/api/items-con-precio?card_code=${encodeURIComponent(card_code)}`)
+    .then(r => r.json())
+    .then(data => {
+      itemsMap = {};
+      data.forEach(d => itemsMap[d.item_code] = d);
+      const li = document.getElementById('listItems');
+      li.innerHTML = '';
+      data.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.item_code; o.label = d.item_name; li.appendChild(o);
+      });
+    })
+    .catch(err => console.error('[items] ERROR fetch:', err));
+}
+
+/* ── Filtros de columna (multiselect) ────────────────────── */
+const filtroActivo   = { tipo: new Set(), almacen: new Set(), usuario: new Set(), sunat: new Set() };
+const FILTRO_COL_IDX = { tipo: 3, almacen: 11, usuario: 13, sunat: 14 };
+
+function normTxt(el) { return el.textContent.replace(/\s+/g, ' ').trim(); }
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function toggleFiltro(key, e) {
+  e.stopPropagation();
+  const panel   = document.getElementById('panelFiltro' + cap(key));
+  const abierto = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) { construirPanel(key); panel.style.display = 'block'; }
+}
+
+function construirPanel(key) {
+  const idx   = FILTRO_COL_IDX[key];
+  const panel = document.getElementById('panelFiltro' + cap(key));
+  const activos = filtroActivo[key];
+
+  // Recoger valores únicos del DOM (solo filas visibles o todas)
+  const vals = new Set();
+  document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
+    const v = normTxt(r.querySelectorAll('td')[idx]);
+    if (v && v !== '—') vals.add(v);
+  });
+
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span class="filtro-action" onclick="selTodo('${key}',event)">Seleccionar todo</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${key}',event)">Limpiar</span>
+    </div>
+    <div class="filtro-opciones" id="opcionesFiltro${cap(key)}"></div>
+    <div class="filtro-panel-footer">
+      <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+              style="font-size:.73rem;" onclick="cerrarTodosFiltros()">
+        Aplicar
+      </button>
+    </div>`;
+
+  const contenedor = document.getElementById('opcionesFiltro' + cap(key));
+  vals.forEach(v => contenedor.appendChild(crearCheckOpcion(key, v, activos.has(v))));
+}
+
+function crearCheckOpcion(key, valor, checked) {
+  const div = document.createElement('div');
+  div.className = 'filtro-opcion' + (checked ? ' selected' : '');
+  div.innerHTML = `
+    <i class="bi ${checked ? 'bi-check-square-fill' : 'bi-square'} filtro-chk"></i>
+    <span>${valor}</span>`;
+  div.onclick = (e) => { e.stopPropagation(); toggleValorFiltro(key, valor, div); };
+  return div;
+}
+
+function toggleValorFiltro(key, valor, el) {
+  const set = filtroActivo[key];
+  const chk = el.querySelector('.filtro-chk');
+  if (set.has(valor)) {
+    set.delete(valor);
+    el.classList.remove('selected');
+    chk.className = 'bi bi-square filtro-chk';
+  } else {
+    set.add(valor);
+    el.classList.add('selected');
+    chk.className = 'bi bi-check-square-fill filtro-chk';
+  }
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function selTodo(key, e) {
+  e.stopPropagation();
+  const idx  = FILTRO_COL_IDX[key];
+  const set  = filtroActivo[key];
+  document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
+    const v = r.querySelectorAll('td')[idx].textContent.trim();
+    if (v && v !== '—') set.add(v);
+  });
+  construirPanel(key);   // re-render con todos marcados
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function limpiarFiltro(key, e) {
+  e.stopPropagation();
+  filtroActivo[key].clear();
+  construirPanel(key);
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function actualizarIconoFiltro(key) {
+  const activo = filtroActivo[key].size > 0;
+  const icon   = document.getElementById('iconFiltro' + cap(key));
+  const btn    = document.getElementById('btnFiltro'  + cap(key));
+  if (icon) icon.className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  if (btn)  btn.classList.toggle('active', activo);
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+/* ── Filtro rango de fecha documento ─────────────────────── */
+const filtroFechaDoc = { desde: '', hasta: '' };
+
+function toggleFiltroFecha(e) {
+  e.stopPropagation();
+  const panel   = document.getElementById('panelFiltroFechaDoc');
+  const abierto = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) panel.style.display = 'block';
+}
+
+function onFiltroFechaChange() {
+  filtroFechaDoc.desde = document.getElementById('filtroFechaDocDesde').value;
+  filtroFechaDoc.hasta = document.getElementById('filtroFechaDocHasta').value;
+  const activo = filtroFechaDoc.desde || filtroFechaDoc.hasta;
+  document.getElementById('iconFiltroFechaDoc').className =
+    activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroFechaDoc').classList.toggle('active', !!activo);
+  aplicarFiltros();
+}
+
+function limpiarFiltroFecha(e) {
+  e.stopPropagation();
+  filtroFechaDoc.desde = '';
+  filtroFechaDoc.hasta = '';
+  document.getElementById('filtroFechaDocDesde').value = '';
+  document.getElementById('filtroFechaDocHasta').value = '';
+  document.getElementById('iconFiltroFechaDoc').className = 'bi bi-funnel';
+  document.getElementById('btnFiltroFechaDoc').classList.remove('active');
+  aplicarFiltros();
+}
+
+// Convierte "dd/mm/yyyy" → "yyyymmdd" para comparación lexicográfica
+function parseFechaCelda(txt) {
+  const m = txt.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? m[3] + m[2] + m[1] : '';
+}
+
+/* ── Filtro rango de vencimiento ─────────────────────────── */
+const filtroVenc = { desde: '', hasta: '' };
+
+function toggleFiltroVenc(e) {
+  e.stopPropagation();
+  const panel   = document.getElementById('panelFiltroVencimiento');
+  const abierto = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) panel.style.display = 'block';
+}
+
+function onFiltroVencChange() {
+  filtroVenc.desde = document.getElementById('filtroVencDesde').value;
+  filtroVenc.hasta = document.getElementById('filtroVencHasta').value;
+  const activo = filtroVenc.desde || filtroVenc.hasta;
+  document.getElementById('iconFiltroVencimiento').className =
+    activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroVencimiento').classList.toggle('active', !!activo);
+  aplicarFiltros();
+}
+
+function limpiarFiltroVenc(e) {
+  e.stopPropagation();
+  filtroVenc.desde = '';
+  filtroVenc.hasta = '';
+  document.getElementById('filtroVencDesde').value = '';
+  document.getElementById('filtroVencHasta').value = '';
+  document.getElementById('iconFiltroVencimiento').className = 'bi bi-funnel';
+  document.getElementById('btnFiltroVencimiento').classList.remove('active');
+  aplicarFiltros();
+}
+
+/* ── Orden genérico de columnas ──────────────────────────── */
+const _sortState = {};
+
+function normTdVal(row, colIdx, tipo) {
+  const txt = row.querySelectorAll('td')[colIdx].textContent.replace(/\s+/g, ' ').trim();
+  if (tipo === 'date') return parseFechaCelda(txt);
+  if (tipo === 'num')  return parseFloat(txt.replace(/[^0-9.\-]/g, '')) || 0;
+  return txt.toLowerCase();
+}
+
+function sortColumna(e, colIdx, tipo, key) {
+  e.stopPropagation();
+  Object.keys(_sortState).forEach(k => {
+    if (k !== key) {
+      const pi = document.getElementById('iconSort_' + k);
+      const pb = document.getElementById('btnSort_'  + k);
+      if (pi) pi.className = 'bi bi-arrow-down-up';
+      if (pb) pb.classList.remove('active');
+      delete _sortState[k];
+    }
+  });
+  _sortState[key] = _sortState[key] === 'asc' ? 'desc' : 'asc';
+  const dir = _sortState[key];
+
+  const tbody = document.getElementById('tbodyFacturas');
+  const rows  = [...tbody.querySelectorAll('.factura-row')];
+  rows.sort((a, b) => {
+    const va = normTdVal(a, colIdx, tipo);
+    const vb = normTdVal(b, colIdx, tipo);
+    if (tipo === 'num') return dir === 'asc' ? va - vb : vb - va;
+    return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  rows.forEach(r => tbody.appendChild(r));
+
+  const icon = document.getElementById('iconSort_' + key);
+  const btn  = document.getElementById('btnSort_'  + key);
+  if (icon) icon.className = dir === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down';
+  if (btn)  btn.classList.add('active');
+}
+
+function aplicarFiltros() {
+  const q       = document.getElementById('buscarFactura').value.toLowerCase();
+  const setTipo = filtroActivo.tipo;
+  const docDesde = filtroFechaDoc.desde ? filtroFechaDoc.desde.replace(/-/g, '') : '';
+  const docHasta = filtroFechaDoc.hasta ? filtroFechaDoc.hasta.replace(/-/g, '') : '';
+  const vncDesde = filtroVenc.desde     ? filtroVenc.desde.replace(/-/g, '')     : '';
+  const vncHasta = filtroVenc.hasta     ? filtroVenc.hasta.replace(/-/g, '')     : '';
+
+  document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
+    const tds = r.querySelectorAll('td');
+
+    const matchTipo    = filtroActivo.tipo.size    === 0 || filtroActivo.tipo.has(normTxt(tds[3]));
+    const matchAlmacen = filtroActivo.almacen.size === 0 || filtroActivo.almacen.has(normTxt(tds[11]));
+    const matchUsuario = filtroActivo.usuario.size === 0 || filtroActivo.usuario.has(normTxt(tds[13]));
+    const matchSunat   = filtroActivo.sunat.size   === 0 || filtroActivo.sunat.has(normTxt(tds[14]));
+
+    const matchQ = !q || r.textContent.toLowerCase().includes(q);
+
+    let matchFechaDoc = true;
+    if (docDesde || docHasta) {
+      const f = parseFechaCelda(tds[6].textContent);
+      if (docDesde && f < docDesde) matchFechaDoc = false;
+      if (docHasta && f > docHasta) matchFechaDoc = false;
+    }
+
+    let matchVenc = true;
+    if (vncDesde || vncHasta) {
+      const f = parseFechaCelda(tds[8].textContent);
+      if (vncDesde && f < vncDesde) matchVenc = false;
+      if (vncHasta && f > vncHasta) matchVenc = false;
+    }
+
+    r.style.display = (matchTipo && matchAlmacen && matchUsuario && matchSunat
+                       && matchQ && matchFechaDoc && matchVenc) ? '' : 'none';
+  });
+
+  // Actualizar contador y sumas del pie
+  let visibles = 0, sumaSOL = 0, sumaUSD = 0;
+  document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
+    if (r.style.display === 'none') return;
+    visibles++;
+    const id  = parseInt(r.dataset.id);
+    const fac = facturasMap[id];
+    if (fac) {
+      const t = fac.doc_total != null ? parseFloat(fac.doc_total) : 0;
+      if ((fac.doc_currency || 'SOL') === 'USD') sumaUSD += t;
+      else                                        sumaSOL += t;
+    }
+  });
+  document.getElementById('contadorVisible').textContent = visibles;
+  document.getElementById('sumaTotalSOL').textContent    = 'S/ ' + sumaSOL.toFixed(2);
+  document.getElementById('sumaTotalUSD').textContent    = '$ '  + sumaUSD.toFixed(2);
+}
+
+/* ── Exportar a Excel ────────────────────────────────────── */
+function exportarExcel() {
+  // Extraer solo el texto de label del <th> ignorando botones e íconos hijos
+  function thLabel(th) {
+    for (const node of th.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim())
+        return node.textContent.trim();
+    }
+    return th.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  // Cabecera: todas las columnas excepto la última (Ver)
+  const ths = [...document.querySelectorAll('#tablaFacturas thead th')];
+  const hdrs = ths.slice(0, -1).map(thLabel);
+
+  // Filas visibles (respeta todos los filtros activos)
+  const filas = [];
+  document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
+    if (r.style.display === 'none') return;
+    const tds = [...r.querySelectorAll('td')];
+    filas.push(tds.slice(0, -1).map(td => td.textContent.replace(/\s+/g, ' ').trim()));
+  });
+
+  // Construir tabla HTML que Excel puede abrir como .xls
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body>
+    <table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  filas.forEach(f => {
+    html += '<tr>';
+    f.forEach(c => { html += `<td>${c}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table></body></html>';
+
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const fecha = new Date().toISOString().slice(0, 10);
+  a.href     = url;
+  a.download = `facturas_${fecha}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ── Búsqueda en lista ────────────────────────────────────── */
+document.getElementById('buscarFactura').addEventListener('input', aplicarFiltros);
+aplicarFiltros(); // inicializa contador y sumas al cargar
+
+/* ── Abrir drawer ─────────────────────────────────────────── */
+function abrirDrawer(mode, id) {
+  if (mode === 'view' && id != null) {
+    cargarFactura(id);
+  } else {
+    modoNueva();
+  }
+  document.getElementById('facturasDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+/* ── Cerrar drawer ────────────────────────────────────────── */
+function imprimirFactura() {
+  const id = _currentFactura && _currentFactura.invoice_id;
+  if (!id) return;
+  window.open('/ventas/facturas/' + id + '/imprimir', '_blank', 'noopener');
+}
+
+function cerrarDrawer() {
+  document.getElementById('facturasDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+  document.querySelectorAll('.factura-row').forEach(r => r.classList.remove('selected'));
+  document.getElementById('btnImprimirPDF').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Modo NUEVA ───────────────────────────────────────────── */
+function modoNueva() {
+  setBadge('NUEVA', 'bg-primary');
+  document.getElementById('drawerTitle').textContent = 'Nueva Factura';
+  document.getElementById('btnGuardarTxt').textContent = 'Registrar Factura';
+  _currentFactura = null;
+  document.getElementById('btnGuardar').style.display     = '';
+  document.getElementById('btnEditar').style.display      = 'none';
+  document.getElementById('seccionDetalle').style.display = '';
+  document.getElementById('seccionItemsVer').style.display = 'none';
+  document.getElementById('btnSunatTicket').style.display = 'none';
+  document.getElementById('btnSunatA4').style.display     = 'none';
+  document.getElementById('btnSunatXml').style.display    = 'none';
+  document.getElementById('btnEnviarSunat').style.display = 'none';
+  setVal('f_invoice_id_edit', '');
+  document.getElementById('formFactura').action = "{{ url_for('main.ventas_facturas_nueva') }}";
+  setReadonly(false);
+
+  ['f_invoice_id','f_invoice_number','f_card_code','f_num_at_card','f_comments',
+   'f_journal_memo','f_invoice_pos',
+   'f_sunat_estado','f_doc_total'].forEach(id => setVal(id, ''));
+   
+  document.getElementById('f_user_display').value = '{{ current_user.id_usuario }}';
+  setVal('bp_nombre_display', '');
+  actualizarFechaVenc(0);
+  document.getElementById('f_doc_currency').value = 'SOL';
+  document.getElementById('f_invoice_wh').value   = whsDefault;
+  const tipoSel = document.getElementById('f_invoice_type');
+  if (tipoSel.options.length > 1) tipoSel.selectedIndex = 1;
+  const hoy = '{{ today }}';
+  setVal('f_doc_date', hoy); setVal('f_tax_date', hoy); setVal('f_doc_due_date', hoy);
+  cargarSeries();
+
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  agregarLinea();
+  setTimeout(() => document.getElementById('f_card_code').focus(), 320);
+}
+
+/* ── Modo VER — cabecera + ítems (solo lectura) ───────────── */
+function cargarFactura(id) {
+  const d = facturasMap[id];
+  if (!d) return;
+
+  document.querySelectorAll('.factura-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`.factura-row[data-id="${id}"]`)?.classList.add('selected');
+
+  setBadge('VER', 'bg-secondary');
+  document.getElementById('drawerTitle').textContent =
+    `Factura ${d.invoice_number || ('#' + id)}`;
+  _currentFactura = d;
+  document.getElementById('btnGuardar').style.display     = 'none';
+  document.getElementById('btnEditar').style.display      = '';
+  document.getElementById('btnImprimirPDF').style.display = '';
+  document.getElementById('seccionDetalle').style.display = 'none';
+  document.getElementById('seccionItemsVer').style.display = '';
+  _actualizarBotonesSunat(d);
+  const _yaAceptado = d.sunat_estado === 'ACEPTADO';
+  document.getElementById('btnEnviarSunat').style.display = _yaAceptado ? 'none' : '';
+  document.getElementById('btnEditar').style.display      = _yaAceptado ? 'none' : '';
+
+  // Cabecera (solo lectura) — mismo orden que la grilla
+  setVal('f_invoice_id',     id);
+  setVal('f_card_code',      d.card_code);
+  setVal('bp_nombre_display', d.bp_name || '');
+  // Seleccionar tipo: puede venir como código numérico (nuevo) o texto (legado)
+  const typeSelect = document.getElementById('f_invoice_type');
+  const tipoVal = d.invoice_type || '';
+  const tipoOpt = [...typeSelect.options].find(o =>
+    o.value === tipoVal || o.dataset.invoiceType === tipoVal
+  );
+  typeSelect.value = tipoOpt ? tipoOpt.value : tipoVal;
+  document.getElementById('f_invoice_wh').value   = d.invoice_wh  || '';
+  cargarSeries(d.invoice_serie || '');
+  setVal('f_invoice_number', d.invoice_number || '');
+  document.getElementById('f_doc_currency').value = d.doc_currency  || 'SOL';
+  setVal('f_doc_date',       d.doc_date);
+  setVal('f_tax_date',       d.tax_date);
+  setVal('f_doc_due_date',   d.doc_due_date);
+  const sym = d.doc_currency === 'USD' ? '$' : 'S/';
+  setVal('f_doc_total', d.doc_total != null ? sym + ' ' + parseFloat(d.doc_total).toFixed(2) : '');
+  setVal('f_invoice_pos',    d.invoice_pos ?? '');
+  setVal('f_num_at_card',    d.num_at_card);
+  document.getElementById('f_user_display').value = d.user_code || '';
+  setVal('f_sunat_estado',   d.sunat_estado || 'Pendiente');
+  setVal('f_comments',       d.comments);
+  setVal('f_journal_memo',   d.journal_memo);
+  setReadonly(true);
+
+  // Total en sección ítems VER
+  document.getElementById('resumen_total').textContent =
+    d.doc_total != null ? sym + ' ' + parseFloat(d.doc_total).toFixed(2) : '—';
+
+  // Ítems de detalle — espera que itemsMap esté cargado para mostrar nombres
+  const tbody = document.getElementById('tbodyItemsVer');
+  tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-2 small">Cargando…</td></tr>';
+  const lineas = d.items || [];
+
+  const renderLineas = () => {
+    tbody.innerHTML = '';
+    if (!lineas.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3 small">Sin ítems registrados.</td></tr>';
+      document.getElementById('resumen_subtotal').textContent = '0.0000';
+      document.getElementById('resumen_igv').textContent      = '0.0000';
+      return;
+    }
+    let subtotalVer = 0;
+    lineas.forEach((it, idx) => {
+      const maestro = itemsMap[it.item_code] || {};
+      const sub = (it.quantity || 0) * (it.price_after_vat || 0);
+      const avgP = maestro.avg_price != null ? parseFloat(maestro.avg_price) : 0;
+      subtotalVer += (it.quantity || 0) * avgP;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="ps-2 text-muted small">${idx + 1}</td>
+        <td class="font-monospace small fw-bold text-primary">${it.item_code}</td>
+        <td class="small">${maestro.item_name || ''}</td>
+        <td class="text-end small">${parseFloat(it.quantity || 0).toFixed(2)}</td>
+        <td class="text-end small">${avgP ? avgP.toFixed(4) : ''}</td>
+        <td class="text-end small">${parseFloat(it.price_after_vat || 0).toFixed(2)}</td>
+        <td class="small text-muted">${maestro.sal_unit_msr || ''}</td>
+        <td class="small text-muted">${it.tax_code || ''}</td>
+        <td class="text-end small fw-semibold">${sub.toFixed(2)}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('resumen_subtotal').textContent = subtotalVer.toFixed(4);
+    document.getElementById('resumen_igv').textContent      = (subtotalVer * 0.18).toFixed(4);
+  };
+
+  if (d.card_code) cargarItems(d.card_code).then(renderLineas);
+  else renderLineas();
+}
+
+/* ── Modo EDITAR ──────────────────────────────────────────── */
+function modoEditar() {
+  const d = _currentFactura;
+  if (!d) return;
+
+  setBadge('EDITAR', 'bg-warning text-dark');
+  document.getElementById('drawerTitle').textContent      = `Editando Factura ${d.invoice_number || ('#' + d.invoice_id)}`;
+  document.getElementById('btnGuardarTxt').textContent    = 'Guardar Cambios';
+  document.getElementById('btnGuardar').style.display     = '';
+  document.getElementById('btnEditar').style.display      = 'none';
+  document.getElementById('btnSunatTicket').style.display = 'none';
+  document.getElementById('btnSunatA4').style.display     = 'none';
+  document.getElementById('btnSunatXml').style.display    = 'none';
+  document.getElementById('btnEnviarSunat').style.display = 'none';
+  document.getElementById('seccionDetalle').style.display  = '';
+  document.getElementById('seccionItemsVer').style.display = 'none';
+
+  setVal('f_invoice_id_edit', d.invoice_id);
+  document.getElementById('formFactura').action = `/ventas/facturas/${d.invoice_id}/editar`;
+
+  // Cargar líneas existentes en la tabla de detalle
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  const lineas = d.items || [];
+  if (lineas.length) {
+    lineas.forEach(it => {
+      lineaNum++;
+      const maestro = itemsMap[it.item_code] || {};
+      const tr = document.createElement('tr');
+      tr.className = 'linea-detalle';
+      tr.innerHTML = `
+        <td class="ps-2 text-muted">${lineaNum}</td>
+        <td><input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+                   list="listItems" value="${escHtml(it.item_code)}" autocomplete="off"
+                   oninput="onItemSelect(this)" /></td>
+        <td><input type="text" class="form-control form-control-sm inp-item-name bg-light always-readonly"
+                   value="${escHtml(maestro.item_name || '')}" readonly /></td>
+        <td><input type="number" class="form-control form-control-sm inp-qty"
+                   value="${parseFloat(it.quantity || 0).toFixed(2)}" min="0.0001" step="any"
+                   oninput="actualizarTotal()" /></td>
+        <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light always-readonly"
+                   value="${maestro.avg_price != null ? parseFloat(maestro.avg_price).toFixed(4) : ''}" readonly /></td>
+        <td><input type="number" class="form-control form-control-sm inp-price"
+                   value="${parseFloat(it.price_after_vat || 0).toFixed(2)}" min="0" step="any"
+                   oninput="actualizarTotal()" /></td>
+        <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light always-readonly"
+                   value="${escHtml(maestro.sal_unit_msr || '')}" readonly /></td>
+        <td><input type="text" class="form-control form-control-sm inp-taxcode"
+                   value="${escHtml(it.tax_code || 'I18')}" maxlength="10" /></td>
+        <td class="text-end fw-semibold inp-subtotal-display">
+          ${(parseFloat(it.quantity||0)*parseFloat(it.price_after_vat||0)).toFixed(2)}</td>
+        <td><button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+              <i class="bi bi-trash"></i></button></td>`;
+      document.getElementById('lineasDetalle').appendChild(tr);
+    });
+  } else {
+    agregarLinea();
+  }
+
+  // Llamar setReadonly DESPUÉS de crear los inputs para que los afecte
+  setReadonly(false);
+  actualizarTotal();
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Helpers ──────────────────────────────────────────────── */
+function setReadonly(on) {
+  document.querySelectorAll('#formFactura input:not(.always-readonly), #formFactura select').forEach(el => {
+    el.readOnly = on;
+    el.disabled = on && el.tagName === 'SELECT';
+  });
+}
+/* ── Links SUNAT ──────────────────────────────────────────── */
+let _sunatLinks = { a4: '', ticket: '', xml: '' };
+function abrirEnlace(tipo) {
+  const url = _sunatLinks[tipo];
+  if (url) window.open(url, '_blank', 'noopener');
+}
+function _actualizarBotonesSunat(d) {
+  _sunatLinks.ticket = d.sunat_ticket || '';
+  _sunatLinks.a4     = d.sunat_a4     || '';
+  _sunatLinks.xml    = d.sunat_xml    || '';
+  // Siempre visibles en VER; deshabilitados si aún no hay URL
+  ['btnSunatTicket', 'btnSunatA4', 'btnSunatXml'].forEach(id => {
+    const btn = document.getElementById(id);
+    btn.style.display = '';
+    btn.disabled = !_sunatLinks[{ btnSunatTicket:'ticket', btnSunatA4:'a4', btnSunatXml:'xml' }[id]];
+  });
+}
+
+function setBadge(txt, cls) {
+  const b = document.getElementById('drawerBadge');
+  b.textContent = txt; b.className = 'badge ' + cls;
+}
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v ?? ''; }
+function onSocioSelect(inp) {
+  const s = sociosMap[inp.value];
+  setVal('bp_nombre_display', s ? s.card_name : '');
+  actualizarFechaVenc(s ? (s.Creditday || 0) : 0);
+  if (inp.value) cargarItems(inp.value);
+}
+
+function actualizarFechaVenc(creditday) {
+  const fld     = document.getElementById('f_doc_due_date');
+  const docDate = document.getElementById('f_doc_date').value;
+  if (creditday > 0) {
+    if (docDate) setVal('f_doc_due_date', addDays(docDate, creditday));
+    fld.readOnly = true;
+    fld.classList.add('bg-light');
+  } else {
+    fld.readOnly = false;
+    fld.classList.remove('bg-light');
+  }
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+document.getElementById('f_doc_date').addEventListener('input', function () {
+  const s = sociosMap[document.getElementById('f_card_code').value];
+  actualizarFechaVenc(s ? (s.Creditday || 0) : 0);
+});
+
+/* ── Tabla de líneas ─────────────────────────────────────────*/
+let lineaNum = 0;
+let WHS_OPTIONS  = '';
+let whsDefault   = '';
+
+function agregarLinea() {
+  lineaNum++;
+  const tr = document.createElement('tr');
+  tr.className = 'linea-detalle';
+  tr.innerHTML = `
+    <td class="ps-2 text-muted">${lineaNum}</td>
+    <td><input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+               list="listItems" placeholder="Código…" autocomplete="off"
+               oninput="onItemSelect(this)" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-item-name bg-light"
+               placeholder="Descripción" readonly /></td>
+    <td><input type="number" class="form-control form-control-sm inp-qty"
+               value="1" min="0.0001" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light"
+               readonly placeholder="0.0000" /></td>
+    <td><input type="number" class="form-control form-control-sm inp-price"
+               value="0" min="0" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light"
+               readonly /></td>
+    <td><input type="text" class="form-control form-control-sm inp-taxcode"
+               placeholder="I18" maxlength="10" /></td>
+    <td class="text-end fw-semibold inp-subtotal-display">0.00</td>
+    <td><button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+          <i class="bi bi-trash"></i></button></td>`;
+  document.getElementById('lineasDetalle').appendChild(tr);
+  tr.querySelector('.inp-item-code').focus();
+  actualizarTotal();
+}
+
+function eliminarLinea(btn) { btn.closest('tr').remove(); actualizarTotal(); }
+
+function onItemSelect(inp) {
+  const d = itemsMap[inp.value];
+  const row = inp.closest('tr');
+  row.querySelector('.inp-item-name').value = d ? (d.item_name   || '') : '';
+  row.querySelector('.inp-avg-price').value = d && d.avg_price    != null ? parseFloat(d.avg_price).toFixed(4) : '';
+  row.querySelector('.inp-price').value     = d && d.PriceAfterVAT != null ? parseFloat(d.PriceAfterVAT).toFixed(2) : '0.00';
+  row.querySelector('.inp-unit-msr').value  = d ? (d.sal_unit_msr || '') : '';
+  if (d && d.tax_code_ap) row.querySelector('.inp-taxcode').value = d.tax_code_ap;
+  actualizarTotal();
+}
+
+/* ── Tipos dinámicos (carga única al inicio) ─────────────── */
+function cargarTipos() {
+  const sel = document.getElementById('f_invoice_type');
+  sel.innerHTML = '<option value="">— Tipo —</option>';
+  fetch('/api/invoice-types')
+    .then(r => r.json())
+    .then(data => {
+      data.forEach(t => {
+        const o = document.createElement('option');
+        o.value = t.invoice_type; o.textContent = t.invoice_type;
+        o.dataset.idtype = t.idtype;
+        o.dataset.invoiceType = t.invoice_type;
+        sel.appendChild(o);
+      });
+      if (data.length) sel.value = data[0].invoice_type;
+      cargarSeries();
+    })
+    .catch(() => { sel.innerHTML = '<option value="">— Error —</option>'; });
+}
+
+/* ── Series dinámicas ────────────────────────────────────── */
+function cargarSeries(preselect = null) {
+  const typeEl      = document.getElementById('f_invoice_type');
+  const invoiceType = typeEl.value || '';   // texto p.ej. "FACTURA" → va a fn_invoice_inserta
+  const idtype      = typeEl.options[typeEl.selectedIndex]?.dataset.idtype || '';
+  setVal('f_invoice_idtype', idtype);       // sincroniza campo oculto (código numérico)
+  const wh  = document.getElementById('f_invoice_wh').value;
+  const sel = document.getElementById('f_invoice_serie');
+
+  sel.innerHTML = '<option value="">— Serie —</option>';
+  if (!idtype || !wh) return;
+
+  fetch(`${INVOICE_SERIES_URL}?invoice_wh=${encodeURIComponent(wh)}&idtype=${encodeURIComponent(idtype)}`)
+    .then(r => r.json())
+    .then(series => {
+      series.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.invoice_serie; opt.textContent = s.invoice_serie;
+        opt.dataset.pos = s.invoice_pos ?? '';
+        if (preselect && s.invoice_serie === preselect) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      if (preselect && !series.find(s => s.invoice_serie === preselect)) {
+        const opt = document.createElement('option');
+        opt.value = preselect; opt.textContent = preselect;
+        opt.selected = true;
+        sel.appendChild(opt);
+      }
+      onSerieSelect();
+    })
+    .catch(() => {
+      sel.innerHTML = '<option value="">— Error al cargar —</option>';
+    });
+}
+
+function onSerieSelect() {
+  const sel = document.getElementById('f_invoice_serie');
+  const opt = sel.options[sel.selectedIndex];
+  const pos = opt ? (opt.dataset.pos ?? '') : '';
+  if (pos !== '') setVal('f_invoice_pos', pos);
+}
+
+
+function actualizarTotal() {
+  const sym = document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
+  let total = 0, subtotalVentas = 0;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const qty      = parseFloat(row.querySelector('.inp-qty').value)       || 0;
+    const price    = parseFloat(row.querySelector('.inp-price').value)     || 0;
+    const avgPrice = parseFloat(row.querySelector('.inp-avg-price').value) || 0;
+    const sub      = qty * price;
+    total          += sub;
+    subtotalVentas += qty * avgPrice;
+    row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
+  });
+  document.getElementById('subtotalVentasDisplay').textContent = subtotalVentas.toFixed(4);
+  document.getElementById('igvDisplay').textContent            = (subtotalVentas * 0.18).toFixed(4);
+  document.getElementById('totalDisplay').textContent = sym + ' ' + total.toFixed(2);
+  setVal('f_doc_total', sym + ' ' + total.toFixed(2));
+}
+document.getElementById('f_doc_currency').addEventListener('change', actualizarTotal);
+
+/* ── Enviar a SUNAT ───────────────────────────────────────── */
+function enviarSunat() {
+  if (!_currentFactura) return;
+  const id   = _currentFactura.invoice_id;
+  const num  = _currentFactura.invoice_number || ('#' + id);
+  const serie = (_currentFactura.invoice_serie || '') + '-' + (num || '');
+
+  confirmarAccion(
+    `¿Enviar la factura ${serie} a SUNAT? Se registrará el comprobante electrónico.`,
+    () => {
+      const btn = document.getElementById('btnEnviarSunat');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+
+      fetch(`/api/sunat/enviar/${id}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-send-fill me-1"></i>SUNAT';
+          if (data.success) {
+            const estado = data.sunat_estado || 'ACEPTADO';
+            const toastTipo = estado === 'ACEPTADO' ? 'success'
+                            : estado === 'PENDIENTE' ? 'warning' : 'info';
+            mostrarToast(toastTipo, data.message || 'Factura enviada a SUNAT.');
+            setVal('f_sunat_estado', estado);
+            // Actualizar cache local
+            Object.assign(_currentFactura, {
+              sunat_estado: estado,
+              sunat_ticket: data.sunat_ticket || '',
+              sunat_a4:     data.sunat_a4     || '',
+              sunat_xml:    data.sunat_xml    || '',
+              sunat_hash:   data.sunat_hash   || '',
+            });
+            _actualizarBotonesSunat(_currentFactura);
+            if (estado === 'ACEPTADO') {
+              document.getElementById('btnEnviarSunat').style.display = 'none';
+              document.getElementById('btnEditar').style.display      = 'none';
+            }
+            // Actualizar badge en la grilla
+            const badgeCls = estado === 'ACEPTADO' ? 'bg-success-subtle text-success'
+                           : estado === 'PENDIENTE' ? 'bg-warning-subtle text-warning'
+                           : estado === 'RECHAZADO' ? 'bg-danger-subtle text-danger'
+                           : 'bg-secondary-subtle text-secondary';
+            const row = document.querySelector(`.factura-row[data-id="${id}"] td:nth-child(15)`);
+            if (row) row.innerHTML = `<span class="badge ${badgeCls}" style="font-size:.63rem;">${estado}</span>`;
+          } else {
+            const msg = (data.response?.errors?.[0]?.message)
+                     || (data.response?.message)
+                     || data.message
+                     || 'Error al enviar a SUNAT.';
+            mostrarToast('danger', msg);
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-send-fill me-1"></i>SUNAT';
+          mostrarToast('danger', 'Error de conexión con el servidor.');
+        });
+    },
+    { titulo: 'Enviar a SUNAT', tipo: 'primary', txtBtn: 'Enviar' }
+  );
+}
+
+/* ── Submit ───────────────────────────────────────────────── */
+document.getElementById('formFactura').addEventListener('submit', function (e) {
+  // Validación de campos obligatorios cabecera
+  const serie = document.getElementById('f_invoice_serie').value.trim();
+  const pos   = document.getElementById('f_invoice_pos').value.trim();
+
+  if (!serie) {
+    e.preventDefault();
+    document.getElementById('f_invoice_serie').focus();
+    document.getElementById('f_invoice_serie').classList.add('is-invalid');
+    alert('El campo Serie es obligatorio.');
+    return;
+  }
+  document.getElementById('f_invoice_serie').classList.remove('is-invalid');
+
+  if (!pos || parseInt(pos) < 1) {
+    e.preventDefault();
+    document.getElementById('f_invoice_pos').focus();
+    document.getElementById('f_invoice_pos').classList.add('is-invalid');
+    alert('El campo POS es obligatorio y debe ser mayor a 0.');
+    return;
+  }
+  document.getElementById('f_invoice_pos').classList.remove('is-invalid');
+
+  // Validación de líneas de detalle
+  const lineas = [];
+  let ok = true;
+  document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
+    const code = row.querySelector('.inp-item-code').value.trim();
+    if (!code) { ok = false; return; }
+    lineas.push({
+      item_code:       code,
+      quantity:        parseFloat(row.querySelector('.inp-qty').value)   || 0,
+      price_after_vat: parseFloat(row.querySelector('.inp-price').value) || 0,
+      tax_code:        row.querySelector('.inp-taxcode').value.trim(),
+      warehouse_code:  '',
+      costing_code:    '',
+      costing_code2:   '',
+      costing_code3:   '',
+    });
+  });
+  if (!ok)           { e.preventDefault(); alert('Complete el código de ítem en todas las líneas.'); return; }
+  if (!lineas.length){ e.preventDefault(); alert('Agregue al menos un ítem en el detalle.'); return; }
+  document.getElementById('items_json_hidden').value = JSON.stringify(lineas);
+});
+</script>
+{% endblock %}

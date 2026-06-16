@@ -1,0 +1,33 @@
+<footer class="intranet-taskbar">
+  <div class="taskbar-left">
+    <span class="taskbar-item">
+      <i class="bi bi-circle-fill text-success me-1" style="font-size: 0.5rem;"></i>
+      Sistema activo
+    </span>
+    <span class="taskbar-divider">|</span>
+    <span class="taskbar-item">
+      <i class="bi bi-person-fill me-1"></i>
+      {{ current_user.full_name or current_user.username }}
+      <span class="badge bg-primary-subtle text-primary ms-1" style="font-size: 0.65rem;">
+        {{ current_user.role | capitalize }}
+      </span>
+    </span>
+    {% if current_user.department %}
+      <span class="taskbar-divider d-none d-md-inline">|</span>
+      <span class="taskbar-item d-none d-md-inline">
+        <i class="bi bi-building me-1"></i> {{ current_user.department }}
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="taskbar-right">
+    <span class="taskbar-item d-none d-sm-inline">
+      <i class="bi bi-clock me-1"></i>
+      <span id="currentTime"></span>
+    </span>
+    <span class="taskbar-divider d-none d-sm-inline">|</span>
+    <span class="taskbar-item">
+      &copy; <span id="currentYear"></span> {{ config['COMPANY_NAME'] }}
+    </span>
+  </div>
+</footer>

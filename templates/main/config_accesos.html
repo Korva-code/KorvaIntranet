@@ -1,0 +1,436 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} usuarios
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="usuariosData"   type="application/json">{{ usuarios_json    | safe }}</script>
+<script id="menuItemsData"  type="application/json">{{ menu_items_json  | safe }}</script>
+<script id="perfilesData"   type="application/json">{{ perfiles_json    | safe }}</script>
+
+<div class="row g-3">
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL IZQUIERDO: lista de usuarios
+       ═══════════════════════════════════════════════ -->
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-people text-primary me-1"></i> Usuarios
+        </h6>
+        <div class="input-group input-group-sm ms-auto" style="max-width:160px;">
+          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+          <input type="search" class="form-control" id="buscarUsuario" placeholder="Buscar…">
+        </div>
+      </div>
+
+      <div class="table-responsive" style="max-height:560px; overflow-y:auto;">
+        <table class="table table-hover align-middle mb-0" style="font-size:.76rem;">
+          <thead class="table-light sticky-top" style="font-size:.72rem;">
+            <tr>
+              <th class="ps-3">Usuario</th>
+              <th>Nombre</th>
+              <th style="min-width:80px;">Perfil</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyUsuarios"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL DERECHO: configuración de accesos
+       ═══════════════════════════════════════════════ -->
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+
+      <!-- Header -->
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+        <div>
+          <h6 class="mb-0 fw-semibold">
+            <i class="bi bi-shield-check text-primary me-1"></i>
+            Accesos:
+            <span id="lblUsuario" class="text-primary fst-italic">— seleccione un usuario —</span>
+          </h6>
+          <small class="text-muted" id="lblNombre"></small>
+        </div>
+        <button class="btn btn-sm btn-primary ms-auto px-3" id="btnGuardar"
+                onclick="guardarAccesos()" disabled>
+          <i class="bi bi-check-lg me-1"></i>Guardar Cambios
+        </button>
+      </div>
+
+      <!-- Perfil -->
+      <div class="card-body border-bottom py-3">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+          <label class="fw-semibold mb-0" style="font-size:.8rem; white-space:nowrap;">
+            <i class="bi bi-person-badge me-1 text-muted"></i>Perfil asignado:
+          </label>
+          <select class="form-select form-select-sm" id="selPerfil"
+                  style="max-width:280px;" onchange="onPerfilChange()" disabled>
+            <option value="">— seleccione usuario primero —</option>
+          </select>
+          <span class="text-muted small">
+            <i class="bi bi-exclamation-triangle text-warning me-1"></i>
+            Los cambios de permisos afectan a <strong>todos</strong> los usuarios del perfil.
+          </span>
+        </div>
+      </div>
+
+      <!-- Árbol de menú -->
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <span class="fw-semibold" style="font-size:.82rem;">
+            <i class="bi bi-list-tree me-1 text-muted"></i>Permisos de Menú
+          </span>
+          <div class="d-flex gap-2" id="botonesSeleccion" style="display:none !important;">
+            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                    style="font-size:.72rem;" onclick="marcarTodos(true)">Marcar todo</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                    style="font-size:.72rem;" onclick="marcarTodos(false)">Desmarcar todo</button>
+          </div>
+        </div>
+
+        <!-- Placeholder antes de seleccionar usuario -->
+        <div id="arbolPlaceholder" class="text-center text-muted py-5">
+          <i class="bi bi-arrow-left-circle" style="font-size:2rem; opacity:.25;"></i>
+          <p class="mt-2 mb-0" style="font-size:.85rem;">
+            Selecciona un usuario de la lista para ver y editar sus permisos de menú.
+          </p>
+        </div>
+
+        <!-- Árbol de checkboxes -->
+        <div id="arbolMenu" style="display:none;"></div>
+
+        <!-- Spinner de carga -->
+        <div id="arbolSpinner" style="display:none;" class="text-center py-4">
+          <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+          <span class="ms-2 text-muted small">Cargando permisos…</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Árbol de menú ── */
+.menu-section {
+  border: 1px solid #e2e8f0; border-radius: 8px;
+  margin-bottom: .55rem; overflow: hidden;
+}
+.menu-section-header {
+  background: #f8fafc; padding: .5rem .9rem;
+  display: flex; align-items: center; gap: .55rem;
+  font-size: .79rem; font-weight: 700; color: #334155;
+  cursor: pointer; user-select: none;
+}
+.menu-section-header:hover { background: #f1f5f9; }
+.menu-section-body { padding: .35rem 1rem .45rem 2.4rem; }
+.menu-item-row {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .25rem 0; font-size: .79rem; color: #475569;
+}
+.menu-item-row label { cursor: pointer; margin: 0; }
+
+/* ── Fila de usuario seleccionada ── */
+.usuario-row { cursor: pointer; transition: background .1s; }
+.usuario-row.selected { background: #eff6ff !important; }
+.usuario-row td:last-child { text-align:center; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const USUARIOS_DATA   = JSON.parse(document.getElementById('usuariosData').textContent);
+const MENU_ITEMS_DATA = JSON.parse(document.getElementById('menuItemsData').textContent);
+const PERFILES_DATA   = JSON.parse(document.getElementById('perfilesData').textContent);
+
+let usuarioActivo = null;
+let perfilActivo  = null;
+
+/* ── Poblar select de perfiles ──────────────────────────────── */
+(function() {
+  const sel = document.getElementById('selPerfil');
+  PERFILES_DATA.forEach(p => sel.add(new Option(p.nombre, p.id_perfil)));
+})();
+
+/* ── Utilidades ─────────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Render lista de usuarios ───────────────────────────────── */
+let busqueda = '';
+document.getElementById('buscarUsuario').addEventListener('input', function() {
+  busqueda = this.value.toLowerCase();
+  renderUsuarios();
+});
+
+function renderUsuarios() {
+  const tbody = document.getElementById('tbodyUsuarios');
+  const filas = USUARIOS_DATA.filter(u =>
+    !busqueda ||
+    u.id_usuario.toLowerCase().includes(busqueda) ||
+    u.nombres.toLowerCase().includes(busqueda)
+  );
+
+  tbody.innerHTML = '';
+  filas.forEach(u => {
+    const tr = document.createElement('tr');
+    tr.className = 'usuario-row' + (usuarioActivo?.id_usuario === u.id_usuario ? ' selected' : '');
+    tr.dataset.id = u.id_usuario;
+    const estadoBadge = u.id_estado !== 1
+      ? ' <span class="badge bg-danger-subtle text-danger" style="font-size:.58rem;">Inact.</span>' : '';
+    tr.innerHTML = `
+      <td class="ps-3 font-monospace fw-semibold">${escHtml(u.id_usuario)}${estadoBadge}</td>
+      <td>${escHtml(u.nombres)}</td>
+      <td><span class="badge bg-primary-subtle text-primary border" style="font-size:.62rem; white-space:normal;">${escHtml(u.perfil_nombre)}</span></td>`;
+    tr.addEventListener('click', () => seleccionarUsuario(u));
+    tbody.appendChild(tr);
+  });
+}
+
+/* ── Seleccionar usuario ─────────────────────────────────────── */
+function seleccionarUsuario(u) {
+  usuarioActivo = u;
+
+  // Resaltar fila
+  document.querySelectorAll('.usuario-row').forEach(r => r.classList.remove('selected'));
+  document.querySelector(`.usuario-row[data-id="${CSS.escape(u.id_usuario)}"]`)?.classList.add('selected');
+
+  // Cabecera panel derecho
+  document.getElementById('lblUsuario').textContent = u.id_usuario;
+  document.getElementById('lblNombre').textContent  = u.nombres || '';
+
+  // Habilitar controles
+  document.getElementById('selPerfil').disabled    = false;
+  document.getElementById('btnGuardar').disabled   = false;
+  document.getElementById('selPerfil').value       = u.id_perfil ?? '';
+  perfilActivo = u.id_perfil;
+
+  // Mostrar botones marcar/desmarcar
+  document.getElementById('botonesSeleccion').style.display = '';
+
+  // Cargar árbol con permisos del perfil
+  cargarPermisosDelPerfil(u.id_perfil);
+}
+
+/* ── Cambio de perfil ────────────────────────────────────────── */
+function onPerfilChange() {
+  const id = parseInt(document.getElementById('selPerfil').value) || null;
+  perfilActivo = id;
+  cargarPermisosDelPerfil(id);
+}
+
+/* ── Cargar permisos del perfil ─────────────────────────────── */
+function cargarPermisosDelPerfil(id_perfil) {
+  mostrarSpinner(true);
+
+  if (!id_perfil) {
+    mostrarSpinner(false);
+    construirArbol([]);
+    return;
+  }
+
+  fetch(`/api/config/perfil-menu-ids?id_perfil=${id_perfil}`)
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(ids => {
+      mostrarSpinner(false);
+      construirArbol(ids);
+    })
+    .catch(() => {
+      mostrarSpinner(false);
+      construirArbol([]);
+    });
+}
+
+function mostrarSpinner(estado) {
+  document.getElementById('arbolPlaceholder').style.display = 'none';
+  document.getElementById('arbolSpinner').style.display     = estado ? '' : 'none';
+  document.getElementById('arbolMenu').style.display        = estado ? 'none' : '';
+}
+
+/* ── Construir árbol de checkboxes ──────────────────────────── */
+function construirArbol(checkedIds) {
+  const checked   = new Set(checkedIds.map(Number));
+  const container = document.getElementById('arbolMenu');
+  container.innerHTML = '';
+
+  // Separar secciones e hijos
+  const sections   = MENU_ITEMS_DATA.filter(m => m.id_parent == null && m.id_estado === 1)
+                                     .sort((a,b) => a.orden - b.orden);
+  const childrenOf = {};
+  MENU_ITEMS_DATA
+    .filter(m => m.id_parent != null && m.id_estado === 1)
+    .forEach(m => {
+      (childrenOf[m.id_parent] = childrenOf[m.id_parent] || []).push(m);
+    });
+
+  if (!sections.length) {
+    container.innerHTML = '<p class="text-muted small text-center py-3">No hay ítems de menú configurados en la base de datos.</p>';
+    return;
+  }
+
+  sections.forEach(sec => {
+    const hijos = (childrenOf[sec.id_menu] || []).sort((a,b) => a.orden - b.orden);
+    if (!hijos.length) return;
+
+    const todosChecked  = hijos.every(h => checked.has(h.id_menu));
+    const algunoChecked = hijos.some(h  => checked.has(h.id_menu));
+
+    // Sección contenedor
+    const divSec = document.createElement('div');
+    divSec.className = 'menu-section';
+
+    // ── Header de sección
+    const header = document.createElement('div');
+    header.className = 'menu-section-header';
+    header.innerHTML = `
+      <input type="checkbox" class="chk-section" id="sec_${sec.id_menu}"
+             data-sec="${sec.id_menu}" ${todosChecked ? 'checked' : ''}>
+      <i class="bi ${escHtml(sec.icon || 'bi-circle')}" style="font-size:.85rem; color:#64748b;"></i>
+      <label for="sec_${sec.id_menu}" style="flex:1; cursor:pointer;">${escHtml(sec.label)}</label>
+      <i class="bi bi-chevron-down text-muted" style="font-size:.68rem;"></i>`;
+
+    const chkSec = header.querySelector('.chk-section');
+    if (algunoChecked && !todosChecked) chkSec.indeterminate = true;
+
+    // Toggle body al pulsar header (no en checkbox/label)
+    header.addEventListener('click', e => {
+      if (e.target.closest('input, label')) return;
+      const body = divSec.querySelector('.menu-section-body');
+      body.style.display = body.style.display === 'none' ? '' : 'none';
+    });
+
+    // Checkbox sección → marcar/desmarcar todos los hijos
+    chkSec.addEventListener('change', function() {
+      divSec.querySelectorAll('.chk-item').forEach(c => { c.checked = this.checked; });
+    });
+
+    // ── Body con ítems hijo
+    const body = document.createElement('div');
+    body.className = 'menu-section-body';
+
+    hijos.forEach(h => {
+      const row = document.createElement('div');
+      row.className = 'menu-item-row';
+      row.innerHTML = `
+        <input type="checkbox" class="chk-item" id="item_${h.id_menu}"
+               data-id="${h.id_menu}" data-sec="${sec.id_menu}"
+               ${checked.has(h.id_menu) ? 'checked' : ''}>
+        <i class="bi ${escHtml(h.icon || 'bi-circle')}" style="font-size:.78rem; color:#94a3b8;"></i>
+        <label for="item_${h.id_menu}">${escHtml(h.label)}</label>`;
+
+      row.querySelector('.chk-item').addEventListener('change', () =>
+        actualizarSeccion(chkSec, divSec));
+      body.appendChild(row);
+    });
+
+    divSec.appendChild(header);
+    divSec.appendChild(body);
+    container.appendChild(divSec);
+  });
+
+  document.getElementById('arbolMenu').style.display = '';
+}
+
+function actualizarSeccion(chkSec, divSec) {
+  const hijos  = [...divSec.querySelectorAll('.chk-item')];
+  const todos  = hijos.every(c => c.checked);
+  const alguno = hijos.some(c  => c.checked);
+  chkSec.checked       = todos;
+  chkSec.indeterminate = alguno && !todos;
+}
+
+function marcarTodos(estado) {
+  document.querySelectorAll('.chk-item').forEach(c => { c.checked = estado; });
+  document.querySelectorAll('.chk-section').forEach(c => {
+    c.checked = estado; c.indeterminate = false;
+  });
+}
+
+/* ── Guardar ─────────────────────────────────────────────────── */
+async function guardarAccesos() {
+  if (!usuarioActivo) return;
+  const id_perfil = parseInt(document.getElementById('selPerfil').value) || null;
+  if (!id_perfil) {
+    mostrarToast('warning', 'Seleccione un perfil para el usuario.');
+    return;
+  }
+  const menuIds = [...document.querySelectorAll('.chk-item:checked')]
+    .map(c => parseInt(c.dataset.id));
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const resp = await fetch('/api/config/accesos/guardar', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({
+        id_usuario: usuarioActivo.id_usuario,
+        id_perfil,
+        menu_ids: menuIds,
+      }),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      // Actualizar badge en tabla de usuarios
+      const u = USUARIOS_DATA.find(x => x.id_usuario === usuarioActivo.id_usuario);
+      if (u) {
+        u.id_perfil = id_perfil;
+        const p = PERFILES_DATA.find(x => x.id_perfil === id_perfil);
+        u.perfil_nombre = p ? p.nombre : String(id_perfil);
+        renderUsuarios();
+        document.querySelector(`.usuario-row[data-id="${CSS.escape(u.id_usuario)}"]`)?.classList.add('selected');
+      }
+      mostrarToast('success', res.message);
+    } else {
+      mostrarToast('danger', res.message || 'Error al guardar.');
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar Cambios';
+  }
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+/* ── Init ────────────────────────────────────────────────────── */
+renderUsuarios();
+</script>
+{% endblock %}
