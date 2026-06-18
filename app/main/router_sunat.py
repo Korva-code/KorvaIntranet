@@ -1,15 +1,10 @@
-from datetime import datetime
+from datetime import datetime, date
 import requests
 from flask import jsonify, current_app
 from flask_login import login_required
 from sqlalchemy import text
 from app.main import main
 from app import db
-
-# Configuración SUNAT — mover a config.py / variable de entorno en producción
-_APISUNAT_URL   = 'https://sandbox.apisunat.pe/api/v3/documents'
-_APISUNAT_TOKEN = ('530.byrieOPL2IhMi1WxT7dZVKYvjtc69uQFKQbObxwxAJPeTdmqytQQCrVuEYP2'
-                   'lOGl1BXO0TBu5Y04YR4u52X250ExXvdq5UPuqO99nAazD13iPs7wNzk6LWgl')
 
 
 # ── Helpers de mapeo ──────────────────────────────────────────────────────────
@@ -41,11 +36,14 @@ def _build_payload(invoice_id: int) -> dict:
             i.invoice_serie,
             i.invoice_number,
             i.doc_date,
+            i.doc_due_date,
             i.doc_currency,
             i.doc_total,
             i.comments,
+            i.card_code,
             bp.card_name,
-            bp.federal_tax_id,
+            COALESCE(bp."Creditday", 0)                             AS creditday,
+            COALESCE(NULLIF(TRIM(bp.federal_tax_id), ''), i.card_code) AS federal_tax_id,
             COALESCE(
                 (SELECT TRIM(COALESCE(street,'')) ||
                         CASE WHEN COALESCE(street_no,'') <> ''
@@ -118,7 +116,61 @@ def _build_payload(invoice_id: int) -> dict:
     if inv.get('comments'):
         payload['observacion'] = inv['comments'].strip()
 
+    creditday = int(inv.get('creditday') or 0)
+    if creditday > 0 and inv.get('doc_due_date'):
+        due_date = (inv['doc_due_date'].isoformat()
+                    if hasattr(inv['doc_due_date'], 'isoformat')
+                    else str(inv['doc_due_date']))
+        payload['cuotas'] = [{
+            'importe':        f"{float(inv.get('doc_total') or 0):.2f}",
+            'fecha_de_pago':  due_date,
+        }]
+
     return payload
+
+
+# ── Construir payload de anulación desde invoice_id ──────────────────────────
+
+def _build_anulacion_payload(invoice_id: int) -> dict:
+    inv = db.session.execute(text("""
+        SELECT invoice_serie, invoice_number, sunat_estado
+        FROM   invoice
+        WHERE  invoice_id = :id
+    """), {'id': invoice_id}).fetchone()
+
+    if not inv:
+        raise ValueError(f'Factura #{invoice_id} no encontrada.')
+
+    inv = dict(inv._mapping)
+
+    if inv.get('sunat_estado') != 'ACEPTADO':
+        raise ValueError('Solo se pueden anular documentos con estado ACEPTADO.')
+
+    tipo_doc = _tipo_documento(inv.get('invoice_serie', ''))
+    serie    = (inv.get('invoice_serie') or '').strip()
+    numero   = str(int(inv.get('invoice_number') or 0))
+    hoy      = date.today().isoformat()
+
+    if tipo_doc == 'boleta':
+        return {
+            'documento':          'resumen_diario',
+            'fecha_de_referencia': hoy,
+            'documentos_afectados': [{
+                'accion_resumen': 'anular',
+                'documento':      'boleta',
+                'serie':          serie,
+                'numero':         numero,
+            }]
+        }
+    return {
+        'documento': 'comunicacion_baja',
+        'motivo':    'ANULACIÓN DE OPERACIÓN',
+        'documento_afectado': {
+            'documento': 'factura',
+            'serie':     serie,
+            'numero':    numero,
+        }
+    }
 
 
 # ── Rutas ─────────────────────────────────────────────────────────────────────
@@ -134,8 +186,8 @@ def sunat_enviar_factura(invoice_id):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error al preparar datos: {e}'}), 500
 
-    token = current_app.config.get('APISUNAT_TOKEN', _APISUNAT_TOKEN)
-    url   = current_app.config.get('APISUNAT_URL',   _APISUNAT_URL)
+    token = current_app.config['APISUNAT_TOKEN']
+    url   = current_app.config['APISUNAT_URL']
 
     try:
         resp = requests.post(
@@ -222,3 +274,144 @@ def sunat_preview_factura(invoice_id):
         return jsonify({'success': False, 'message': str(e)}), 404
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main.route('/api/sunat/config')
+@login_required
+def sunat_config_info():
+    """Muestra la configuración SUNAT activa (modo y URL)."""
+    return jsonify({
+        'modo': current_app.config.get('APISUNAT_MODO'),
+        'url':  current_app.config.get('APISUNAT_URL'),
+    })
+
+
+@main.route('/api/sunat/debug/<int:invoice_id>')
+@login_required
+def sunat_debug_factura(invoice_id):
+    """Envía la factura a SUNAT y devuelve el payload enviado + respuesta completa."""
+    try:
+        payload = _build_payload(invoice_id)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+    token = current_app.config['APISUNAT_TOKEN']
+    url   = current_app.config['APISUNAT_URL']
+
+    try:
+        resp = requests.post(
+            url,
+            json=payload,
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            timeout=30,
+        )
+        resp_data = resp.json() if resp.content else {}
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+    return jsonify({
+        'url_enviada':  url,
+        'payload':      payload,
+        'status_http':  resp.status_code,
+        'respuesta':    resp_data,
+    })
+
+
+@main.route('/api/sunat/anular/debug/<int:invoice_id>')
+@login_required
+def sunat_anular_debug(invoice_id):
+    """Envía la anulación a SUNAT y devuelve payload enviado + respuesta completa."""
+    try:
+        payload = _build_anulacion_payload(invoice_id)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+    token = current_app.config['APISUNAT_TOKEN']
+    url   = current_app.config['APISUNAT_VOID_URL']
+
+    try:
+        resp = requests.post(
+            url, json=payload,
+            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+            timeout=30,
+        )
+        resp_data = resp.json() if resp.content else {}
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+    return jsonify({
+        'url_enviada': url,
+        'payload':     payload,
+        'status_http': resp.status_code,
+        'respuesta':   resp_data,
+    })
+
+
+@main.route('/api/sunat/anular/preview/<int:invoice_id>')
+@login_required
+def sunat_anular_preview(invoice_id):
+    """Devuelve el JSON de anulación sin enviarlo."""
+    try:
+        payload = _build_anulacion_payload(invoice_id)
+        return jsonify({'success': True, 'payload': payload})
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@main.route('/api/sunat/anular/<int:invoice_id>', methods=['POST'])
+@login_required
+def sunat_anular_factura(invoice_id):
+    """Envía la anulación a SUNAT y actualiza el estado."""
+    try:
+        payload = _build_anulacion_payload(invoice_id)
+    except ValueError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error al preparar datos: {e}'}), 500
+
+    token = current_app.config['APISUNAT_TOKEN']
+    url   = current_app.config['APISUNAT_VOID_URL']
+
+    try:
+        resp = requests.post(
+            url,
+            json=payload,
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type':  'application/json',
+            },
+            timeout=30,
+        )
+        resp_data = resp.json() if resp.content else {}
+    except requests.exceptions.Timeout:
+        return jsonify({'success': False, 'message': 'Timeout al conectar con SUNAT.'}), 504
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error de conexión: {e}'}), 502
+
+    ok      = resp.status_code in (200, 201)
+    inner   = resp_data.get('payload') or {}
+    msg_api = resp_data.get('message', '')
+    ticket  = inner.get('ticket', '')
+
+    if ok:
+        try:
+            db.session.execute(text("""
+                UPDATE invoice SET sunat_estado = 'ANULADO' WHERE invoice_id = :id
+            """), {'id': invoice_id})
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({
+            'success':       True,
+            'message':       msg_api or f'Documento #{invoice_id} anulado en SUNAT.',
+            'sunat_ticket':  ticket,
+        })
+
+    return jsonify({
+        'success':  False,
+        'message':  msg_api or f'SUNAT respondió con error {resp.status_code}.',
+        'response': resp_data,
+    }), resp.status_code

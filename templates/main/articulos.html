@@ -250,13 +250,15 @@
       <div class="row g-2 mb-3">
         <div class="col-sm-6">
           <label class="form-label-sm">Unidad de Venta</label>
-          <input type="text" class="form-control form-control-sm"
-                 name="sal_unit_msr" id="f_sal_unit_msr" placeholder="UNI, KG, LT…" maxlength="50" />
+          <select class="form-select form-select-sm" name="sal_unit_msr" id="f_sal_unit_msr">
+            <option value="">— Seleccionar —</option>
+          </select>
         </div>
         <div class="col-sm-6">
           <label class="form-label-sm">Unidad de Compra</label>
-          <input type="text" class="form-control form-control-sm"
-                 name="buy_unit_msr" id="f_buy_unit_msr" placeholder="UNI, KG, LT…" maxlength="50" />
+          <select class="form-select form-select-sm" name="buy_unit_msr" id="f_buy_unit_msr">
+            <option value="">— Seleccionar —</option>
+          </select>
         </div>
       </div>
 
@@ -452,6 +454,27 @@
 
 {% block extra_js %}
 <script>
+/* ── Unidades de medida ────────────────────────────────── */
+function cargarUnidadesMedida() {
+  fetch('/api/unidad-medida')
+    .then(r => r.json())
+    .then(data => {
+      ['f_sal_unit_msr', 'f_buy_unit_msr'].forEach(id => {
+        const sel = document.getElementById(id);
+        const val = sel.value;
+        sel.innerHTML = '<option value="">— Seleccionar —</option>';
+        data.forEach(u => {
+          const o = document.createElement('option');
+          o.value = u.codigo;
+          o.textContent = u.codigo + ' — ' + u.descripcion;
+          sel.appendChild(o);
+        });
+        if (val) sel.value = val;
+      });
+    });
+}
+cargarUnidadesMedida();
+
 /* ── Datos ─────────────────────────────────────────────── */
 const ITEMS_DATA = JSON.parse(document.getElementById('itemsData').textContent);
 const itemsMap   = {};
@@ -670,14 +693,15 @@ function limpiarForm() {
   setFormMode('new', null);
   const hoy = new Date().toISOString().slice(0, 10);
   const campos = ['f_item_name','f_frgn_name','f_avg_price','f_PriceAfterVAT',
-                  'f_sal_unit_msr','f_buy_unit_msr',
                   'f_tax_code_ar','f_tax_code_ap'];
   campos.forEach(id => setVal(id, ''));
   setVal('f_item_code',    siguienteItemCode());
   setVal('f_create_date',  hoy);
   setVal('f_update_date',  hoy);
-  document.getElementById('f_itms_grp_cod').value = '';
-  document.getElementById('f_TipoBien').value     = '';
+  document.getElementById('f_itms_grp_cod').value  = '';
+  document.getElementById('f_TipoBien').value      = '';
+  document.getElementById('f_sal_unit_msr').value  = '';
+  document.getElementById('f_buy_unit_msr').value  = '';
   limpiarBarcodes();
   ['f_invnt_item','f_sell_item','f_prchse_item','f_valid_for','f_frozen_for']
     .forEach(id => setCheck(id, false));

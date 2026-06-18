@@ -189,6 +189,118 @@ def ventas_cotizaciones_nueva():
     return redirect(url_for('main.ventas_cotizaciones'))
 
 
+# ── Editar Cotización ──────────────────────────────────────────
+
+@main.route('/ventas/cotizaciones/<int:cot_id>/editar', methods=['POST'])
+@login_required
+def ventas_cotizacion_editar(cot_id):
+    def _parse_date(s):
+        try:
+            return datetime.strptime(s.strip(), '%Y-%m-%d').date() if s and s.strip() else None
+        except ValueError:
+            return None
+
+    card_code    = request.form.get('card_code',    '').strip() or None
+    doc_date     = _parse_date(request.form.get('doc_date',     ''))
+    doc_due_date = _parse_date(request.form.get('doc_due_date', ''))
+    doc_currency = request.form.get('doc_currency', 'SOL').strip()
+    tc_str       = request.form.get('tipo_cambio',  '1').strip().replace(',', '.')
+    try:
+        tipo_cambio = float(tc_str) if tc_str else 1.0
+    except ValueError:
+        tipo_cambio = 1.0
+    invoice_wh   = request.form.get('invoice_wh',   '').strip() or ''
+    num_at_card  = request.form.get('num_at_card',  '').strip() or ''
+    comments     = request.form.get('comments',     '').strip() or ''
+    journal_memo = request.form.get('journal_memo', '').strip() or ''
+    p_user       = request.form.get('invoice_user', '').strip() or str(current_user.id_usuario)
+    items_raw    = request.form.get('items_json',   '[]')
+
+    try:
+        items_list = json.loads(items_raw)
+    except Exception:
+        items_list = []
+
+    if not card_code:
+        flash('El Cliente es obligatorio.', 'danger')
+        return redirect(url_for('main.ventas_cotizaciones'))
+    if not items_list:
+        flash('Debe agregar al menos un ítem en el detalle.', 'warning')
+        return redirect(url_for('main.ventas_cotizaciones'))
+
+    IGV_RATE     = 0.18
+    doc_total    = sum(float(i.get('price_after_vat', 0)) * float(i.get('quantity', 0)) for i in items_list)
+    subtotal_sin = sum(
+        float(i.get('price_after_vat', 0)) / (1 + IGV_RATE) * float(i.get('quantity', 0))
+        if i.get('tax_code', 'I18') == 'I18'
+        else float(i.get('price_after_vat', 0)) * float(i.get('quantity', 0))
+        for i in items_list
+    )
+    doc_subtotal = subtotal_sin
+    doc_igv      = doc_total - subtotal_sin
+
+    try:
+        db.session.execute(text("""
+            UPDATE invoice_cotizaciones SET
+                card_code    = :card_code,
+                doc_date     = CAST(:doc_date     AS DATE),
+                doc_due_date = CAST(:doc_due_date AS DATE),
+                doc_currency = :doc_currency,
+                tipo_cambio  = :tipo_cambio,
+                doc_total    = :doc_total,
+                doc_subtotal = :doc_subtotal,
+                doc_igv      = :doc_igv,
+                invoice_wh   = :invoice_wh,
+                num_at_card  = :num_at_card,
+                comments     = :comments,
+                journal_memo = :journal_memo,
+                user_code    = :user_code
+            WHERE cot_id = :cot_id
+        """), {
+            'cot_id':      cot_id,
+            'card_code':   card_code,
+            'doc_date':    doc_date.isoformat() if doc_date else None,
+            'doc_due_date': doc_due_date.isoformat() if doc_due_date else None,
+            'doc_currency': doc_currency,
+            'tipo_cambio': round(tipo_cambio, 6),
+            'doc_total':   round(doc_total, 4),
+            'doc_subtotal': round(doc_subtotal, 4),
+            'doc_igv':     round(doc_igv, 4),
+            'invoice_wh':  invoice_wh,
+            'num_at_card': num_at_card,
+            'comments':    comments,
+            'journal_memo': journal_memo,
+            'user_code':   p_user,
+        })
+
+        db.session.execute(text(
+            "DELETE FROM invoice_item_cotizaciones WHERE cot_id = :cot_id"
+        ), {'cot_id': cot_id})
+
+        for it in items_list:
+            db.session.execute(text("""
+                INSERT INTO invoice_item_cotizaciones
+                       (cot_id, item_code, item_name, quantity, price_after_vat, tax_code, warehouse_code)
+                VALUES (:cot_id, :item_code, :item_name, :quantity, :price_after_vat, :tax_code, :wh)
+            """), {
+                'cot_id':         cot_id,
+                'item_code':      it.get('item_code', ''),
+                'item_name':      it.get('item_name', ''),
+                'quantity':       float(it.get('quantity', 0)),
+                'price_after_vat': float(it.get('price_after_vat', 0)),
+                'tax_code':       it.get('tax_code', 'I18'),
+                'wh':             it.get('warehouse_code', '') or invoice_wh,
+            })
+
+        db.session.commit()
+        flash(f'Cotización COT-{cot_id:05d} actualizada correctamente.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error al actualizar: {e}', 'danger')
+
+    return redirect(url_for('main.ventas_cotizaciones'))
+
+
 # ── Anular Cotización ──────────────────────────────────────────
 
 @main.route('/ventas/cotizaciones/<int:cot_id>/anular', methods=['POST'])
@@ -201,14 +313,13 @@ def ventas_cotizacion_anular(cot_id):
         ).fetchone()
         if row and row[0]:
             db.session.commit()
-            flash(f'COT-{cot_id:05d} anulada correctamente.', 'success')
+            return jsonify({'success': True,  'message': f'COT-{cot_id:05d} anulada correctamente.'})
         else:
             db.session.rollback()
-            flash(row[1] if row else 'Error al anular.', 'danger')
+            return jsonify({'success': False, 'message': row[1] if row else 'Error al anular.'})
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {e}', 'danger')
-    return redirect(url_for('main.ventas_cotizaciones'))
+        return jsonify({'success': False, 'message': str(e)})
 
 
 # ── API: ítems para Cotizaciones ───────────────────────────────

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: korva-intranet
+    runtime: python
+    pythonVersion: "3.11"
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --workers 2 --timeout 120
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: APISUNAT_MODO
+        value: produccion
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: APISUNAT_TOKEN
+        sync: false
+      - key: APP_NAME
+        value: Intranet
+      - key: COMPANY_NAME
+        value: KORVA SAC

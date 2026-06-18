@@ -1,0 +1,725 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} socios
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA PRINCIPAL
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-tags text-primary me-1"></i> Lista de Precios
+    </h6>
+    <div class="input-group input-group-sm" style="max-width:280px;">
+      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+      <input type="search" class="form-control" id="buscarSocio"
+             placeholder="Buscar socio, RUC…">
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:110px;">Cód. Socio</th>
+          <th style="min-width:200px;">Nombre</th>
+          <th style="width:140px;">RUC / DNI</th>
+          <th style="width:110px; position:relative; white-space:nowrap;">
+            Tipo
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo', event)" title="Filtrar por tipo">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th class="text-center" style="width:120px;">Ítems en Lista</th>
+          <th class="text-center" style="width:90px;">Precios</th>
+        </tr>
+      </thead>
+      <tbody id="tbodySocios">
+        {% for s in socios %}
+        <tr class="socio-row" style="font-size:.75rem;"
+            data-code="{{ s.card_code }}"
+            data-tipo="{{ s.card_type }}"
+            data-tipo-nombre="{{ s.tipo_nombre or s.card_type }}">
+          <td class="ps-3 font-monospace text-muted">{{ s.card_code }}</td>
+          <td class="fw-semibold">{{ s.card_name }}</td>
+          <td class="font-monospace">{{ s.federal_tax_id or '—' }}</td>
+          <td>
+            <span class="badge bg-secondary-subtle text-secondary border" style="font-size:.63rem;">
+              {{ s.tipo_nombre or s.card_type or '—' }}
+            </span>
+          </td>
+          <td class="text-center">
+            {% if s.total_items > 0 %}
+              <span class="badge bg-success-subtle text-success border" style="font-size:.68rem;">
+                {{ s.total_items }} ítem{{ 's' if s.total_items != 1 else '' }}
+              </span>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.72rem;"
+                    onclick="abrirDrawer('{{ s.card_code }}')">
+              <i class="bi bi-tags me-1"></i>Ver
+            </button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center text-muted py-5">Sin socios registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center text-muted small">
+    <span>Mostrando: <strong id="contadorVisible">{{ total }}</strong> socios</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="precios-drawer" id="preciosDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-primary" id="drawerBadge">PRECIOS</span>
+      <div>
+        <h6 class="mb-0 fw-bold" id="drawerTitle">Lista de Precios</h6>
+        <small class="text-muted font-monospace" id="drawerSubtitle"></small>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div id="preciosDrawerInner">
+
+  <div class="drawer-body">
+
+    <!-- Datos del socio -->
+    <div class="row g-2 mb-3">
+      <div class="col-sm-3">
+        <label class="form-label-sm">Cód. Socio</label>
+        <input type="text" class="form-control form-control-sm bg-light font-monospace"
+               id="d_card_code" readonly>
+      </div>
+      <div class="col-sm-5">
+        <label class="form-label-sm">Nombre</label>
+        <input type="text" class="form-control form-control-sm bg-light"
+               id="d_card_name" readonly>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label-sm">RUC / DNI</label>
+        <input type="text" class="form-control form-control-sm bg-light font-monospace"
+               id="d_ruc" readonly>
+      </div>
+    </div>
+
+    <!-- Grilla de precios estilo ventas_facturas -->
+    <div>
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <div class="form-section-label mb-0">Líneas de Precio</div>
+        <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2"
+                style="font-size:.72rem;" onclick="agregarLinea()">
+          <i class="bi bi-plus-lg"></i> Agregar Ítem
+        </button>
+      </div>
+
+      <div class="table-responsive rounded border" style="max-height:420px; overflow-y:auto;">
+        <table class="table table-sm align-middle mb-0"
+               style="font-size:.75rem; min-width:620px;">
+          <thead class="table-light sticky-top">
+            <tr>
+              <th class="ps-2" style="width:28px;">#</th>
+              <th style="min-width:110px;">Código</th>
+              <th style="min-width:150px;">Descripción</th>
+              <th class="text-end" style="width:110px;">P. s/IGV</th>
+              <th class="text-end" style="width:110px;">P. c/IGV</th>
+              <th style="width:32px;"></th>
+            </tr>
+          </thead>
+          <tbody id="lineasDetalle"></tbody>
+        </table>
+      </div>
+
+      <!-- Spinner carga -->
+      <div id="spinnerPrecios" class="text-center py-3" style="display:none;">
+        <div class="spinner-border spinner-border-sm text-primary me-1"></div>
+        <span class="small text-muted">Cargando…</span>
+      </div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="generarPDF()">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-4" id="btnGuardar"
+            onclick="guardarLista()">
+      <i class="bi bi-check-lg me-1"></i>Guardar Lista
+    </button>
+  </div>
+
+  </div><!-- /preciosDrawerInner -->
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-label-sm {
+  display:block; font-size:.75rem; font-weight:600;
+  color:#475569; margin-bottom:.15rem;
+}
+.form-section-label {
+  font-size:.7rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:.06em; color:#64748b;
+  border-bottom:1px solid #e2e8f0;
+  padding-bottom:.25rem; margin-bottom:.6rem;
+}
+
+.drawer-overlay {
+  display:none; position:fixed; inset:0;
+  background:rgba(15,23,42,.45); backdrop-filter:blur(2px); z-index:1090;
+}
+.drawer-overlay.active { display:block; }
+
+.precios-drawer {
+  position:fixed; top:0; right:0; bottom:0;
+  width:min(780px,96vw); background:#fff;
+  box-shadow:-8px 0 32px rgba(0,0,0,.18);
+  z-index:1100; display:flex; flex-direction:column;
+  transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+.precios-drawer.open { transform:translateX(0); }
+
+.drawer-header {
+  display:flex; align-items:center; gap:.75rem;
+  padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0;
+  background:#f8fafc; flex-shrink:0;
+}
+#preciosDrawerInner {
+  flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;
+}
+.drawer-body {
+  flex:1; overflow-y:auto; padding:1.25rem; min-height:0;
+}
+.drawer-body::-webkit-scrollbar { width:4px; }
+.drawer-body::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+.drawer-footer {
+  padding:.85rem 1.25rem; border-top:1px solid #e2e8f0;
+  background:#f8fafc; display:flex; justify-content:flex-end;
+  gap:.5rem; flex-shrink:0;
+}
+
+.btn-del-linea {
+  border:none; background:none; color:#ef4444;
+  padding:.1rem .3rem; border-radius:4px; cursor:pointer;
+}
+.btn-del-linea:hover { background:#fee2e2; }
+
+#lineasDetalle input { font-size:.73rem; padding:.18rem .35rem; height:auto; }
+
+/* ── Filtro columna ───────────────────────────────────────── */
+.btn-col-filtro {
+  background:none; border:none; padding:0 2px;
+  cursor:pointer; color:#94a3b8; font-size:.72rem;
+  vertical-align:middle; line-height:1;
+}
+.btn-col-filtro.active { color:#2563eb; }
+.col-filtro-panel {
+  position:absolute; top:100%; left:0; z-index:300;
+  background:#fff; border:1px solid #e2e8f0;
+  border-radius:6px; box-shadow:0 4px 20px rgba(0,0,0,.14);
+  min-width:170px; font-size:.75rem;
+  font-weight:400; text-transform:none; letter-spacing:0;
+  overflow:hidden;
+}
+.filtro-panel-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:5px 10px; border-bottom:1px solid #f1f5f9; background:#f8fafc;
+}
+.filtro-action { cursor:pointer; font-size:.7rem; color:#64748b; }
+.filtro-action:hover { color:#2563eb; text-decoration:underline; }
+.filtro-action.danger:hover { color:#ef4444; }
+.filtro-opciones { max-height:220px; overflow-y:auto; padding:4px 0; }
+.filtro-opcion {
+  display:flex; align-items:center; gap:7px;
+  padding:5px 12px; cursor:pointer; white-space:nowrap;
+  color:#334155; user-select:none;
+}
+.filtro-opcion:hover { background:#f1f5f9; }
+.filtro-opcion.selected { color:#2563eb; }
+.filtro-opcion .filtro-chk { font-size:.8rem; flex-shrink:0; }
+.filtro-panel-footer { padding:6px 10px; border-top:1px solid #f1f5f9; background:#f8fafc; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+let itemsMap = {};
+
+// Datalist en body — igual que ventas_facturas.html
+(function () {
+  const dl = document.createElement('datalist');
+  dl.id = 'listItems';
+  document.body.appendChild(dl);
+})();
+
+/* ── Reutiliza el mismo endpoint que ventas_facturas ─────────── */
+function cargarItems(card_code) {
+  return fetch(`/api/items-con-precio?card_code=${encodeURIComponent(card_code)}`)
+    .then(r => r.json())
+    .then(data => {
+      itemsMap = {};
+      data.forEach(d => { itemsMap[d.item_code] = d; });
+      const dl = document.getElementById('listItems');
+      dl.innerHTML = '';
+      data.forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.item_code; o.label = d.item_name;
+        dl.appendChild(o);
+      });
+    })
+    .catch(err => console.error('[items] ERROR fetch:', err));
+}
+
+let _ruc      = '';
+let _cardCode = '';
+let lineaNum  = 0;
+
+/* ── Abrir drawer ─────────────────────────────────────────── */
+function abrirDrawer(cardCode) {
+  _cardCode = cardCode;
+  _ruc      = '';
+  lineaNum  = 0;
+  document.getElementById('d_card_code').value         = cardCode;
+  document.getElementById('d_card_name').value         = '';
+  document.getElementById('d_ruc').value               = '';
+  document.getElementById('drawerTitle').textContent   = cardCode;
+  document.getElementById('drawerSubtitle').textContent = '';
+  document.getElementById('lineasDetalle').innerHTML   = '';
+
+  document.getElementById('preciosDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+
+  cargarItems(cardCode).then(() => cargarPrecios(cardCode));
+}
+
+function cerrarDrawer() {
+  document.getElementById('preciosDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Cargar precios existentes ────────────────────────────── */
+function cargarPrecios(cardCode) {
+  document.getElementById('spinnerPrecios').style.display = '';
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+
+  fetch(`/api/lista-precios/${encodeURIComponent(cardCode)}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('spinnerPrecios').style.display = 'none';
+      if (!data.success) { mostrarToast('warning', data.message); return; }
+
+      _ruc = data.ruc;
+      document.getElementById('d_card_name').value         = data.card_name || '';
+      document.getElementById('d_ruc').value               = data.ruc       || '';
+      document.getElementById('drawerTitle').textContent   = data.card_name || cardCode;
+      document.getElementById('drawerSubtitle').textContent = data.ruc || '';
+
+      if (data.items.length) {
+        data.items.forEach(it => agregarLinea(it));
+      } else {
+        agregarLinea();
+      }
+    })
+    .catch(() => {
+      document.getElementById('spinnerPrecios').style.display = 'none';
+      mostrarToast('danger', 'Error de conexión.');
+    });
+}
+
+/* ── Agregar fila a la grilla ────────────────────────────── */
+function agregarLinea(it) {
+  lineaNum++;
+  const tr = document.createElement('tr');
+  tr.className = 'linea-precio';
+
+  const itemCode = it ? escHtml(it.item_code)        : '';
+  const itemName = it ? escHtml(it.item_name || '')   : '';
+  const pSin     = it ? parseFloat(it.avg_price_d     || 0).toFixed(4) : '';
+  const pCon     = it ? parseFloat(it.priceaftervat_d || 0).toFixed(4) : '';
+
+  tr.innerHTML = `
+    <td class="ps-2 text-muted">${lineaNum}</td>
+    <td>
+      <input type="text" class="form-control form-control-sm font-monospace inp-code"
+             list="listItems" value="${itemCode}" placeholder="Código…" autocomplete="off"
+             oninput="onItemSelect(this)" onchange="onItemSelect(this)">
+    </td>
+    <td>
+      <input type="text" class="form-control form-control-sm inp-name bg-light"
+             value="${itemName}" placeholder="Descripción" readonly>
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm text-end inp-sigv"
+             value="${pSin}" min="0" step="0.0001" placeholder="0.0000"
+             oninput="calcCon(this)">
+    </td>
+    <td>
+      <input type="number" class="form-control form-control-sm text-end inp-cigv"
+             value="${pCon}" min="0" step="0.0001" placeholder="0.0000"
+             oninput="calcSin(this)">
+    </td>
+    <td>
+      <button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>`;
+  document.getElementById('lineasDetalle').appendChild(tr);
+
+  if (!it) tr.querySelector('.inp-code').focus();
+}
+
+function eliminarLinea(btn) { btn.closest('tr').remove(); }
+
+/* ── Autocompletar al seleccionar ítem ───────────────────── */
+function onItemSelect(inp) {
+  const d   = itemsMap[inp.value];
+  const row = inp.closest('tr');
+  row.querySelector('.inp-name').value = d ? (d.item_name || '') : '';
+  if (d) {
+    row.querySelector('.inp-cigv').value = (d.PriceAfterVAT || 0).toFixed(4);
+    row.querySelector('.inp-sigv').value = (d.avg_price     || 0).toFixed(4);
+  }
+}
+
+/* ── Cálculo bidireccional ───────────────────────────────── */
+function calcSin(inp) {
+  const row  = inp.closest('tr');
+  const pCon = parseFloat(inp.value) || 0;
+  row.querySelector('.inp-sigv').value = (pCon / 1.18).toFixed(4);
+}
+function calcCon(inp) {
+  const row  = inp.closest('tr');
+  const pSin = parseFloat(inp.value) || 0;
+  row.querySelector('.inp-cigv').value = (pSin * 1.18).toFixed(4);
+}
+
+/* ── Guardar lista completa ──────────────────────────────── */
+async function guardarLista() {
+  if (!_ruc) { mostrarToast('warning', 'Sin RUC de socio.'); return; }
+
+  const items = [];
+  document.querySelectorAll('#lineasDetalle .linea-precio').forEach(row => {
+    const code = row.querySelector('.inp-code').value.trim();
+    if (!code) return;
+    items.push({
+      item_code:       code,
+      avg_price_d:     parseFloat(row.querySelector('.inp-sigv').value) || 0,
+      priceaftervat_d: parseFloat(row.querySelector('.inp-cigv').value) || 0,
+    });
+  });
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const resp = await fetch('/api/lista-precios/guardar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ federal_tax_id: _ruc, items }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      mostrarToast('success', data.message);
+      actualizarContadorGrilla(_cardCode, items.length);
+      cerrarDrawer();
+    } else {
+      mostrarToast('danger', data.message || 'Error al guardar.');
+    }
+  } catch {
+    mostrarToast('danger', 'Error de conexión.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar Lista';
+  }
+}
+
+/* ── Actualizar badge en grilla principal ─────────────────── */
+function actualizarContadorGrilla(cardCode, total) {
+  const row = document.querySelector(`.socio-row[data-code="${CSS.escape(cardCode)}"]`);
+  if (!row) return;
+  const td = row.querySelectorAll('td')[4];
+  if (!td) return;
+  td.innerHTML = total > 0
+    ? `<span class="badge bg-success-subtle text-success border" style="font-size:.68rem;">${total} ítem${total !== 1 ? 's' : ''}</span>`
+    : '<span class="text-muted small">—</span>';
+}
+
+/* ── Filtro de columna Tipo (multiselect) ─────────────────── */
+const filtroActivo = { tipo: new Set() };
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function toggleFiltro(key, e) {
+  e.stopPropagation();
+  const panel   = document.getElementById('panelFiltro' + cap(key));
+  const abierto = panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) { construirPanel(key); panel.style.display = 'block'; }
+}
+
+function construirPanel(key) {
+  const panel   = document.getElementById('panelFiltro' + cap(key));
+  const activos = filtroActivo[key];
+  const vals    = new Set();
+  document.querySelectorAll('#tbodySocios .socio-row').forEach(r => {
+    const v = (r.dataset.tipoNombre || '').trim();
+    if (v && v !== '—') vals.add(v);
+  });
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span class="filtro-action" onclick="selTodo('${key}',event)">Seleccionar todo</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${key}',event)">Limpiar</span>
+    </div>
+    <div class="filtro-opciones" id="opcionesFiltro${cap(key)}"></div>
+    <div class="filtro-panel-footer">
+      <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+              style="font-size:.73rem;" onclick="cerrarTodosFiltros()">Aplicar</button>
+    </div>`;
+  const cont = document.getElementById('opcionesFiltro' + cap(key));
+  vals.forEach(v => cont.appendChild(crearCheckOpcion(key, v, activos.has(v))));
+}
+
+function crearCheckOpcion(key, valor, checked) {
+  const div = document.createElement('div');
+  div.className = 'filtro-opcion' + (checked ? ' selected' : '');
+  div.innerHTML = `<i class="bi ${checked ? 'bi-check-square-fill' : 'bi-square'} filtro-chk"></i><span>${valor}</span>`;
+  div.onclick = (e) => { e.stopPropagation(); toggleValorFiltro(key, valor, div); };
+  return div;
+}
+
+function toggleValorFiltro(key, valor, el) {
+  const set = filtroActivo[key];
+  const chk = el.querySelector('.filtro-chk');
+  if (set.has(valor)) {
+    set.delete(valor);
+    el.classList.remove('selected');
+    chk.className = 'bi bi-square filtro-chk';
+  } else {
+    set.add(valor);
+    el.classList.add('selected');
+    chk.className = 'bi bi-check-square-fill filtro-chk';
+  }
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function selTodo(key, e) {
+  e.stopPropagation();
+  const set = filtroActivo[key];
+  document.querySelectorAll('#tbodySocios .socio-row').forEach(r => {
+    const v = (r.dataset.tipoNombre || '').trim();
+    if (v && v !== '—') set.add(v);
+  });
+  construirPanel(key);
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function limpiarFiltro(key, e) {
+  e.stopPropagation();
+  filtroActivo[key].clear();
+  construirPanel(key);
+  actualizarIconoFiltro(key);
+  aplicarFiltros();
+}
+
+function actualizarIconoFiltro(key) {
+  const activo = filtroActivo[key].size > 0;
+  const icon   = document.getElementById('iconFiltro' + cap(key));
+  const btn    = document.getElementById('btnFiltro'  + cap(key));
+  if (icon) icon.className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  if (btn)  btn.classList.toggle('active', activo);
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+/* ── Búsqueda + filtro ────────────────────────────────────── */
+document.getElementById('buscarSocio').addEventListener('input', aplicarFiltros);
+function aplicarFiltros() {
+  const q       = document.getElementById('buscarSocio').value.toLowerCase();
+  const setTipo = filtroActivo.tipo;
+  let visible   = 0;
+  document.querySelectorAll('#tbodySocios .socio-row').forEach(r => {
+    const tipoNombre = (r.dataset.tipoNombre || '').trim();
+    const okQ    = !q    || r.textContent.toLowerCase().includes(q);
+    const okTipo = setTipo.size === 0 || setTipo.has(tipoNombre);
+    r.style.display = (okQ && okTipo) ? '' : 'none';
+    if (okQ && okTipo) visible++;
+  });
+  document.getElementById('contadorVisible').textContent = visible;
+}
+
+/* ── Toast ────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) +
+    '<button type="button" class="btn-close" onclick="this.closest(\'.alert\').remove()"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Generar PDF (ventana de impresión) ──────────────────── */
+function generarPDF() {
+  const cardName = document.getElementById('d_card_name').value || _cardCode;
+  const ruc      = document.getElementById('d_ruc').value       || '—';
+  const empresa  = {{ config['COMPANY_NAME'] | tojson }};
+  const hoy      = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
+
+  const filas = [];
+  let num = 1;
+  document.querySelectorAll('#lineasDetalle .linea-precio').forEach(row => {
+    const code = row.querySelector('.inp-code').value.trim();
+    if (!code) return;
+    filas.push({
+      num,
+      code,
+      name: row.querySelector('.inp-name').value.trim() || code,
+      sigv: parseFloat(row.querySelector('.inp-sigv').value) || 0,
+      cigv: parseFloat(row.querySelector('.inp-cigv').value) || 0,
+    });
+    num++;
+  });
+
+  if (!filas.length) { mostrarToast('warning', 'No hay ítems en la lista.'); return; }
+
+  const filaHtml = filas.map(f => `
+    <tr>
+      <td class="center">${f.num}</td>
+      <td class="mono">${escHtml(f.code)}</td>
+      <td>${escHtml(f.name)}</td>
+      <td class="right">${f.sigv.toFixed(2)}</td>
+      <td class="right">${f.cigv.toFixed(2)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Lista de Precios — ${escHtml(cardName)}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #111; padding: 18mm 15mm; }
+  .hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+  .hdr-empresa { font-size:13pt; font-weight:700; color:#1e40af; }
+  .hdr-fecha { font-size:8pt; color:#555; text-align:right; }
+  .titulo { font-size:11pt; font-weight:700; text-align:center;
+            border-top:2px solid #1e40af; border-bottom:1px solid #1e40af;
+            padding:4px 0; margin-bottom:8px; }
+  .socio-info { display:flex; gap:30px; margin-bottom:10px;
+                background:#f8f9fa; padding:6px 10px; border-radius:4px; }
+  .socio-info div { font-size:8.5pt; }
+  .socio-info .lbl { font-weight:700; color:#444; font-size:7.5pt; }
+  table { width:100%; border-collapse:collapse; margin-top:4px; }
+  thead tr { background:#1e40af; color:#fff; }
+  thead th { padding:4px 6px; font-size:8pt; font-weight:600; }
+  tbody tr:nth-child(even) { background:#f1f5f9; }
+  tbody td { padding:3px 6px; border-bottom:1px solid #e2e8f0; font-size:8.5pt; }
+  .center { text-align:center; }
+  .right  { text-align:right; }
+  .mono   { font-family:monospace; }
+  .footer { margin-top:12px; font-size:7.5pt; color:#888; text-align:center;
+            border-top:1px solid #ddd; padding-top:6px; }
+  @media print {
+    body { padding:10mm 12mm; }
+    @page { margin:10mm; }
+  }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-empresa">${escHtml(empresa)}</div>
+  <div class="hdr-fecha">Fecha: ${hoy}</div>
+</div>
+<div class="titulo">LISTA DE PRECIOS</div>
+<div class="socio-info">
+  <div><span class="lbl">CLIENTE / PROVEEDOR</span><br>${escHtml(cardName)}</div>
+  <div><span class="lbl">RUC / DNI</span><br>${escHtml(ruc)}</div>
+  <div><span class="lbl">TOTAL ÍTEMS</span><br>${filas.length}</div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th class="center" style="width:30px">#</th>
+      <th style="width:90px">Código</th>
+      <th>Descripción</th>
+      <th class="right" style="width:80px">P. s/IGV</th>
+      <th class="right" style="width:80px">P. c/IGV</th>
+    </tr>
+  </thead>
+  <tbody>${filaHtml}</tbody>
+</table>
+<div class="footer">${escHtml(empresa)} &bull; Lista de precios generada el ${hoy}</div>
+<script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+}
+</script>
+{% endblock %}

@@ -6,10 +6,6 @@ from sqlalchemy import text
 from app.main import main
 from app import db
 
-_APISUNAT_URL   = 'https://sandbox.apisunat.pe/api/v3/documents'
-_APISUNAT_TOKEN = ('530.byrieOPL2IhMi1WxT7dZVKYvjtc69uQFKQbObxwxAJPeTdmqytQQCrVuEYP2'
-                   'lOGl1BXO0TBu5Y04YR4u52X250ExXvdq5UPuqO99nAazD13iPs7wNzk6LWgl')
-
 
 def _tipo_documento_serie(serie: str) -> str:
     s = (serie or '').strip().upper()
@@ -169,8 +165,8 @@ def sunat_nc_enviar(id_nc):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error al preparar datos: {e}'}), 500
 
-    token = current_app.config.get('APISUNAT_TOKEN', _APISUNAT_TOKEN)
-    url   = current_app.config.get('APISUNAT_URL',   _APISUNAT_URL)
+    token = current_app.config['APISUNAT_TOKEN']
+    url   = current_app.config['APISUNAT_URL']
 
     try:
         resp = requests.post(

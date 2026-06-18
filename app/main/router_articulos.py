@@ -133,6 +133,15 @@ def api_articulo_barcodes(item_code):
     return jsonify([{'item_barcode': r[0] or ''} for r in rows])
 
 
+@main.route('/api/unidad-medida')
+@login_required
+def api_unidad_medida():
+    rows = db.session.execute(text(
+        "SELECT codigo, descripcion FROM unidad_medida ORDER BY codigo"
+    )).fetchall()
+    return jsonify([{'codigo': r[0], 'descripcion': r[1]} for r in rows])
+
+
 @main.route('/api/items-lista')
 @login_required
 def api_items_lista():

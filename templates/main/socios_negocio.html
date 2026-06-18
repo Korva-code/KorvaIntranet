@@ -186,8 +186,15 @@
       <div class="row g-2 mb-3">
         <div class="col-12">
           <label class="form-label-sm">RUC / DNI</label>
-          <input type="text" class="form-control form-control-sm font-monospace"
-                 name="federal_tax_id" id="f_federal_tax_id" maxlength="20" />
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control form-control-sm font-monospace"
+                   name="federal_tax_id" id="f_federal_tax_id" maxlength="20" />
+            <button type="button" class="btn btn-outline-warning fw-semibold"
+                    id="btnSunatBuscar" style="display:none; font-size:.72rem;"
+                    onclick="buscarEnSunat()">
+              <i class="bi bi-search me-1"></i>SUNAT
+            </button>
+          </div>
         </div>
       </div>
 
@@ -292,8 +299,9 @@
                    style="font-size:.72rem;">
               <thead class="table-light">
                 <tr>
-                  <th style="min-width:200px;">Artículo</th>
-                  <th style="width:85px;" class="text-end">Descuento %</th>
+                  <th style="min-width:180px;">Artículo</th>
+                  <th style="width:100px;" class="text-end">P. s/IGV</th>
+                  <th style="width:100px;" class="text-end">P. c/IGV</th>
                   <th style="width:65px;" class="text-center">Estado</th>
                   <th style="width:34px;"></th>
                 </tr>
@@ -631,18 +639,21 @@ function setFormMode(mode, code) {
   const btnTxt = document.getElementById('btnGuardarTxt');
   const codeEl = document.getElementById('f_card_code');
 
+  const btnSunat = document.getElementById('btnSunatBuscar');
   if (mode === 'edit' && code) {
     form.action        = '/maestras/socios/' + encodeURIComponent(code) + '/editar';
     badge.textContent  = 'EDITANDO'; badge.className = 'badge bg-warning text-dark';
     title.textContent  = 'Editar Socio';
     btnTxt.textContent = 'Guardar Cambios';
     codeEl.setAttribute('readonly', true);
+    btnSunat.style.display = 'none';
   } else {
     form.action        = '{{ url_for("main.socio_nuevo") }}';
     badge.textContent  = 'NUEVO'; badge.className = 'badge bg-primary';
     title.textContent  = 'Nuevo Socio';
     btnTxt.textContent = 'Registrar';
     codeEl.removeAttribute('readonly');
+    btnSunat.style.display = '';
   }
 }
 
@@ -708,9 +719,10 @@ document.getElementById('socioForm').addEventListener('submit', function() {
   const descRows = [];
   document.querySelectorAll('#tbodyDescuentos tr').forEach(tr => {
     descRows.push({
-      item_code: tr.querySelector('.desc-item').value,
-      descuento: parseFloat(tr.querySelector('.desc-pct').value) || 0,
-      status:    tr.querySelector('.desc-status').checked ? 1 : 0,
+      item_code:      tr.querySelector('.desc-item').value,
+      avg_price_d:    parseFloat(tr.querySelector('.desc-avg').value)  || 0,
+      priceaftervat_d: parseFloat(tr.querySelector('.desc-cigv').value) || 0,
+      status:         tr.querySelector('.desc-status').checked ? 1 : 0,
     });
   });
   document.getElementById('f_descuentos_json').value = JSON.stringify(descRows);
@@ -736,15 +748,22 @@ function cargarItemsCache(cb) {
 
 function agregarDescuento(d) {
   d = d || {};
-  const checked = (d.status === undefined || d.status == 1) ? 'checked' : '';
+  const checked  = (d.status === undefined || d.status == 1) ? 'checked' : '';
+  const avgVal   = d.avg_price_d    != null ? parseFloat(d.avg_price_d).toFixed(4)    : '';
+  const cigvVal  = d.priceaftervat_d != null ? parseFloat(d.priceaftervat_d).toFixed(4) : '';
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><select class="form-select form-select-sm desc-item" style="font-size:.7rem;">
       ${getItemsOpts(d.item_code || '')}
     </select></td>
-    <td><input type="number" class="form-control form-control-sm desc-pct text-end"
-         value="${esc(d.descuento ?? '')}" min="0" max="100" step="0.01"
-         style="font-size:.7rem;" /></td>
+    <td><input type="number" class="form-control form-control-sm desc-avg text-end"
+         value="${esc(avgVal)}" min="0" step="0.0001" placeholder="0.0000"
+         style="font-size:.7rem;"
+         oninput="this.closest('tr').querySelector('.desc-cigv').value=((parseFloat(this.value)||0)*1.18).toFixed(4)" /></td>
+    <td><input type="number" class="form-control form-control-sm desc-cigv text-end"
+         value="${esc(cigvVal)}" min="0" step="0.0001" placeholder="0.0000"
+         style="font-size:.7rem;"
+         oninput="this.closest('tr').querySelector('.desc-avg').value=((parseFloat(this.value)||0)/1.18).toFixed(4)" /></td>
     <td class="text-center">
       <div class="form-check form-switch d-flex justify-content-center mb-0">
         <input class="form-check-input desc-status" type="checkbox" ${checked} />
@@ -786,6 +805,45 @@ document.getElementById('tab-desc-btn').addEventListener('shown.bs.tab', functio
     });
   });
 });
+
+/* ── Consulta SUNAT / RENIEC ───────────────────────────────── */
+function buscarEnSunat() {
+  const num = document.getElementById('f_federal_tax_id').value.trim();
+  if (!num) { mostrarToast('warning', 'Ingrese el RUC o DNI antes de consultar.'); return; }
+
+  const btn = document.getElementById('btnSunatBuscar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+  fetch('/api/sunat/buscar/' + encodeURIComponent(num))
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-search me-1"></i>SUNAT';
+      if (!data.success) {
+        mostrarToast('danger', data.message || 'No encontrado.');
+        return;
+      }
+      setVal('f_card_name', data.nombre);
+      if (!document.getElementById('f_card_code').value)
+        setVal('f_card_code', num);
+      if (data.direccion) {
+        limpiarDirecciones();
+        agregarDireccion({
+          address_name: 'DIRECCION FISCAL',
+          street:    data.direccion,
+          street_no: '',
+          city:      data.ciudad,
+        });
+      }
+      mostrarToast('success', 'Datos cargados: ' + data.nombre);
+    })
+    .catch(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-search me-1"></i>SUNAT';
+      mostrarToast('danger', 'Error al conectar con el servicio.');
+    });
+}
 
 /* ── Habilitar/deshabilitar días de crédito ────────────────── */
 function toggleCreditday(chk) {

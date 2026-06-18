@@ -1,11 +1,14 @@
 import json
 from datetime import datetime
+import requests as http_requests
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required
 from sqlalchemy import text
 from app.main import main
 from app import db
 from app.models import BusinessPartner
+
+_DNIRUC_TOKEN = '4f9b09b3-e397-46bf-ae2d-5d896b5045a8'
 
 
 def _parse_date(val: str):
@@ -76,13 +79,17 @@ def _save_descuentos(federal_tax_id, descuentos_json):
     for d in descuentos:
         if not d.get('item_code'):
             continue
+        avg  = float(d.get('avg_price_d')    or 0)
+        cigv = float(d.get('priceaftervat_d') or avg * 1.18)
         db.session.execute(text("""
-            INSERT INTO business_partners_discount_item (federal_tax_id, item_code, descuento, status)
-            VALUES (:ruc, :item_code, :descuento, 1)
+            INSERT INTO business_partners_discount_item
+                   (federal_tax_id, item_code, avg_price_d, priceaftervat_d, status)
+            VALUES (:ruc, :item_code, :avg, :cigv, 1)
         """), {
             'ruc':       ruc,
             'item_code': (d.get('item_code') or '').strip(),
-            'descuento': d.get('descuento') or 0,
+            'avg':       avg,
+            'cigv':      cigv,
         })
 
 
@@ -216,13 +223,51 @@ def api_descuentos():
         return jsonify([])
     rows = db.session.execute(text("""
         SELECT d.item_code, COALESCE(i.item_name, d.item_code, '') AS item_name,
-               d.descuento, d.status
+               COALESCE(d.avg_price_d, 0) AS avg_price_d,
+               COALESCE(d.status, 1)      AS status
         FROM business_partners_discount_item d
         LEFT JOIN items i ON i.item_code = d.item_code
         WHERE TRIM(d.federal_tax_id) = :ruc
         ORDER BY d.item_code
     """), {'ruc': ruc}).fetchall()
     return jsonify([{
-        'item_code': r[0] or '', 'item_name': r[1] or '',
-        'descuento': r[2], 'status': r[3],
+        'item_code':      r[0] or '',
+        'item_name':      r[1] or '',
+        'avg_price_d':    float(r[2]),
+        'priceaftervat_d': round(float(r[2]) * 1.18, 4),
+        'status':         r[3],
     } for r in rows])
+
+
+@main.route('/api/sunat/buscar/<numero>')
+@login_required
+def api_sunat_buscar_numero(numero):
+    numero = numero.strip()
+    if len(numero) == 11:
+        url = f'https://api.dniruc.com/api/search/ruc/{numero}/{_DNIRUC_TOKEN}'
+    else:
+        url = f'https://api.dniruc.com/api/search/dni/{numero}/{_DNIRUC_TOKEN}'
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+    }
+    try:
+        resp = http_requests.get(url, headers=headers, timeout=10)
+        data = resp.json()
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error de conexión: {e}'}), 502
+
+    if not data.get('success') or not data.get('data'):
+        return jsonify({'success': False, 'message': data.get('message', 'No encontrado.')}), 404
+
+    d = data['data']
+    return jsonify({
+        'success':   True,
+        'numero':    numero,
+        'nombre':    d.get('nombre_razon_social') or d.get('nombre_completo') or d.get('nombre', ''),
+        'direccion': d.get('calle') or d.get('ubigeotext', ''),
+        'ciudad':    d.get('distrito', ''),
+        'estado':    d.get('estado', ''),
+        'condicion': d.get('condicion', ''),
+    })

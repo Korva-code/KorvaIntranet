@@ -226,16 +226,17 @@
 
         <div class="table-responsive rounded border" style="max-height:260px; overflow-y:auto;">
           <table class="table table-sm align-middle mb-0" id="tablaDetalle"
-                 style="font-size:.75rem; min-width:700px;">
+                 style="font-size:.75rem; min-width:820px;">
             <thead class="table-light sticky-top">
               <tr>
                 <th class="ps-2" style="width:28px;">#</th>
                 <th style="min-width:110px;">Código</th>
                 <th style="min-width:130px;">Descripción</th>
-                <th style="width:75px;">Cant.</th>
-                <th style="width:95px;">P. Unitario</th>
-                <th style="width:65px;">Unidad</th>
-                <th style="width:55px;">Imp.</th>
+                <th style="width:65px;">Cant.</th>
+                <th class="text-end" style="width:95px;">P. s/IGV</th>
+                <th class="text-end" style="width:95px;">P. c/IGV</th>
+                <th style="width:60px;">Unidad</th>
+                <th style="width:50px;">Imp.</th>
                 <th class="text-end" style="width:90px;">Subtotal</th>
                 <th style="width:32px;"></th>
               </tr>
@@ -265,15 +266,15 @@
         <div class="form-section-label mb-1">Líneas de Detalle</div>
         <div class="table-responsive rounded border" style="max-height:300px; overflow-y:auto;">
           <table class="table table-sm align-middle mb-0"
-                 style="font-size:.75rem; min-width:620px;">
+                 style="font-size:.75rem; min-width:740px;">
             <thead class="table-light sticky-top">
               <tr>
                 <th class="ps-2" style="width:28px;">#</th>
                 <th style="min-width:100px;">Código</th>
                 <th style="min-width:140px;">Descripción</th>
-                <th class="text-end" style="width:70px;">Cant.</th>
-                <th class="text-end" style="width:95px;">P. Unitario</th>
-                <th style="width:65px;">Unidad</th>
+                <th class="text-end" style="width:60px;">Cant.</th>
+                <th class="text-end" style="width:95px;">P. s/IGV</th>
+                <th class="text-end" style="width:95px;">P. c/IGV</th>
                 <th style="width:55px;">Imp.</th>
                 <th class="text-end" style="width:90px;">Subtotal</th>
               </tr>
@@ -301,6 +302,13 @@
     <div class="drawer-footer" id="drawerFooter">
       <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
         <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="button" class="btn btn-outline-danger btn-sm" onclick="generarPDF()">
+        <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+      </button>
+      <button type="button" id="btnEditarCOT" style="display:none;"
+              class="btn btn-warning btn-sm" onclick="modoEditar()">
+        <i class="bi bi-pencil me-1"></i>Editar
       </button>
       <button type="button" id="btnAnularCOT" style="display:none;"
               class="btn btn-outline-danger btn-sm" onclick="confirmarAnularCOT()">
@@ -355,8 +363,11 @@
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc; flex-shrink: 0;
 }
+#formCOT {
+  flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
 .drawer-body {
-  flex: 1; overflow-y: auto; padding: 1.25rem;
+  flex: 1; overflow-y: auto; padding: 1.25rem; min-height: 0;
 }
 .drawer-body::-webkit-scrollbar { width: 4px; }
 .drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
@@ -669,7 +680,10 @@ function modoNueva() {
   setBadge('NUEVA', 'bg-success');
   document.getElementById('drawerTitle').textContent = 'Nueva Cotización';
   document.getElementById('btnGuardar').style.display   = '';
-  document.getElementById('btnAnularCOT').style.display = 'none';
+  document.getElementById('btnGuardar').innerHTML = '<i class="bi bi-check-lg me-1"></i>Registrar Cotización';
+  document.getElementById('formCOT').action = "{{ url_for('main.ventas_cotizaciones_nueva') }}";
+  document.getElementById('btnAnularCOT').style.display  = 'none';
+  document.getElementById('btnEditarCOT').style.display  = 'none';
   document.getElementById('seccionDetalle').style.display   = '';
   document.getElementById('seccionItemsVer').style.display  = 'none';
   setReadonly(false);
@@ -707,6 +721,7 @@ function verCOT(id) {
   document.getElementById('seccionDetalle').style.display   = 'none';
   document.getElementById('seccionItemsVer').style.display  = '';
   document.getElementById('btnAnularCOT').style.display = d.id_estado === 1 ? '' : 'none';
+  document.getElementById('btnEditarCOT').style.display = d.id_estado === 1 ? '' : 'none';
 
   setReadonly(true);
   setVal('f_card_code',       d.card_code);
@@ -736,24 +751,82 @@ function verCOT(id) {
     return;
   }
 
+  let subtotalVer = 0, totalVer = 0;
   lineas.forEach((it, idx) => {
-    const sub = (it.quantity || 0) * (it.price_after_vat || 0);
-    const tr  = document.createElement('tr');
+    const pCon = parseFloat(it.price_after_vat || 0);
+    const pSin = pCon / 1.18;
+    const qty  = parseFloat(it.quantity || 0);
+    const sub  = qty * pCon;
+    subtotalVer += qty * pSin;
+    totalVer    += sub;
+    const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="ps-2 text-muted small">${idx + 1}</td>
       <td class="font-monospace small fw-bold text-success">${escHtml(it.item_code)}</td>
       <td class="small">${escHtml(it.item_name)}</td>
-      <td class="text-end small">${parseFloat(it.quantity || 0).toFixed(2)}</td>
-      <td class="text-end small">${sym} ${parseFloat(it.price_after_vat || 0).toFixed(4)}</td>
-      <td class="small text-muted">${escHtml(it.warehouse_code || '')}</td>
+      <td class="text-end small">${qty.toFixed(2)}</td>
+      <td class="text-end small">${sym} ${pSin.toFixed(4)}</td>
+      <td class="text-end small">${sym} ${pCon.toFixed(4)}</td>
       <td class="small text-muted">${escHtml(it.tax_code || '')}</td>
       <td class="text-end small fw-semibold">${sym} ${sub.toFixed(2)}</td>`;
     tbody.appendChild(tr);
   });
 
-  document.getElementById('ver_subtotal').textContent = sym + ' ' + parseFloat(d.doc_subtotal || 0).toFixed(4);
-  document.getElementById('ver_igv').textContent      = sym + ' ' + parseFloat(d.doc_igv     || 0).toFixed(4);
-  document.getElementById('ver_total').textContent    = sym + ' ' + parseFloat(d.doc_total   || 0).toFixed(2);
+  document.getElementById('ver_subtotal').textContent = sym + ' ' + subtotalVer.toFixed(4);
+  document.getElementById('ver_igv').textContent      = sym + ' ' + (subtotalVer * 0.18).toFixed(4);
+  document.getElementById('ver_total').textContent    = sym + ' ' + totalVer.toFixed(2);
+}
+
+/* ── Modo EDITAR ────────────────────────────────────────── */
+function modoEditar() {
+  const d = cotMap[currentCOTId];
+  if (!d) return;
+  setBadge('EDITAR', 'bg-warning text-dark');
+  document.getElementById('drawerTitle').textContent = `Editando COT-${String(currentCOTId).padStart(5,'0')}`;
+  document.getElementById('btnGuardar').style.display = '';
+  document.getElementById('btnGuardar').innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar Cambios';
+  document.getElementById('btnAnularCOT').style.display = 'none';
+  document.getElementById('btnEditarCOT').style.display = 'none';
+  document.getElementById('seccionDetalle').style.display  = '';
+  document.getElementById('seccionItemsVer').style.display = 'none';
+  document.getElementById('formCOT').action = `/ventas/cotizaciones/${currentCOTId}/editar`;
+  setReadonly(false);
+
+  document.getElementById('lineasDetalle').innerHTML = '';
+  lineaNum = 0;
+  (d.items || []).forEach(it => {
+    lineaNum++;
+    const tr = document.createElement('tr');
+    tr.className = 'linea-detalle';
+    const pCon = parseFloat(it.price_after_vat || 0);
+    const pSin = pCon / 1.18;
+    const sub  = parseFloat(it.quantity || 0) * pCon;
+    tr.innerHTML = `
+      <td class="ps-2 text-muted">${lineaNum}</td>
+      <td><input type="text" class="form-control form-control-sm font-monospace inp-item-code"
+                 list="listItems" placeholder="Código…" autocomplete="off"
+                 value="${escHtml(it.item_code)}"
+                 oninput="onItemSelect(this)" /></td>
+      <td><input type="text" class="form-control form-control-sm inp-item-name bg-light"
+                 placeholder="Descripción" readonly value="${escHtml(it.item_name)}" /></td>
+      <td><input type="number" class="form-control form-control-sm inp-qty"
+                 value="${parseFloat(it.quantity || 0).toFixed(4)}" min="0.0001" step="any"
+                 oninput="actualizarTotal()" /></td>
+      <td><input type="number" class="form-control form-control-sm text-end inp-avg-price bg-light"
+                 value="${pSin.toFixed(4)}" min="0" step="0.0001" readonly tabindex="-1" /></td>
+      <td><input type="number" class="form-control form-control-sm text-end inp-price"
+                 value="${pCon.toFixed(4)}" min="0" step="any"
+                 oninput="recalcSinIGV(this); actualizarTotal()" /></td>
+      <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light" readonly /></td>
+      <td><input type="text" class="form-control form-control-sm inp-taxcode"
+                 value="${escHtml(it.tax_code || 'I18')}" maxlength="10" /></td>
+      <td class="text-end fw-semibold inp-subtotal-display">${sub.toFixed(2)}</td>
+      <td><button type="button" class="btn-del-linea" onclick="eliminarLinea(this)">
+            <i class="bi bi-trash"></i></button></td>`;
+    document.getElementById('lineasDetalle').appendChild(tr);
+  });
+  if (!(d.items || []).length) agregarLinea();
+  actualizarTotal();
 }
 
 /* ── Tabla de líneas (modo NUEVA) ───────────────────────── */
@@ -770,8 +843,10 @@ function agregarLinea() {
                placeholder="Descripción" readonly /></td>
     <td><input type="number" class="form-control form-control-sm inp-qty"
                value="1" min="0.0001" step="any" oninput="actualizarTotal()" /></td>
-    <td><input type="number" class="form-control form-control-sm inp-price"
-               value="0.0000" min="0" step="any" oninput="actualizarTotal()" /></td>
+    <td><input type="number" class="form-control form-control-sm text-end inp-avg-price bg-light"
+               value="0.0000" min="0" step="0.0001" readonly tabindex="-1" /></td>
+    <td><input type="number" class="form-control form-control-sm text-end inp-price"
+               value="0.0000" min="0" step="any" oninput="recalcSinIGV(this); actualizarTotal()" /></td>
     <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light" readonly /></td>
     <td><input type="text" class="form-control form-control-sm inp-taxcode"
                value="I18" maxlength="10" /></td>
@@ -788,29 +863,34 @@ function eliminarLinea(btn) { btn.closest('tr').remove(); actualizarTotal(); }
 function onItemSelect(inp) {
   const it  = ITEMS_DATA.find(i => i.item_code === inp.value);
   const row = inp.closest('tr');
-  row.querySelector('.inp-item-name').value = it ? (it.item_name || '') : '';
-  row.querySelector('.inp-price').value     = it ? Number(it.price_after_vat).toFixed(4) : '0.0000';
-  row.querySelector('.inp-unit-msr').value  = it ? (it.unit_msr || '') : '';
+  const pCon = it ? Number(it.price_after_vat) : 0;
+  row.querySelector('.inp-item-name').value  = it ? (it.item_name || '') : '';
+  row.querySelector('.inp-price').value      = pCon.toFixed(4);
+  row.querySelector('.inp-avg-price').value  = (pCon / 1.18).toFixed(4);
+  row.querySelector('.inp-unit-msr').value   = it ? (it.unit_msr || '') : '';
   if (it && it.tax_code) row.querySelector('.inp-taxcode').value = it.tax_code;
   actualizarTotal();
 }
 
+function recalcSinIGV(inp) {
+  const row = inp.closest('tr');
+  row.querySelector('.inp-avg-price').value = (parseFloat(inp.value) / 1.18 || 0).toFixed(4);
+}
+
 function actualizarTotal() {
   const sym = document.getElementById('f_doc_currency').value === 'USD' ? '$' : 'S/';
-  const IGV = 0.18;
-  let total = 0, subtotal = 0;
+  let total = 0, subtotalVentas = 0;
   document.querySelectorAll('#lineasDetalle .linea-detalle').forEach(row => {
-    const qty   = parseFloat(row.querySelector('.inp-qty').value)   || 0;
-    const price = parseFloat(row.querySelector('.inp-price').value) || 0;
-    const tax   = row.querySelector('.inp-taxcode').value;
-    const sub   = qty * price;
-    total    += sub;
-    subtotal += tax === 'I18' ? sub / (1 + IGV) : sub;
+    const qty      = parseFloat(row.querySelector('.inp-qty').value)       || 0;
+    const price    = parseFloat(row.querySelector('.inp-price').value)     || 0;
+    const avgPrice = parseFloat(row.querySelector('.inp-avg-price').value) || 0;
+    const sub      = qty * price;
+    total          += sub;
+    subtotalVentas += qty * avgPrice;
     row.querySelector('.inp-subtotal-display').textContent = sub.toFixed(2);
   });
-  const igv = total - subtotal;
-  document.getElementById('subtotalDisplay').textContent = subtotal.toFixed(4);
-  document.getElementById('igvDisplay').textContent      = igv.toFixed(4);
+  document.getElementById('subtotalDisplay').textContent = subtotalVentas.toFixed(4);
+  document.getElementById('igvDisplay').textContent      = (subtotalVentas * 0.18).toFixed(4);
   document.getElementById('totalDisplay').textContent    = sym + ' ' + total.toFixed(2);
   setVal('f_doc_total', sym + ' ' + total.toFixed(2));
 }
@@ -848,12 +928,35 @@ document.getElementById('formCOT').addEventListener('submit', function (e) {
 /* ── Anular ─────────────────────────────────────────────── */
 function confirmarAnularCOT() {
   if (!currentCOTId) return;
-  if (!confirm('¿Anular esta Cotización? Esta acción no se puede deshacer.')) return;
-  const f = document.createElement('form');
-  f.method = 'POST';
-  f.action = `/ventas/cotizaciones/${currentCOTId}/anular`;
-  document.body.appendChild(f);
-  f.submit();
+  const id = currentCOTId;
+  confirmarAccion(
+    `¿Anular la cotización COT-${String(id).padStart(5,'0')}? Esta acción no se puede deshacer.`,
+    () => {
+      const btn = document.getElementById('btnAnularCOT');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Anulando…';
+      fetch(`/ventas/cotizaciones/${id}/anular`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Anular Cotización';
+          if (data.success) {
+            mostrarToast('success', data.message);
+            if (cotMap[id]) cotMap[id].id_estado = 0;
+            cerrarDrawer();
+            aplicarFiltros();
+          } else {
+            mostrarToast('danger', data.message || 'Error al anular.');
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Anular Cotización';
+          mostrarToast('danger', 'Error de conexión con el servidor.');
+        });
+    },
+    { titulo: 'Anular Cotización', tipo: 'danger', txtBtn: 'Anular' }
+  );
 }
 
 /* ── Exportar Excel ─────────────────────────────────────── */
@@ -891,6 +994,147 @@ function setReadonly(on) {
     el.readOnly = on;
     el.disabled = on && el.tagName === 'SELECT';
   });
+}
+
+/* ── Generar PDF (ventana de impresión) ─────────────────── */
+function generarPDF() {
+  const empresa  = {{ config['COMPANY_NAME'] | tojson }};
+  const titulo   = document.getElementById('drawerTitle').textContent.trim();
+  const cliente  = document.getElementById('bp_nombre_display').value.trim() || '—';
+  const codCli   = document.getElementById('f_card_code').value.trim()        || '—';
+  const fecha    = document.getElementById('f_doc_date').value                || '—';
+  const venc     = document.getElementById('f_doc_due_date').value            || '—';
+  const ref      = document.getElementById('f_num_at_card').value.trim()      || '—';
+  const moneda   = document.getElementById('f_doc_currency').value            || 'SOL';
+  const sym      = moneda === 'USD' ? '$' : 'S/';
+  const hoy      = new Date().toLocaleDateString('es-PE', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  const modoVer  = document.getElementById('seccionItemsVer').style.display !== 'none';
+  const estado   = currentCOTId && cotMap[currentCOTId] ? cotMap[currentCOTId].id_estado : 1;
+  const anulado  = estado === 0;
+
+  const filas = [];
+  if (modoVer) {
+    document.querySelectorAll('#tbodyItemsVer tr').forEach((tr, i) => {
+      const tds = tr.querySelectorAll('td');
+      if (tds.length < 8) return;
+      filas.push({
+        num:    i + 1,
+        code:   tds[1].textContent.trim(),
+        name:   tds[2].textContent.trim(),
+        qty:    tds[3].textContent.trim(),
+        price:  tds[4].textContent.trim(),  // P. s/IGV
+        sub:    tds[7].textContent.trim(),  // Subtotal
+      });
+    });
+  } else {
+    document.querySelectorAll('#lineasDetalle .linea-detalle').forEach((tr, i) => {
+      const code = tr.querySelector('.inp-item-code')?.value.trim();
+      if (!code) return;
+      const qty   = parseFloat(tr.querySelector('.inp-qty')?.value   || 0);
+      const price = parseFloat(tr.querySelector('.inp-price')?.value || 0);
+      filas.push({
+        num:   i + 1,
+        code,
+        name:  tr.querySelector('.inp-item-name')?.value.trim() || '',
+        qty:   qty.toFixed(2),
+        price: sym + ' ' + price.toFixed(4),
+        sub:   sym + ' ' + (qty * price).toFixed(2),
+      });
+    });
+  }
+
+  if (!filas.length) { alert('No hay ítems para generar el PDF.'); return; }
+
+  const subEl  = modoVer ? document.getElementById('ver_subtotal') : document.getElementById('subtotalDisplay');
+  const igvEl  = modoVer ? document.getElementById('ver_igv')      : document.getElementById('igvDisplay');
+  const totEl  = modoVer ? document.getElementById('ver_total')    : document.getElementById('totalDisplay');
+  const subTxt = subEl?.textContent.trim() || '—';
+  const igvTxt = igvEl?.textContent.trim() || '—';
+  const totTxt = totEl?.textContent.trim() || '—';
+
+  const filaHtml = filas.map(f => `
+    <tr>
+      <td class="center">${f.num}</td>
+      <td class="mono">${escHtml(f.code)}</td>
+      <td>${escHtml(f.name)}</td>
+      <td class="right">${escHtml(f.qty)}</td>
+      <td class="right">${escHtml(f.price)}</td>
+      <td class="right fw">${escHtml(f.sub)}</td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8">
+<title>Cotización — ${escHtml(titulo)}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:Arial,sans-serif; font-size:9pt; color:#111; padding:18mm 15mm; }
+.hdr { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; }
+.hdr-empresa { font-size:13pt; font-weight:700; color:#166534; }
+.hdr-fecha { font-size:8pt; color:#555; text-align:right; }
+.titulo { font-size:11pt; font-weight:700; text-align:center;
+          border-top:2px solid #166534; border-bottom:1px solid #166534;
+          padding:4px 0; margin-bottom:8px; }
+.info { display:grid; grid-template-columns:1fr 1fr; gap:6px 20px;
+        background:#f0fdf4; padding:6px 10px; border-radius:4px; margin-bottom:10px; }
+.info div { font-size:8.5pt; }
+.info .lbl { font-weight:700; color:#444; font-size:7.5pt; }
+table { width:100%; border-collapse:collapse; }
+thead tr { background:#166534; color:#fff; }
+thead th { padding:4px 6px; font-size:8pt; font-weight:600; }
+tbody tr:nth-child(even) { background:#f0fdf4; }
+tbody td { padding:3px 6px; border-bottom:1px solid #e2e8f0; font-size:8.5pt; }
+.center { text-align:center; } .right { text-align:right; }
+.mono { font-family:monospace; } .fw { font-weight:600; }
+.totales { margin-top:8px; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+.totales div { font-size:8.5pt; display:flex; gap:20px; }
+.totales .lbl { color:#555; min-width:100px; text-align:right; }
+.totales .val { min-width:80px; text-align:right; }
+.totales .grand { font-size:10pt; font-weight:700; color:#166534; }
+.footer { margin-top:12px; font-size:7.5pt; color:#888; text-align:center;
+          border-top:1px solid #ddd; padding-top:6px; }
+.anulado-banner { background:#fee2e2; color:#dc2626; font-weight:700; font-size:10pt;
+                  text-align:center; padding:5px 10px; border-radius:4px;
+                  border:1px solid #fca5a5; margin-bottom:8px; letter-spacing:.05em; }
+@media print { body { padding:10mm 12mm; } @page { margin:10mm; } }
+</style></head><body>
+<div class="hdr">
+  <div class="hdr-empresa">${escHtml(empresa)}</div>
+  <div class="hdr-fecha">Impreso: ${hoy}</div>
+</div>
+<div class="titulo">${escHtml(titulo)}</div>
+${anulado ? '<div class="anulado-banner">&#10007; COTIZACIÓN ANULADA</div>' : ''}
+<div class="info">
+  <div><span class="lbl">CLIENTE</span><br>${escHtml(cliente)}</div>
+  <div><span class="lbl">CÓD. CLIENTE</span><br>${escHtml(codCli)}</div>
+  <div><span class="lbl">FECHA</span><br>${escHtml(fecha)}</div>
+  <div><span class="lbl">VENCIMIENTO</span><br>${escHtml(venc)}</div>
+  <div><span class="lbl">REFERENCIA</span><br>${escHtml(ref)}</div>
+  <div><span class="lbl">MONEDA</span><br>${escHtml(moneda)}</div>
+</div>
+<table>
+  <thead><tr>
+    <th class="center" style="width:28px">#</th>
+    <th style="width:90px">Código</th>
+    <th>Descripción</th>
+    <th class="right" style="width:60px">Cant.</th>
+    <th class="right" style="width:90px">P. Unitario</th>
+    <th class="right" style="width:90px">Subtotal</th>
+  </tr></thead>
+  <tbody>${filaHtml}</tbody>
+</table>
+<div class="totales">
+  <div><span class="lbl">Subtotal s/IGV:</span><span class="val">${escHtml(subTxt)}</span></div>
+  <div><span class="lbl">IGV (18%):</span><span class="val">${escHtml(igvTxt)}</span></div>
+  <div class="grand"><span class="lbl">TOTAL:</span><span class="val">${escHtml(totTxt)}</span></div>
+</div>
+<div class="footer">${escHtml(empresa)} &bull; Cotización generada el ${hoy}</div>
+<script>window.onload=()=>window.print()<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
 }
 
 /* ── Inicializar ────────────────────────────────────────── */

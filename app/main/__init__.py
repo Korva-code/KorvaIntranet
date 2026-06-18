@@ -29,6 +29,7 @@ from app.main import router_sunat                       # noqa: E402, F401
 from app.main import router_ventas_parte_diario         # noqa: E402, F401
 from app.main import router_ventas_nc                   # noqa: E402, F401
 from app.main import router_sunat_nota_credito          # noqa: E402, F401
+from app.main import router_ventas_lista_precios        # noqa: E402, F401
 
 
 @main.context_processor
