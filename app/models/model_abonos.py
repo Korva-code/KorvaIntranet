@@ -14,6 +14,8 @@ class Abono(db.Model):
     concepto   = db.Column(db.Text)
     card_code  = db.Column(db.String(50))
     id_estado  = db.Column(db.Integer, default=1)
+    tipo       = db.Column(db.Integer, default=1)
+    imagen     = db.Column(db.Text)
 
     def __repr__(self):
         return f'<Abono {self.id_abono}>'

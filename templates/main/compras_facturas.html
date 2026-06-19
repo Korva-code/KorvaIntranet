@@ -98,6 +98,7 @@
                  onclick="event.stopPropagation()"></div>
           </th>
           <th class="text-end" style="width:100px;">Total</th>
+          <th class="text-end" style="width:105px;">Aplicado</th>
           <th style="width:85px; position:relative; white-space:nowrap;">
             SUNAT
             <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
@@ -854,7 +855,7 @@ function renderTabla() {
   }
 
   tbody.innerHTML = filas.length ? '' :
-    '<tr><td colspan="13" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    '<tr><td colspan="14" class="text-center text-muted py-5">Sin resultados.</td></tr>';
 
   const tipoDocMap = Object.fromEntries(INVOICE_TYPES_DATA.map(t => [t.idtype, t.invoice_type]));
 
@@ -883,6 +884,7 @@ function renderTabla() {
       <td class="text-muted">${escHtml(whsMap[(f.invoice_wh || '').trim()] || f.invoice_wh || '—')}</td>
       <td>${monedaBadge}</td>
       <td class="text-end fw-semibold">${sym} ${(f.doc_total || 0).toFixed(2)}</td>
+      <td class="text-end fw-semibold" style="color:${(f.doc_total_aply||0).toFixed(2)===(f.doc_total||0).toFixed(2)?'#16a34a':'#dc2626'};">${sym} ${(f.doc_total_aply||0).toFixed(2)}</td>
       <td>${sunatBadge}</td>
       <td class="text-center">
         <button class="btn btn-sm btn-outline-primary py-0 px-2"

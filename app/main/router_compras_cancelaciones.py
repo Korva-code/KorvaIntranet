@@ -158,6 +158,18 @@ def compras_cancelaciones_nueva():
     except Exception:
         db.session.rollback()
 
+    # Marcar abono como aplicado si fue seleccionado
+    id_abono_str = request.form.get('id_abono', '').strip()
+    if id_abono_str.isdigit():
+        try:
+            db.session.execute(
+                text("UPDATE abonos SET id_estado = 2 WHERE id_abono = :id AND id_estado = 1"),
+                {'id': int(id_abono_str)}
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
     flash(f'{len(saved_cancs)} pago(s) registrado(s) correctamente.', 'success')
     return redirect(url_for('main.compras_cancelaciones'))
 

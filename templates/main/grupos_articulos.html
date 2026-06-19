@@ -98,8 +98,9 @@
   </div>
 
   <!-- Formulario -->
-  <form id="grupoForm" method="POST" action="{{ url_for('main.grupo_nuevo') }}" novalidate>
-    <div class="drawer-body">
+  <form id="grupoForm" method="POST" action="{{ url_for('main.grupo_nuevo') }}" novalidate
+        style="flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;">
+    <div class="drawer-body" id="drawerBody">
 
       <!-- ── Identificación ──────────────────────────────── -->
       <div class="form-section-label">Identificación</div>
@@ -285,6 +286,8 @@ function abrirDrawer(mode, code) {
   drawer.classList.add('open');
   overlay.classList.add('active');
   document.body.style.overflow = 'hidden';
+  const db = document.getElementById('drawerBody');
+  if (db) db.scrollTop = 0;
 }
 
 /* ── Cerrar drawer ─────────────────────────────────────── */
@@ -316,7 +319,13 @@ function cargarGrupo(code) {
 /* ── Limpiar formulario (modo nuevo) ───────────────────── */
 function limpiarForm() {
   setFormMode('new', null);
-  ['f_item_group_code', 'f_item_group_name', 'f_CostingCode'].forEach(id => setVal(id, ''));
+  const maxCode = GRUPOS_DATA.reduce((max, d) => {
+    const c = parseInt(d.item_group_code) || 0;
+    return c > max ? c : max;
+  }, 0);
+  setVal('f_item_group_code', maxCode > 0 ? maxCode + 1 : '');
+  setVal('f_item_group_name', '');
+  setVal('f_CostingCode', '');
   document.getElementById('f_item_group_code').removeAttribute('readonly');
   setTimeout(() => document.getElementById('f_item_group_code').focus(), 320);
 }

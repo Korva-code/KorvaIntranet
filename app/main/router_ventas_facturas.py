@@ -42,7 +42,8 @@ def ventas_facturas():
             i.sunat_ticket,
             COALESCE(i.sunat_hash, '') AS sunat_hash,
             COALESCE(i.sunat_xml,  '') AS sunat_xml,
-            COALESCE(i.sunat_cdr,  '') AS sunat_cdr
+            COALESCE(i.sunat_cdr,  '') AS sunat_cdr,
+            COALESCE(i.doc_total_aply, 0) AS doc_total_aply
         FROM invoice i
         LEFT JOIN business_partners bp ON bp.card_code = i.card_code
         LEFT JOIN warehouses w ON TRIM(w.whs_code) = TRIM(i.invoice_wh)
@@ -98,6 +99,7 @@ def ventas_facturas():
         'sunat_hash':     r[21] or '',
         'sunat_xml':      r[22] or '',
         'sunat_cdr':      r[23] or '',
+        'doc_total_aply': float(r[24]) if r[24] is not None else 0.0,
         'items':          det_by_inv.get(r[0], []),
     } for r in fact_rows]
 
@@ -194,7 +196,8 @@ def ventas_facturas_imprimir(invoice_id):
                 ''
             )                                          AS direccion,
             -- tipo documento (descripción real de invoice_type)
-            COALESCE(tp.invoice_type, '')              AS tipo_desc
+            COALESCE(tp.invoice_type, '')              AS tipo_desc,
+            COALESCE(i.journal_memo, '')               AS journal_memo
         FROM invoice i
         LEFT JOIN business_partners bp ON bp.card_code = i.card_code
         LEFT JOIN invoice_type tp ON (
@@ -274,20 +277,34 @@ def ventas_facturas_imprimir(invoice_id):
 
     monto_letras = _num_a_letras(total) + ' ' + moneda_label
 
+    emp_row = db.session.execute(text(
+        "SELECT descripcion, ruc, direccion, telefono, contacto FROM empresa ORDER BY id_empresa LIMIT 1"
+    )).fetchone()
+    empresa = {
+        'descripcion': (emp_row[0] or '') if emp_row else '',
+        'ruc':         (emp_row[1] or '') if emp_row else '',
+        'direccion':   (emp_row[2] or '') if emp_row else '',
+        'telefono':    (emp_row[3] or '') if emp_row else '',
+        'contacto':    (emp_row[4] or '') if emp_row else '',
+    }
+
     return render_template('main/factura_imprimir.html',
-        inv       = row,
-        serie     = serie,
-        numero    = str(row[2]).strip().zfill(7),
-        tipo_label= tipo_label,
+        inv          = row,
+        serie        = serie,
+        numero       = str(row[2]).strip().zfill(7),
+        tipo_label   = tipo_label,
         moneda_label = moneda_label,
         moneda_sym   = moneda_sym,
-        items     = items,
-        op_grav   = op_grav,
-        op_exo    = op_exo,
-        op_ina    = op_ina,
-        igv       = igv,
-        total     = total,
+        items        = items,
+        op_grav      = op_grav,
+        op_exo       = op_exo,
+        op_ina       = op_ina,
+        igv          = igv,
+        total        = total,
         monto_letras = monto_letras,
+        referencia   = str(row[14] or '').strip(),
+        comentarios  = str(row[8]  or '').strip(),
+        empresa      = empresa,
     )
 
 

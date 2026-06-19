@@ -21,6 +21,7 @@ def _row_to_dict(r):
         'card_code':    r[8] or '',
         'bp_name':      r[9] or '',
         'id_estado':    r[10] if r[10] is not None else 1,
+        'tipo':         r[11] if r[11] is not None else 1,
     }
 
 
@@ -38,6 +39,70 @@ def abonos():
                            today=today)
 
 
+@main.route('/api/abonos/<int:id_abono>/imagen')
+@login_required
+def api_abono_imagen(id_abono):
+    row = db.session.execute(
+        text("SELECT imagen FROM abonos WHERE id_abono = :id"),
+        {'id': id_abono}
+    ).fetchone()
+    return jsonify({'imagen': row[0] if row and row[0] else None})
+
+
+@main.route('/api/abonos-ingreso')
+@login_required
+def api_abonos_ingreso():
+    rows = db.session.execute(text("""
+        SELECT
+            a.id_abono,
+            a.id_banco,
+            COALESCE(b.nombre, '')                          AS banco_nombre,
+            a.fecha,
+            a.monto,
+            a.moneda,
+            a.referencia,
+            a.concepto,
+            a.card_code,
+            COALESCE(bp.card_name, a.card_code, '')         AS bp_name,
+            a.id_estado,
+            COALESCE(a.tipo, 1)                             AS tipo
+        FROM   abonos a
+        LEFT   JOIN bancos              b  ON b.id_banco  = a.id_banco
+        LEFT   JOIN business_partners   bp ON bp.card_code = a.card_code
+        WHERE  a.id_estado = 1
+          AND  COALESCE(a.tipo, 1) = 1
+        ORDER  BY a.fecha DESC, a.id_abono DESC
+    """)).fetchall()
+    return jsonify([_row_to_dict(r) for r in rows])
+
+
+@main.route('/api/abonos-salida')
+@login_required
+def api_abonos_salida():
+    rows = db.session.execute(text("""
+        SELECT
+            a.id_abono,
+            a.id_banco,
+            COALESCE(b.nombre, '')                          AS banco_nombre,
+            a.fecha,
+            a.monto,
+            a.moneda,
+            a.referencia,
+            a.concepto,
+            a.card_code,
+            COALESCE(bp.card_name, a.card_code, '')         AS bp_name,
+            a.id_estado,
+            COALESCE(a.tipo, 1)                             AS tipo
+        FROM   abonos a
+        LEFT   JOIN bancos              b  ON b.id_banco  = a.id_banco
+        LEFT   JOIN business_partners   bp ON bp.card_code = a.card_code
+        WHERE  a.id_estado = 1
+          AND  COALESCE(a.tipo, 1) = 2
+        ORDER  BY a.fecha DESC, a.id_abono DESC
+    """)).fetchall()
+    return jsonify([_row_to_dict(r) for r in rows])
+
+
 @main.route('/finanzas/abonos/nuevo', methods=['POST'])
 @login_required
 def abono_nuevo():
@@ -48,6 +113,7 @@ def abono_nuevo():
     except ValueError:
         fecha = None
 
+    imagen_b64 = request.form.get('imagen_b64', '').strip() or None
     abono = Abono(
         id_banco   = int(request.form.get('id_banco', 0) or 0) or None,
         fecha      = fecha,
@@ -57,6 +123,8 @@ def abono_nuevo():
         concepto   = request.form.get('concepto', '').strip() or None,
         card_code  = request.form.get('card_code', '').strip() or None,
         id_estado  = int(request.form.get('id_estado', 1) or 1),
+        tipo       = int(request.form.get('tipo', 1) or 1),
+        imagen     = imagen_b64,
     )
     db.session.add(abono)
     db.session.commit()
@@ -86,6 +154,10 @@ def abono_editar(id_abono):
     abono.concepto   = request.form.get('concepto', '').strip() or None
     abono.card_code  = request.form.get('card_code', '').strip() or None
     abono.id_estado  = int(request.form.get('id_estado', 1) or 1)
+    abono.tipo       = int(request.form.get('tipo', 1) or 1)
+    imagen_b64 = request.form.get('imagen_b64', '').strip()
+    if imagen_b64:
+        abono.imagen = imagen_b64
     db.session.commit()
     flash(f'Abono #{id_abono} actualizado correctamente.', 'success')
     return redirect(url_for('main.abonos'))
@@ -127,7 +199,7 @@ def abono_aplicar(id_abono):
             'moneda_pago':    abono.moneda or 'SOL',
             'referencia':     abono.referencia,
             'concepto':       abono.concepto,
-            'monto_aplicado': float(abono.monto) if abono.monto is not None else 0.0,
+            'monto_aplicado': (-1 if (abono.tipo or 1) == 2 else 1) * (float(abono.monto) if abono.monto is not None else 0.0),
             'id_banco':       abono.id_banco,
             'nombre_banco':   nombre_banco,
             'user_code':      str(current_user.id_usuario),

@@ -148,8 +148,9 @@
   </div>
 
   <!-- Formulario -->
-  <form id="itemForm" method="POST" action="{{ url_for('main.articulo_nuevo') }}" novalidate>
-    <div class="drawer-body">
+  <form id="itemForm" method="POST" action="{{ url_for('main.articulo_nuevo') }}" novalidate
+        style="flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;">
+    <div class="drawer-body" id="drawerBody">
 
       <!-- ── Identificación ──────────────────────────────── -->
       <div class="form-section-label">Identificación</div>
@@ -228,11 +229,12 @@
       <div class="form-section-label">Precios</div>
       <div class="row g-2 mb-3">
         <div class="col-sm-6">
-          <label class="form-label-sm">Precio Promedio</label>
+          <label class="form-label-sm">Precio sin IGV</label>
           <div class="input-group input-group-sm">
             <span class="input-group-text">S/</span>
             <input type="number" class="form-control form-control-sm"
-                   name="avg_price" id="f_avg_price" step="0.000001" min="0" />
+                   name="avg_price" id="f_avg_price" step="0.0001" min="0"
+                   oninput="calcPrecioIGV()" />
           </div>
         </div>
         <div class="col-sm-6">
@@ -267,13 +269,15 @@
       <div class="row g-2 mb-3">
         <div class="col-sm-6">
           <label class="form-label-sm">Código Impuesto Ventas (AR)</label>
-          <input type="text" class="form-control form-control-sm"
-                 name="tax_code_ar" id="f_tax_code_ar" placeholder="IGV" maxlength="20" />
+          <select class="form-select form-select-sm" name="tax_code_ar" id="f_tax_code_ar">
+            <option value="">— Seleccionar —</option>
+          </select>
         </div>
         <div class="col-sm-6">
           <label class="form-label-sm">Código Impuesto Compras (AP)</label>
-          <input type="text" class="form-control form-control-sm"
-                 name="tax_code_ap" id="f_tax_code_ap" placeholder="IGV" maxlength="20" />
+          <select class="form-select form-select-sm" name="tax_code_ap" id="f_tax_code_ap">
+            <option value="">— Seleccionar —</option>
+          </select>
         </div>
       </div>
 
@@ -475,6 +479,27 @@ function cargarUnidadesMedida() {
 }
 cargarUnidadesMedida();
 
+/* ── Impuestos ─────────────────────────────────────────── */
+function cargarImpuestos() {
+  fetch('/api/impuestos')
+    .then(r => r.json())
+    .then(data => {
+      ['f_tax_code_ar', 'f_tax_code_ap'].forEach(id => {
+        const sel = document.getElementById(id);
+        const val = sel.value;
+        sel.innerHTML = '<option value="">— Seleccionar —</option>';
+        data.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.codigo;
+          opt.textContent = `${d.codigo} — ${d.descripcion}`;
+          sel.appendChild(opt);
+        });
+        sel.value = val;
+      });
+    });
+}
+cargarImpuestos();
+
 /* ── Datos ─────────────────────────────────────────────── */
 const ITEMS_DATA = JSON.parse(document.getElementById('itemsData').textContent);
 const itemsMap   = {};
@@ -629,7 +654,9 @@ function abrirDrawer(mode, code) {
 
   drawer.classList.add('open');
   overlay.classList.add('active');
-  document.body.style.overflow = 'hidden';   // evitar scroll de fondo
+  document.body.style.overflow = 'hidden';
+  const db = document.getElementById('drawerBody');
+  if (db) db.scrollTop = 0;
 }
 
 /* ── Cerrar drawer ─────────────────────────────────────── */
@@ -776,6 +803,13 @@ document.getElementById('itemForm').addEventListener('submit', function() {
   });
   document.getElementById('f_barcodes_json').value = JSON.stringify(rows);
 });
+
+/* ── Calcular precio con IGV (18%) ─────────────────────── */
+function calcPrecioIGV() {
+  const sinIgv = parseFloat(document.getElementById('f_avg_price').value) || 0;
+  const conIgv = sinIgv > 0 ? (sinIgv * 1.18).toFixed(2) : '';
+  document.getElementById('f_PriceAfterVAT').value = conIgv;
+}
 
 /* ── Helpers ───────────────────────────────────────────── */
 function setVal(id, v)   { const el = document.getElementById(id); if (el) el.value = v ?? ''; }

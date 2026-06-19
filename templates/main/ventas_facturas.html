@@ -156,6 +156,7 @@
           </th>
           <th style="width:50px;">Mon.</th>
           <th class="text-end" style="width:105px;">Total</th>
+          <th class="text-end" style="width:105px;">Aplicado</th>
           <th style="min-width:120px; position:relative; white-space:nowrap;">
             Almacén
             <button type="button" class="btn-col-filtro" id="btnFiltroAlmacen"
@@ -203,6 +204,12 @@
           <td class="text-end fw-semibold">
             {{ '%.2f' | format(f.doc_total | float) if f.doc_total is not none else '—' }}
           </td>
+          {% set aply = f.doc_total_aply | float %}
+          {% set total = f.doc_total | float if f.doc_total is not none else 0 %}
+          <td class="text-end fw-semibold"
+              style="color:{{ '#16a34a' if aply == total else '#dc2626' }};">
+            {{ '%.2f' | format(aply) }}
+          </td>
           <td>
             <div class="text-muted" style="font-size:.68rem;">{{ f.whs_name or '' }}</div>
           </td>
@@ -228,7 +235,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="16" class="text-center text-muted py-5">Sin facturas registradas.</td>
+          <td colspan="17" class="text-center text-muted py-5">Sin facturas registradas.</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -10,6 +10,6 @@ CREATE TABLE IF NOT EXISTS impuestos (
 );
 
 INSERT INTO impuestos (codigo, descripcion, valor) VALUES
-    ('IGV', 'Impuesto General a las Ventas', 16.00),
+    ('IGV', 'Impuesto General a las Ventas', 18.00),
     ('EXO', 'Exonerado',                      0.01)
 ON CONFLICT (codigo) DO NOTHING;

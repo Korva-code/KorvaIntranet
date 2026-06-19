@@ -215,6 +215,17 @@ def api_socio_direcciones(card_code):
     } for r in rows])
 
 
+@main.route('/api/socios-todos')
+@login_required
+def api_socios_todos():
+    rows = db.session.execute(text("""
+        SELECT card_code, card_name
+        FROM   business_partners
+        ORDER  BY card_code
+    """)).fetchall()
+    return jsonify([{'card_code': r[0] or '', 'card_name': r[1] or ''} for r in rows])
+
+
 @main.route('/api/descuentos')
 @login_required
 def api_descuentos():

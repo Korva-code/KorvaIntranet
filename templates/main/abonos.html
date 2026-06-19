@@ -40,6 +40,7 @@
         <tr>
           <th class="ps-3" style="width:55px;">#</th>
           <th style="width:90px;">Fecha</th>
+          <th style="width:80px;">Tipo</th>
           <th style="min-width:160px; position:relative; white-space:nowrap;">
             Banco
             <button type="button" class="btn-col-filtro" id="btnFiltroBanco"
@@ -105,8 +106,9 @@
     </button>
   </div>
 
-  <form id="abonoForm" method="POST" action="{{ url_for('main.abono_nuevo') }}" novalidate>
-    <div class="drawer-body">
+  <form id="abonoForm" method="POST" action="{{ url_for('main.abono_nuevo') }}" novalidate
+        style="flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;">
+    <div class="drawer-body" id="drawerBody">
 
       <div class="form-section-label">Datos del Abono</div>
       <div class="row g-2 mb-3">
@@ -134,6 +136,14 @@
             <div id="socioDropdown" class="socio-dropdown" style="display:none;"></div>
           </div>
           <div class="text-muted mt-1" style="font-size:.72rem;" id="bp_nombre_display"></div>
+        </div>
+
+        <div class="col-sm-4">
+          <label class="form-label-sm">Tipo <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" name="tipo" id="f_tipo">
+            <option value="1">1 — Ingreso</option>
+            <option value="2">2 — Salida</option>
+          </select>
         </div>
 
         <div class="col-sm-5">
@@ -168,12 +178,31 @@
                  name="concepto" id="f_concepto" placeholder="Descripción del abono" />
         </div>
 
+        <div class="col-12">
+          <label class="form-label-sm">Imagen / Comprobante</label>
+          <input type="file" class="form-control form-control-sm" id="f_imagen_file"
+                 accept="image/*" onchange="procesarImagen(this)" />
+          <input type="hidden" name="imagen_b64" id="f_imagen_b64" />
+          <div id="imagenPreview" class="mt-2" style="display:none;">
+            <img id="imagenPreviewImg" src="" alt="Comprobante"
+                 style="max-width:100%; border-radius:6px; border:1px solid #e2e8f0; display:block;" />
+            <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1"
+                    onclick="quitarImagen()">
+              <i class="bi bi-trash me-1"></i>Quitar imagen
+            </button>
+          </div>
+        </div>
+
       </div>
     </div><!-- /drawer-body -->
 
     <div class="drawer-footer">
       <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
         <i class="bi bi-x me-1"></i>Cancelar
+      </button>
+      <button type="button" id="btnEditar" class="btn btn-outline-warning btn-sm"
+              style="display:none;" onclick="modoEditar()">
+        <i class="bi bi-pencil me-1"></i>Editar
       </button>
       <button type="button" id="btnAplicar" class="btn btn-success btn-sm px-3"
               style="display:none;" onclick="aplicarAbono()">
@@ -278,7 +307,7 @@ let sociosMap   = {};
 let BANCOS_DATA_DRW = [];
 
 /* ── Cargar socios ───────────────────────────────────────── */
-fetch('/api/socios-ventas')
+fetch('/api/socios-todos')
   .then(r => r.json())
   .then(data => {
     SOCIOS_DATA = data;
@@ -325,7 +354,7 @@ function renderTabla() {
   });
 
   tbody.innerHTML = filas.length ? '' :
-    '<tr><td colspan="10" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    '<tr><td colspan="11" class="text-center text-muted py-5">Sin resultados.</td></tr>';
 
   filas.forEach(a => {
     const estadoBadge = a.id_estado === 1
@@ -333,6 +362,9 @@ function renderTabla() {
       : a.id_estado === 2
       ? '<span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size:.63rem;">Aplicado</span>'
       : '<span class="badge bg-secondary-subtle text-secondary" style="font-size:.63rem;">Inactivo</span>';
+    const tipoBadge = a.tipo === 2
+      ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:.63rem;">Salida</span>'
+      : '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:.63rem;">Ingreso</span>';
     const monedaBadge = a.moneda === 'USD'
       ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">USD</span>'
       : '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">SOL</span>';
@@ -342,6 +374,7 @@ function renderTabla() {
     tr.innerHTML = `
       <td class="ps-3 text-muted">${a.id_abono}</td>
       <td class="font-monospace">${a.fecha}</td>
+      <td>${tipoBadge}</td>
       <td class="fw-semibold">${escHtml(a.banco_nombre)}</td>
       <td class="text-muted">${escHtml(a.bp_name || a.card_code)}</td>
       <td class="font-monospace text-muted">${escHtml(a.referencia)}</td>
@@ -463,6 +496,7 @@ function abrirDrawer(modo, id) {
     title.textContent = 'Nuevo Abono';
     form.action       = '{{ url_for("main.abono_nuevo") }}';
     setFormReadonly(false);
+    document.getElementById('btnEditar').style.display  = 'none';
     document.getElementById('btnGuardar').style.display = '';
     document.getElementById('btnAplicar').style.display = 'none';
   } else {
@@ -481,6 +515,7 @@ function abrirDrawer(modo, id) {
     form.action       = `/finanzas/abonos/${id}/editar`;
     document.getElementById('f_id_banco').value   = a.id_banco   || '';
     document.getElementById('f_fecha').value      = a.fecha      || '';
+    document.getElementById('f_tipo').value       = String(a.tipo || 1);
     document.getElementById('f_monto').value      = a.monto;
     document.getElementById('f_moneda').value     = a.moneda     || 'SOL';
     document.getElementById('f_referencia').value = a.referencia || '';
@@ -492,9 +527,22 @@ function abrirDrawer(modo, id) {
       socioDisplay.textContent = a.bp_name || '';
     }
 
-    // Botones y readonly según estado
-    setFormReadonly(aplicado);
-    document.getElementById('btnGuardar').style.display = aplicado ? 'none' : '';
+    // Cargar imagen si existe
+    fetch(`/api/abonos/${id}/imagen`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.imagen) {
+          document.getElementById('imagenPreviewImg').src = data.imagen;
+          document.getElementById('imagenPreview').style.display = '';
+          document.getElementById('f_imagen_b64').value = data.imagen;
+        }
+      })
+      .catch(() => {});
+
+    // Siempre abre en modo lectura; Editar lo habilita
+    setFormReadonly(true);
+    document.getElementById('btnEditar').style.display  = aplicado ? 'none' : '';
+    document.getElementById('btnGuardar').style.display = 'none';
     const btnApl = document.getElementById('btnAplicar');
     btnApl.style.display = a.id_estado === 1 ? '' : 'none';
     btnApl.dataset.id    = id;
@@ -509,20 +557,35 @@ function cerrarDrawer() {
   document.getElementById('drawerOverlay').classList.remove('active');
 }
 
+function modoEditar() {
+  setFormReadonly(false);
+  document.getElementById('btnEditar').style.display  = 'none';
+  document.getElementById('btnGuardar').style.display = '';
+  document.getElementById('drawerBadge').textContent  = 'EDITAR';
+  document.getElementById('drawerBadge').className    = 'badge bg-warning text-dark';
+  document.getElementById('drawerTitle').textContent  =
+    document.getElementById('drawerTitle').textContent.replace('Abono', 'Editando Abono');
+}
+
 function limpiarForm() {
   document.getElementById('f_id_banco').value   = '';
   document.getElementById('f_fecha').value      = '{{ today }}';
+  document.getElementById('f_tipo').value       = '1';
   document.getElementById('f_monto').value      = '';
   document.getElementById('f_moneda').value     = 'SOL';
   document.getElementById('f_referencia').value = '';
   document.getElementById('f_concepto').value   = '';
   document.getElementById('f_id_estado').value  = '1';
   socioHidden.value = ''; socioSearch.value = ''; socioDisplay.textContent = '';
+  quitarImagen();
 }
 
 function setFormReadonly(readonly) {
   const fields = document.querySelectorAll('#abonoForm input, #abonoForm select, #abonoForm textarea');
   fields.forEach(el => { el.disabled = readonly; });
+  document.getElementById('f_imagen_file').disabled = readonly;
+  const btnQuitarImg = document.querySelector('#imagenPreview .btn-link');
+  if (btnQuitarImg) btnQuitarImg.style.display = readonly ? 'none' : '';
 }
 
 /* ── Aplicar abono ───────────────────────────────────────── */
@@ -543,6 +606,41 @@ function aplicarAbono() {
       .catch(() => mostrarToast('danger', 'Error de conexión.')),
     { titulo: 'Aplicar Abono', tipo: 'primary', txtBtn: 'Aplicar' }
   );
+}
+
+/* ── Imagen / Comprobante ────────────────────────────────── */
+function procesarImagen(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const W = 400, H = 600;
+      const canvas = document.createElement('canvas');
+      canvas.width  = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.min(W / img.width, H / img.height);
+      const w = img.width  * scale;
+      const h = img.height * scale;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('f_imagen_b64').value    = b64;
+      document.getElementById('imagenPreviewImg').src  = b64;
+      document.getElementById('imagenPreview').style.display = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function quitarImagen() {
+  document.getElementById('f_imagen_b64').value   = '';
+  document.getElementById('f_imagen_file').value  = '';
+  document.getElementById('imagenPreviewImg').src = '';
+  document.getElementById('imagenPreview').style.display = 'none';
 }
 
 /* ── Excel ───────────────────────────────────────────────── */

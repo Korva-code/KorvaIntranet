@@ -11,18 +11,23 @@
 
 <form id="formCancelacion" method="POST"
       action="{{ url_for('main.compras_cancelaciones_nueva') }}" novalidate>
-  <input type="hidden" name="lineas_json" id="lineas_json" value="[]">
+  <input type="hidden" name="lineas_json" id="lineas_json"  value="[]">
   <input type="hidden" name="card_code"   id="f_card_code" value="">
+  <input type="hidden" name="id_abono"    id="f_id_abono"  value="">
 
   <div class="row g-3 align-items-start">
 
     <!-- ── Columna izquierda: datos del pago ───────────────── -->
     <div class="col-md-4">
       <div class="card border-0 shadow-sm">
-        <div class="card-header bg-white border-bottom py-2">
+        <div class="card-header bg-white border-bottom py-2 d-flex align-items-center">
           <h6 class="mb-0 fw-semibold">
             <i class="bi bi-cash-coin text-primary me-1"></i>Datos del Pago
           </h6>
+          <button type="button" class="btn btn-sm btn-outline-primary ms-auto py-0 px-2"
+                  style="font-size:.75rem;" onclick="abrirDrawerAbono()">
+            <i class="bi bi-search me-1"></i>Buscar Abono
+          </button>
         </div>
         <div class="card-body">
 
@@ -188,6 +193,51 @@
   <div style="height:64px;"></div>
 </form>
 
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER — Buscador de Abonos (Salida)
+     ══════════════════════════════════════════════════════════ -->
+<div class="abono-picker-overlay" id="abonoPickerOverlay" onclick="cerrarDrawerAbono()"></div>
+
+<aside class="abono-picker-drawer" id="abonoPickerDrawer">
+  <div class="abono-picker-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-cash-coin text-primary"></i>
+      <h6 class="mb-0 fw-bold">Seleccionar Abono (Salidas)</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawerAbono()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="abono-picker-search px-3 pt-2 pb-1">
+    <input type="search" class="form-control form-control-sm" id="abonoBuscador"
+           placeholder="Buscar banco, socio, referencia…" oninput="filtrarAbonos()" />
+  </div>
+  <div class="abono-picker-body" id="abonoPickerBody">
+    <div class="text-center py-5 text-muted" id="abonoPickerSpinner">
+      <div class="spinner-border spinner-border-sm text-primary"></div>
+      <div class="mt-2" style="font-size:.8rem;">Cargando abonos…</div>
+    </div>
+    <table class="table table-hover align-middle mb-0" id="tablaAbonosPicker"
+           style="font-size:.75rem; display:none;">
+      <thead class="table-light sticky-top" style="font-size:.72rem;">
+        <tr>
+          <th style="width:45px;" class="ps-3">#</th>
+          <th style="width:90px;">Fecha</th>
+          <th style="min-width:130px;">Banco</th>
+          <th style="min-width:140px;">Socio</th>
+          <th style="min-width:120px;">Referencia</th>
+          <th style="width:70px;">Moneda</th>
+          <th class="text-end" style="width:100px;">Monto</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyAbonosPicker"></tbody>
+    </table>
+    <div id="abonoPickerVacio" class="text-center py-5 text-muted" style="display:none;">
+      Sin abonos de salida activos.
+    </div>
+  </div>
+</aside>
+
 <!-- ── Barra de acciones fija ──────────────────────────────── -->
 <div class="barra-acciones-fija d-flex align-items-center justify-content-end gap-2 px-4 py-2">
   <a href="{{ url_for('main.compras_cancelaciones') }}"
@@ -236,6 +286,33 @@ body.sidebar-collapsed .barra-acciones-fija {
 /* ── Fila vencida ────────────────────────────────────────── */
 .row-vencida td { color: #b91c1c !important; }
 .row-vencida .saldo-cell { font-weight: 700; color: #dc2626 !important; }
+
+/* ── Drawer buscador de abonos ───────────────────────────── */
+.abono-picker-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.abono-picker-overlay.active { display: block; }
+.abono-picker-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 760px; max-width: 97vw;
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.abono-picker-drawer.open { transform: translateX(0); }
+.abono-picker-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .85rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.abono-picker-search { flex-shrink: 0; }
+.abono-picker-body { flex: 1; overflow-y: auto; min-height: 0; }
+.abono-picker-body::-webkit-scrollbar { width: 4px; }
+.abono-picker-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+#tablaAbonosPicker tbody tr { cursor: pointer; }
+#tablaAbonosPicker tbody tr:hover td { background: #eff6ff; }
 
 /* ── Input aplicar ───────────────────────────────────────── */
 .inp-aplicar {
@@ -629,6 +706,101 @@ document.getElementById('f_fecha_pago').addEventListener('change', function () {
 
 /* ── Tipo cambio: redistribuye al cambiar ────────────────── */
 document.getElementById('f_tipo_cambio').addEventListener('input', distribuirImporte);
+
+/* ── Drawer buscador de abonos (salida) ─────────────────── */
+let ABONOS_PICKER_DATA    = [];
+let ABONOS_PICKER_CARGADO = false;
+
+function abrirDrawerAbono() {
+  document.getElementById('abonoPickerDrawer').classList.add('open');
+  document.getElementById('abonoPickerOverlay').classList.add('active');
+  document.getElementById('abonoBuscador').value = '';
+  if (!ABONOS_PICKER_CARGADO) cargarAbonosSalida();
+  else filtrarAbonos();
+}
+
+function cerrarDrawerAbono() {
+  document.getElementById('abonoPickerDrawer').classList.remove('open');
+  document.getElementById('abonoPickerOverlay').classList.remove('active');
+}
+
+function cargarAbonosSalida() {
+  document.getElementById('abonoPickerSpinner').style.display = '';
+  document.getElementById('tablaAbonosPicker').style.display  = 'none';
+  document.getElementById('abonoPickerVacio').style.display   = 'none';
+
+  fetch('/api/abonos-salida')
+    .then(r => r.json())
+    .then(data => {
+      ABONOS_PICKER_DATA    = data;
+      ABONOS_PICKER_CARGADO = true;
+      document.getElementById('abonoPickerSpinner').style.display = 'none';
+      renderAbonosPicker(data);
+    })
+    .catch(() => {
+      document.getElementById('abonoPickerSpinner').style.display = 'none';
+      document.getElementById('abonoPickerVacio').style.display   = '';
+    });
+}
+
+function filtrarAbonos() {
+  const q = (document.getElementById('abonoBuscador').value || '').toLowerCase();
+  const filtrados = q
+    ? ABONOS_PICKER_DATA.filter(a =>
+        (a.banco_nombre || '').toLowerCase().includes(q) ||
+        (a.bp_name      || '').toLowerCase().includes(q) ||
+        (a.card_code    || '').toLowerCase().includes(q) ||
+        (a.referencia   || '').toLowerCase().includes(q) ||
+        (a.concepto     || '').toLowerCase().includes(q))
+    : ABONOS_PICKER_DATA;
+  renderAbonosPicker(filtrados);
+}
+
+function renderAbonosPicker(lista) {
+  const tbody = document.getElementById('tbodyAbonosPicker');
+  const tabla  = document.getElementById('tablaAbonosPicker');
+  const vacio  = document.getElementById('abonoPickerVacio');
+  if (!lista.length) { tabla.style.display = 'none'; vacio.style.display = ''; return; }
+  tabla.style.display = ''; vacio.style.display = 'none';
+  tbody.innerHTML = lista.map(a => {
+    const sym = a.moneda === 'USD' ? '$' : 'S/';
+    const monBadge = a.moneda === 'USD'
+      ? '<span class="badge bg-warning-subtle text-warning border" style="font-size:.62rem;">USD</span>'
+      : '<span class="badge bg-info-subtle text-info border" style="font-size:.62rem;">SOL</span>';
+    return `<tr onclick="seleccionarAbono(${a.id_abono})">
+      <td class="ps-3 text-muted">${a.id_abono}</td>
+      <td class="font-monospace" style="font-size:.73rem;">${a.fecha || ''}</td>
+      <td class="fw-semibold">${escHtml(a.banco_nombre)}</td>
+      <td class="text-muted">${escHtml(a.bp_name || a.card_code)}</td>
+      <td class="font-monospace text-muted">${escHtml(a.referencia)}</td>
+      <td>${monBadge}</td>
+      <td class="text-end fw-semibold">${sym} ${parseFloat(a.monto || 0).toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function seleccionarAbono(id) {
+  const a = ABONOS_PICKER_DATA.find(x => x.id_abono === id);
+  if (!a) return;
+
+  document.getElementById('f_id_abono').value = a.id_abono;
+  if (a.id_banco)   document.getElementById('f_id_banco').value    = String(a.id_banco);
+  if (a.fecha)      document.getElementById('f_fecha_pago').value  = a.fecha;
+  if (a.moneda)     document.getElementById('f_moneda_pago').value = a.moneda;
+  if (a.monto)      document.getElementById('f_importe').value     = parseFloat(a.monto).toFixed(2);
+  if (a.referencia) document.getElementById('f_referencia').value  = a.referencia;
+  if (a.concepto)   document.getElementById('f_concepto').value    = a.concepto;
+
+  document.getElementById('f_moneda_pago').dispatchEvent(new Event('change'));
+  document.getElementById('f_fecha_pago').dispatchEvent(new Event('change'));
+  document.getElementById('f_importe').dispatchEvent(new Event('input'));
+
+  if (a.card_code && !document.getElementById('f_card_code').value) {
+    seleccionarSocio(a.card_code);
+  }
+
+  cerrarDrawerAbono();
+}
 
 /* ── Moneda pago: actualiza etiqueta y redistribuye ─────── */
 document.getElementById('f_moneda_pago').addEventListener('change', function () {

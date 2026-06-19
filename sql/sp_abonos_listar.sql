@@ -26,7 +26,8 @@ RETURNS TABLE (
     "concepto"   TEXT,
     "card_code"  TEXT,
     "bp_name"    TEXT,
-    "id_estado"  INTEGER
+    "id_estado"  INTEGER,
+    "tipo"       INTEGER
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -41,7 +42,8 @@ BEGIN
         a.concepto                        ::TEXT,
         a.card_code                       ::TEXT,
         COALESCE(bp.card_name, a.card_code, '') ::TEXT AS bp_name,
-        a.id_estado
+        a.id_estado,
+        COALESCE(a.tipo, 1)               ::INTEGER AS tipo
     FROM abonos a
     LEFT JOIN bancos           b  ON b.id_banco  = a.id_banco
     LEFT JOIN business_partners bp ON bp.card_code = a.card_code

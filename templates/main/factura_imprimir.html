@@ -98,13 +98,12 @@
   {# ── Header ────────────────────────────────────── #}
   <div class="header">
     <div class="empresa">
-      <h2>KORVA S.A.C.</h2>
-      <p>CAL. ALFA CENTAURO 185 URB. LA CALERA DE MONTERRICO<br>
-         SURQUILLO - LIMA - LIMA</p>
+      <h2>{{ empresa.descripcion }}</h2>
+      <p>{{ empresa.direccion }}{% if empresa.telefono %}<br>Telf.: {{ empresa.telefono }}{% endif %}</p>
     </div>
     <div class="doc-box">
       <div class="doc-tipo">{{ tipo_label }}</div>
-      <div class="doc-ruc">RUC: 20615472019</div>
+      <div class="doc-ruc">RUC: {{ empresa.ruc }}</div>
       <div class="doc-serie">{{ serie }}-{{ numero }}</div>
     </div>
   </div>
@@ -146,11 +145,18 @@
       <td class="sep">:</td>
       <td>{{ moneda_label }}</td>
     </tr>
-    {% if inv[8] %}
+    {% if referencia %}
     <tr>
-      <td class="lbl">Observación</td>
+      <td class="lbl">Referencia</td>
       <td class="sep">:</td>
-      <td colspan="2">{{ inv[8] }}</td>
+      <td colspan="2">{{ referencia }}</td>
+    </tr>
+    {% endif %}
+    {% if comentarios %}
+    <tr>
+      <td class="lbl">Comentarios</td>
+      <td class="sep">:</td>
+      <td colspan="2">{{ comentarios }}</td>
     </tr>
     {% endif %}
   </table>

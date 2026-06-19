@@ -143,8 +143,9 @@
     </button>
   </div>
 
-  <form id="socioForm" method="POST" action="{{ url_for('main.socio_nuevo') }}" novalidate>
-    <div class="drawer-body">
+  <form id="socioForm" method="POST" action="{{ url_for('main.socio_nuevo') }}" novalidate
+        style="flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;">
+    <div class="drawer-body" id="drawerBody">
 
       <!-- ── Identificación ──────────────────────────────── -->
       <div class="form-section-label">Identificación</div>
@@ -576,6 +577,8 @@ function abrirDrawer(mode, code) {
   document.getElementById('sociosDrawer').classList.add('open');
   document.getElementById('drawerOverlay').classList.add('active');
   document.body.style.overflow = 'hidden';
+  const db = document.getElementById('drawerBody');
+  if (db) db.scrollTop = 0;
 }
 
 /* ── Cerrar drawer ─────────────────────────────────────────── */
