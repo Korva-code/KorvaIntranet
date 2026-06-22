@@ -23,7 +23,7 @@
     <h6 class="mb-0 fw-semibold text-nowrap">
       <i class="bi bi-receipt text-primary me-1"></i> Facturas de Compra
     </h6>
-    <div class="input-group input-group-sm" style="max-width:260px;">
+    <div class="input-group input-group-sm flex-grow-1" style="min-width:150px; max-width:260px;">
       <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
       <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar proveedor, número…">
     </div>
@@ -748,8 +748,9 @@ async function guardarFactura() {
     comments:       document.getElementById('f_comments').value.trim(),
     items: [...document.querySelectorAll('#lineasDetalle .linea-detalle')].map(row => ({
       item_code:       row.querySelector('.inp-item-code').value.trim(),
-      quantity:        parseFloat(row.querySelector('.inp-qty').value)   || 0,
-      price_after_vat: parseFloat(row.querySelector('.inp-price').value) || 0,
+      quantity:        parseFloat(row.querySelector('.inp-qty').value)       || 0,
+      price_after_vat: parseFloat(row.querySelector('.inp-price').value)    || 0,
+      price:           parseFloat(row.querySelector('.inp-avg-price').value) || 0,
       tax_code:        row.querySelector('.inp-taxcode').value.trim(),
     })).filter(it => it.item_code),
   };

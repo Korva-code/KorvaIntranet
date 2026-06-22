@@ -21,7 +21,11 @@ class Invoice(db.Model):
     invoice_pos   = db.Column(db.Integer)
     user_code       = db.Column(db.Text)
     sunat_estado    = db.Column(db.Text)
-    doc_total_aply  = db.Column(db.Numeric(18, 2), default=0)
+    doc_total_aply       = db.Column(db.Numeric(18, 2), default=0)
+    doc_status           = db.Column(db.Integer, default=1)
+    nota_credito_serie   = db.Column(db.Text)
+    nota_credito_numero  = db.Column(db.Integer)
+    nota_credito_total   = db.Column(db.Numeric(18, 4))
 
     bp = db.relationship(
         'BusinessPartner',

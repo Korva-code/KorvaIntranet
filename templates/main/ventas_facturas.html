@@ -17,11 +17,11 @@
      ══════════════════════════════════════════════════════════ -->
 <div class="card border-0 shadow-sm">
 
-  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
     <h6 class="mb-0 fw-semibold text-nowrap">
       <i class="bi bi-receipt text-primary me-1"></i> Facturas de Venta
     </h6>
-    <div class="input-group input-group-sm" style="max-width:260px;">
+    <div class="input-group input-group-sm flex-grow-1" style="min-width:150px; max-width:260px;">
       <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
       <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar N° doc, socio…">
     </div>
@@ -176,6 +176,9 @@
             <div class="col-filtro-panel" id="panelFiltroUsuario" style="display:none;"
                  onclick="event.stopPropagation()"></div>
           </th>
+          <th class="text-center" style="width:90px;">Estado</th>
+          <th class="text-center" style="width:110px;">N° Nota Créd.</th>
+          <th class="text-end"   style="width:95px;">Total NC</th>
           <th class="text-center" style="width:90px; position:relative; white-space:nowrap;">
             SUNAT
             <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
@@ -190,7 +193,9 @@
       </thead>
       <tbody id="tbodyFacturas">
         {% for f in fact_rows %}
-        <tr class="factura-row" data-id="{{ f.invoice_id }}" style="font-size:.75rem;">
+        <tr class="factura-row" data-id="{{ f.invoice_id }}"
+            data-status="{{ f.doc_status | int if f.doc_status is not none else 1 }}"
+            style="font-size:.75rem;">
           <td class="ps-3 text-muted">{{ f.invoice_id }}</td>
           <td class="font-monospace">{{ f.card_code }}</td>
           <td class="fw-semibold">{{ f.bp_name or f.card_code }}</td>
@@ -219,6 +224,30 @@
 
           </td>
           <td class="text-center">
+            {% set ds = f.doc_status | int if f.doc_status is not none else 1 %}
+            {% if ds == 2 %}
+              <span class="badge bg-success-subtle text-success" style="font-size:.63rem;">Pagado</span>
+            {% elif ds == 3 %}
+              <span class="badge bg-danger-subtle text-danger" style="font-size:.63rem;">Anulada</span>
+            {% elif ds == 4 %}
+              <span class="badge bg-dark-subtle text-dark" style="font-size:.63rem;">Cerrado</span>
+            {% else %}
+              <span class="badge bg-primary-subtle text-primary" style="font-size:.63rem;">Registrado</span>
+            {% endif %}
+          </td>
+          {% set nc_serie = f.nota_credito_serie or '' %}
+          {% set nc_num   = f.nota_credito_numero %}
+          <td class="text-center font-monospace" style="font-size:.72rem;">
+            {% if nc_serie and nc_num is not none %}
+              {{ nc_serie }}-{{ '%08d' | format(nc_num | int) }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end" style="font-size:.72rem;">
+            {% if f.nota_credito_total is not none %}
+              {{ '%.2f' | format(f.nota_credito_total | float) }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-center">
             {% if f.sunat_estado %}
               <span class="badge bg-success-subtle text-success" style="font-size:.63rem;">{{ f.sunat_estado }}</span>
             {% else %}
@@ -227,7 +256,7 @@
           </td>
           <td class="text-center">
             <button class="btn btn-sm btn-outline-primary py-0 px-2"
-                    onclick="abrirDrawer('view', parseInt(this.closest('tr').dataset.id))"
+                    onclick="abrirDrawer('view', parseInt(this.closest('tr').dataset.id), parseInt(this.closest('tr').dataset.status||'1'))"
                     title="Ver factura" style="font-size:.72rem;">
               <i class="bi bi-eye-fill me-1"></i>Ver
             </button>
@@ -235,19 +264,38 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="17" class="text-center text-muted py-5">Sin facturas registradas.</td>
+          <td colspan="20" class="text-center text-muted py-5">Sin facturas registradas.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-3 text-muted small flex-wrap">
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-2 text-muted small flex-wrap" style="font-size:.74rem;">
     <span>Total: <strong id="contadorVisible">{{ fact_rows | length }}</strong> facturas</span>
-    <span class="ms-auto">
-      Suma SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
+    <span class="vr mx-1"></span>
+    <span>
+      <i class="bi bi-check-circle-fill text-success me-1"></i>Aplicados SOL:
+      <strong class="text-success" id="sumaAplicadoSOL">S/ 0.00</strong>
+    </span>
+    <span>
+      <i class="bi bi-check-circle-fill text-success me-1"></i>Aplicados USD:
+      <strong class="text-success" id="sumaAplicadoUSD">$ 0.00</strong>
+    </span>
+    <span class="vr mx-1"></span>
+    <span>
+      <i class="bi bi-clock-fill text-primary me-1"></i>Registrados SOL:
+      <strong class="text-primary" id="sumaRegistradoSOL">S/ 0.00</strong>
+    </span>
+    <span>
+      <i class="bi bi-clock-fill text-primary me-1"></i>Registrados USD:
+      <strong class="text-primary" id="sumaRegistradoUSD">$ 0.00</strong>
+    </span>
+    <span class="vr mx-1 ms-auto"></span>
+    <span>
+      Total SOL: <strong class="text-dark" id="sumaTotalSOL">S/ 0.00</strong>
       &nbsp;|&nbsp;
-      Suma USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
+      Total USD: <strong class="text-dark" id="sumaTotalUSD">$ 0.00</strong>
     </span>
   </div>
 </div>
@@ -413,7 +461,24 @@
           <input type="text" class="form-control form-control-sm"
                  name="comments" id="f_comments" placeholder="Observaciones del documento" />
         </div>
-        
+
+        <!-- Nota de Crédito asociada -->
+        <div class="col-12" id="seccionNotaCredito">
+          <hr class="my-2">
+          <div class="form-section-label mb-2">Nota de Crédito Asociada</div>
+          <div class="row g-2">
+            <div class="col-sm-6">
+              <label class="form-label-sm">N° Nota de Crédito</label>
+              <input type="text" class="form-control form-control-sm font-monospace bg-light always-readonly"
+                     id="f_nota_credito_doc" readonly />
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label-sm">Total NC</label>
+              <input type="text" class="form-control form-control-sm text-end font-monospace bg-light always-readonly"
+                     id="f_nota_credito_total" readonly />
+            </div>
+          </div>
+        </div>
 
       </div><!-- /cabecera row -->
 
@@ -437,6 +502,7 @@
                 <th style="min-width:130px;">Descripción</th>
                 <th style="width:75px;">Cant.</th>
                 <th style="width:90px;">P. s/IGV</th>
+                <th style="width:90px;">Últ. Costo</th>
                 <th style="width:90px;">P. c/IGV</th>
                 <th style="width:70px;">Unidad</th>
                 <th style="width:60px;">Imp.</th>
@@ -480,6 +546,7 @@
                 <th style="min-width:140px;">Descripción</th>
                 <th class="text-end" style="width:70px;">Cant.</th>
                 <th class="text-end" style="width:90px;">P. s/IGV</th>
+                <th class="text-end" style="width:90px;">Últ. Costo</th>
                 <th class="text-end" style="width:90px;">P. c/IGV</th>
                 <th style="width:70px;">Unidad</th>
                 <th style="width:65px;">Cód. Imp.</th>
@@ -977,20 +1044,29 @@ function aplicarFiltros() {
 
   // Actualizar contador y sumas del pie
   let visibles = 0, sumaSOL = 0, sumaUSD = 0;
+  let sumaAplicadoSOL = 0, sumaAplicadoUSD = 0;
+  let sumaRegistradoSOL = 0, sumaRegistradoUSD = 0;
   document.querySelectorAll('#tbodyFacturas .factura-row').forEach(r => {
     if (r.style.display === 'none') return;
     visibles++;
-    const id  = parseInt(r.dataset.id);
-    const fac = facturasMap[id];
+    const id     = parseInt(r.dataset.id);
+    const status = parseInt(r.dataset.status) || 1;
+    const fac    = facturasMap[id];
     if (fac) {
-      const t = fac.doc_total != null ? parseFloat(fac.doc_total) : 0;
-      if ((fac.doc_currency || 'SOL') === 'USD') sumaUSD += t;
-      else                                        sumaSOL += t;
+      const t      = fac.doc_total != null ? parseFloat(fac.doc_total) : 0;
+      const esUSD  = (fac.doc_currency || 'SOL') === 'USD';
+      if (esUSD) sumaUSD += t; else sumaSOL += t;
+      if (status === 2) { if (esUSD) sumaAplicadoUSD += t; else sumaAplicadoSOL += t; }
+      if (status === 1) { if (esUSD) sumaRegistradoUSD += t; else sumaRegistradoSOL += t; }
     }
   });
-  document.getElementById('contadorVisible').textContent = visibles;
-  document.getElementById('sumaTotalSOL').textContent    = 'S/ ' + sumaSOL.toFixed(2);
-  document.getElementById('sumaTotalUSD').textContent    = '$ '  + sumaUSD.toFixed(2);
+  document.getElementById('contadorVisible').textContent      = visibles;
+  document.getElementById('sumaTotalSOL').textContent         = 'S/ ' + sumaSOL.toFixed(2);
+  document.getElementById('sumaTotalUSD').textContent         = '$ '  + sumaUSD.toFixed(2);
+  document.getElementById('sumaAplicadoSOL').textContent      = 'S/ ' + sumaAplicadoSOL.toFixed(2);
+  document.getElementById('sumaAplicadoUSD').textContent      = '$ '  + sumaAplicadoUSD.toFixed(2);
+  document.getElementById('sumaRegistradoSOL').textContent    = 'S/ ' + sumaRegistradoSOL.toFixed(2);
+  document.getElementById('sumaRegistradoUSD').textContent    = '$ '  + sumaRegistradoUSD.toFixed(2);
 }
 
 /* ── Exportar a Excel ────────────────────────────────────── */
@@ -1048,9 +1124,9 @@ document.getElementById('buscarFactura').addEventListener('input', aplicarFiltro
 aplicarFiltros(); // inicializa contador y sumas al cargar
 
 /* ── Abrir drawer ─────────────────────────────────────────── */
-function abrirDrawer(mode, id) {
+function abrirDrawer(mode, id, docStatus) {
   if (mode === 'view' && id != null) {
-    cargarFactura(id);
+    cargarFactura(id, docStatus || 1);
   } else {
     modoNueva();
   }
@@ -1096,7 +1172,8 @@ function modoNueva() {
 
   ['f_invoice_id','f_invoice_number','f_card_code','f_num_at_card','f_comments',
    'f_journal_memo','f_invoice_pos',
-   'f_sunat_estado','f_doc_total'].forEach(id => setVal(id, ''));
+   'f_sunat_estado','f_doc_total',
+   'f_nota_credito_doc','f_nota_credito_total'].forEach(id => setVal(id, ''));
    
   document.getElementById('f_user_display').value = '{{ current_user.id_usuario }}';
   setVal('bp_nombre_display', '');
@@ -1108,6 +1185,7 @@ function modoNueva() {
   const hoy = '{{ today }}';
   setVal('f_doc_date', hoy); setVal('f_tax_date', hoy); setVal('f_doc_due_date', hoy);
   cargarSeries();
+  cargarItems('');
 
   document.getElementById('lineasDetalle').innerHTML = '';
   lineaNum = 0;
@@ -1116,7 +1194,7 @@ function modoNueva() {
 }
 
 /* ── Modo VER — cabecera + ítems (solo lectura) ───────────── */
-function cargarFactura(id) {
+function cargarFactura(id, docStatus) {
   const d = facturasMap[id];
   if (!d) return;
 
@@ -1137,6 +1215,14 @@ function cargarFactura(id) {
   document.getElementById('btnEnviarSunat').style.display = _yaAceptado ? 'none' : '';
   document.getElementById('btnEditar').style.display      = _yaAceptado ? 'none' : '';
   document.getElementById('btnAnularSunat').style.display = _yaAceptado ? ''     : 'none';
+
+  if (docStatus === 2 || docStatus === 3 || docStatus === 4) {
+    document.getElementById('btnEditar').style.display      = 'none';
+    document.getElementById('btnEnviarSunat').style.display = 'none';
+  }
+  if (docStatus === 2) {
+    document.getElementById('btnAnularSunat').style.display = 'none';
+  }
 
   // Cabecera (solo lectura) — mismo orden que la grilla
   setVal('f_invoice_id',     id);
@@ -1164,6 +1250,18 @@ function cargarFactura(id) {
   setVal('f_sunat_estado',   d.sunat_estado || 'Pendiente');
   setVal('f_comments',       d.comments);
   setVal('f_journal_memo',   d.journal_memo);
+
+  // Nota de Crédito asociada
+  const ncSerie  = d.nota_credito_serie  || '';
+  const ncNum    = d.nota_credito_numero != null ? d.nota_credito_numero : null;
+  const ncTotal  = d.nota_credito_total  != null ? d.nota_credito_total  : null;
+  setVal('f_nota_credito_doc', ncSerie && ncNum != null
+    ? `${ncSerie}-${String(ncNum).padStart(8,'0')}`
+    : '');
+  setVal('f_nota_credito_total', ncTotal != null
+    ? sym + ' ' + parseFloat(ncTotal).toFixed(2)
+    : '');
+
   setReadonly(true);
 
   // Total en sección ítems VER
@@ -1172,13 +1270,13 @@ function cargarFactura(id) {
 
   // Ítems de detalle — espera que itemsMap esté cargado para mostrar nombres
   const tbody = document.getElementById('tbodyItemsVer');
-  tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-2 small">Cargando…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-2 small">Cargando…</td></tr>';
   const lineas = d.items || [];
 
   const renderLineas = () => {
     tbody.innerHTML = '';
     if (!lineas.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3 small">Sin ítems registrados.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3 small">Sin ítems registrados.</td></tr>';
       document.getElementById('resumen_subtotal').textContent = '0.0000';
       document.getElementById('resumen_igv').textContent      = '0.0000';
       return;
@@ -1196,6 +1294,7 @@ function cargarFactura(id) {
         <td class="small">${maestro.item_name || ''}</td>
         <td class="text-end small">${parseFloat(it.quantity || 0).toFixed(2)}</td>
         <td class="text-end small">${avgP ? avgP.toFixed(4) : ''}</td>
+        <td class="text-end small text-muted">${it.price_cost ? parseFloat(it.price_cost).toFixed(4) : ''}</td>
         <td class="text-end small">${parseFloat(it.price_after_vat || 0).toFixed(2)}</td>
         <td class="small text-muted">${maestro.sal_unit_msr || ''}</td>
         <td class="small text-muted">${it.tax_code || ''}</td>
@@ -1253,6 +1352,8 @@ function modoEditar() {
                    oninput="actualizarTotal()" /></td>
         <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light always-readonly"
                    value="${maestro.avg_price != null ? parseFloat(maestro.avg_price).toFixed(4) : ''}" readonly /></td>
+        <td><input type="text" class="form-control form-control-sm inp-cost bg-light always-readonly"
+                   value="${it.price_cost ? parseFloat(it.price_cost).toFixed(4) : ''}" readonly /></td>
         <td><input type="number" class="form-control form-control-sm inp-price"
                    value="${parseFloat(it.price_after_vat || 0).toFixed(2)}" min="0" step="any"
                    oninput="recalcularSinIGV(this); actualizarTotal()" /></td>
@@ -1364,6 +1465,8 @@ function agregarLinea() {
                value="1" min="0.0001" step="any" oninput="actualizarTotal()" /></td>
     <td><input type="text" class="form-control form-control-sm inp-avg-price bg-light"
                readonly placeholder="0.0000" /></td>
+    <td><input type="text" class="form-control form-control-sm inp-cost bg-light"
+               readonly placeholder="0.0000" /></td>
     <td><input type="number" class="form-control form-control-sm inp-price"
                value="0" min="0" step="any" oninput="recalcularSinIGV(this); actualizarTotal()" /></td>
     <td><input type="text" class="form-control form-control-sm inp-unit-msr bg-light"
@@ -1384,7 +1487,8 @@ function onItemSelect(inp) {
   const d = itemsMap[inp.value];
   const row = inp.closest('tr');
   row.querySelector('.inp-item-name').value = d ? (d.item_name   || '') : '';
-  row.querySelector('.inp-avg-price').value = d && d.avg_price    != null ? parseFloat(d.avg_price).toFixed(4) : '';
+  row.querySelector('.inp-avg-price').value = d && d.avg_price     != null ? parseFloat(d.avg_price).toFixed(4)     : '';
+  row.querySelector('.inp-cost').value      = d && d.ultimo_costo  != null ? parseFloat(d.ultimo_costo).toFixed(4)  : '';
   row.querySelector('.inp-price').value     = d && d.PriceAfterVAT != null ? parseFloat(d.PriceAfterVAT).toFixed(2) : '0.00';
   row.querySelector('.inp-unit-msr').value  = d ? (d.sal_unit_msr || '') : '';
   if (d && d.tax_code_ap) row.querySelector('.inp-taxcode').value = d.tax_code_ap;
@@ -1613,8 +1717,10 @@ document.getElementById('formFactura').addEventListener('submit', function (e) {
     if (!code) { ok = false; return; }
     lineas.push({
       item_code:       code,
-      quantity:        parseFloat(row.querySelector('.inp-qty').value)   || 0,
-      price_after_vat: parseFloat(row.querySelector('.inp-price').value) || 0,
+      quantity:        parseFloat(row.querySelector('.inp-qty').value)       || 0,
+      price_after_vat: parseFloat(row.querySelector('.inp-price').value)    || 0,
+      price:           parseFloat(row.querySelector('.inp-avg-price').value) || 0,
+      price_cost:      parseFloat(row.querySelector('.inp-cost').value)      || 0,
       tax_code:        row.querySelector('.inp-taxcode').value.trim(),
       warehouse_code:  '',
       costing_code:    '',

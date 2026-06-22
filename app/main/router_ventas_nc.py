@@ -80,22 +80,29 @@ def api_nc_buscar_factura():
         if not cab:
             return jsonify({'success': False, 'message': f'No se encontró la factura {serie}-{num}.'}), 404
 
+        extra = db.session.execute(
+            text("SELECT COALESCE(doc_status,1), COALESCE(sunat_estado,'') FROM invoice WHERE invoice_id = :id"),
+            {'id': cab[0]}
+        ).fetchone()
+
         items_rows = db.session.execute(
             text("SELECT * FROM fn_nc_buscar_factura_items(:id)"),
             {'id': cab[0]}
         ).fetchall()
 
         return jsonify({
-            'success':      True,
-            'invoice_id':   cab[0],
-            'card_code':    cab[1],
-            'bp_name':      cab[2],
-            'invoice_type': cab[3],
-            'invoice_serie':cab[4],
+            'success':       True,
+            'invoice_id':    cab[0],
+            'card_code':     cab[1],
+            'bp_name':       cab[2],
+            'invoice_type':  cab[3],
+            'invoice_serie': cab[4],
             'invoice_number':cab[5],
-            'doc_date':     cab[6].isoformat() if cab[6] else '',
-            'doc_currency': cab[7],
-            'doc_total':    float(cab[8] or 0),
+            'doc_date':      cab[6].isoformat() if cab[6] else '',
+            'doc_currency':  cab[7],
+            'doc_total':     float(cab[8] or 0),
+            'doc_status':    int(extra[0]) if extra else 1,
+            'sunat_estado':  str(extra[1]) if extra else '',
             'items': [{
                 'item_code':       r[0],
                 'item_name':       r[1],
@@ -215,6 +222,24 @@ def ventas_nc_nueva():
         }).fetchone()
 
         if row and row[0]:
+            if invoice_id:
+                db.session.execute(text("""
+                    UPDATE invoice
+                       SET nota_credito_serie  = :nc_serie,
+                           nota_credito_numero = :nc_number,
+                           nota_credito_total  = :nc_total,
+                           doc_status          = 3,
+                           doc_total           = 0
+                     WHERE invoice_id = :inv_id
+                """), {
+                    'nc_serie':  nc_serie,
+                    'nc_number': nc_number,
+                    'nc_total':  doc_total,
+                    'inv_id':    invoice_id,
+                })
+                db.session.execute(text(
+                    "DELETE FROM movimientos_almacen WHERE invoice_id = :inv_id"
+                ), {'inv_id': invoice_id})
             db.session.commit()
             return jsonify({'success': True, 'message': row[1], 'id_nc': row[2]})
         db.session.rollback()

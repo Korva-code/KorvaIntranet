@@ -57,6 +57,9 @@ def _apply_item_fields(item: Item, form) -> None:
     item.tax_code_ap  = form.get('tax_code_ap', '').strip() or None
     item.create_date  = _parse_date(form.get('create_date'))
     item.update_date  = _parse_date(form.get('update_date')) or date.today()
+    uc = form.get('ultimo_costo', '').strip()
+    if uc:
+        item.ultimo_costo = _parse_num(uc)
 
 
 def _save_barcodes(item_code: str, barcodes_json: str) -> None:
@@ -124,6 +127,26 @@ def articulo_editar(item_code):
     return redirect(url_for('main.articulos'))
 
 
+@main.route('/api/articulos/<path:item_code>/costos')
+@login_required
+def api_articulo_costos(item_code):
+    rows = db.session.execute(text("""
+        SELECT DISTINCT price
+        FROM (
+            SELECT price
+            FROM invoice_item_p
+            WHERE item_code = :code
+              AND price IS NOT NULL
+              AND price > 0
+            ORDER BY id DESC
+            LIMIT 100
+        ) sub
+        ORDER BY price DESC
+        LIMIT 10
+    """), {'code': item_code}).fetchall()
+    return jsonify([{'price': float(r[0])} for r in rows])
+
+
 @main.route('/api/articulos/<path:item_code>/barcodes')
 @login_required
 def api_articulo_barcodes(item_code):
@@ -159,10 +182,11 @@ def api_items_con_precio():
         "SELECT * FROM sp_item_invoice_bp_lista(:card_code)"
     ), {'card_code': card_code}).fetchall()
     return jsonify([{
-        'item_code':    r[0] or '',
-        'item_name':    r[1] or '',
-        'avg_price':    float(r[2]) if r[2] is not None else 0.0,
+        'item_code':     r[0] or '',
+        'item_name':     r[1] or '',
+        'avg_price':     float(r[2]) if r[2] is not None else 0.0,
         'PriceAfterVAT': float(r[3]) if r[3] is not None else 0.0,
-        'tax_code_ap':  r[4] or '',
-        'sal_unit_msr': r[5] or '',
+        'tax_code_ap':   r[4] or '',
+        'sal_unit_msr':  r[5] or '',
+        'ultimo_costo':  float(r[6]) if r[6] is not None else None,
     } for r in rows])

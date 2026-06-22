@@ -397,8 +397,15 @@ def sunat_anular_factura(invoice_id):
 
     if ok:
         try:
+            db.session.execute(text(
+                "DELETE FROM movimientos_almacen WHERE invoice_id = :id"
+            ), {'id': invoice_id})
             db.session.execute(text("""
-                UPDATE invoice SET sunat_estado = 'ANULADO' WHERE invoice_id = :id
+                UPDATE invoice
+                   SET sunat_estado = 'ANULADO',
+                       doc_total    = 0,
+                       doc_status   = 3
+                 WHERE invoice_id   = :id
             """), {'id': invoice_id})
             db.session.commit()
         except Exception:

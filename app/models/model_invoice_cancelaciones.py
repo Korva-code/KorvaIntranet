@@ -22,3 +22,4 @@ class InvoiceCancelacion(db.Model):
     fecha_registro = db.Column(db.DateTime, server_default=db.func.now())
     id_estado      = db.Column(db.Integer, default=1)
     id_payment     = db.Column(db.Integer)
+    imagen         = db.Column(db.Text)

@@ -45,6 +45,7 @@ def _row_to_dict_item(r):
         'price_after_vat': float(m['price_after_vat']) if m.get('price_after_vat') is not None else 0.0,
         'tax_code':        m.get('tax_code') or '',
         'subtotal':        float(m['subtotal']) if m.get('subtotal') is not None else 0.0,
+        'price':           float(m['price'])    if m.get('price')    is not None else 0.0,
     }
 
 
@@ -160,6 +161,21 @@ def compras_facturas_guardar():
 
         if row and row[0]:
             db.session.commit()
+            # Actualizar ultimo_costo en items con el precio sin IGV de cada línea
+            for it in items:
+                code  = (it.get('item_code') or '').strip()
+                price = it.get('price')
+                if code and price is not None:
+                    try:
+                        db.session.execute(text(
+                            "UPDATE items SET ultimo_costo = :price WHERE item_code = :code"
+                        ), {'price': float(price), 'code': code})
+                    except Exception:
+                        pass
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
             # Registrar movimientos de entrada en el kardex
             try:
                 from app.main.router_almacen_kardex import registrar_movimientos_compra

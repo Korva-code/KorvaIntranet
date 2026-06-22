@@ -102,6 +102,7 @@ def ventas_cancelaciones_nueva():
         importe = None
     referencia  = request.form.get('referencia', '').strip() or None
     concepto    = request.form.get('concepto', '').strip() or None
+    imagen_b64  = request.form.get('imagen_b64', '').strip() or None
     lineas_raw  = request.form.get('lineas_json', '[]')
     try:
         lineas = json.loads(lineas_raw)
@@ -136,11 +137,13 @@ def ventas_cancelaciones_nueva():
             monto_aplicado = monto_aplicado,
             user_code      = current_user.id_usuario,
             id_estado      = 1,
+            imagen         = imagen_b64,
         )
         db.session.add(canc)
         inv = db.session.get(Invoice, invoice_id)
         if inv is not None:
             inv.doc_total_aply = float(inv.doc_total_aply or 0) + monto_aplicado
+            inv.doc_status = 2
         inv_fields = db.session.execute(text(
             "SELECT invoice_serie, invoice_number FROM invoice WHERE invoice_id = :id"
         ), {'id': invoice_id}).fetchone()
@@ -201,16 +204,36 @@ def ventas_cancelacion_anular(id_cancelacion):
     if not canc:
         return jsonify({'success': False, 'message': f'Cancelación #{id_cancelacion} no encontrada.'}), 404
     try:
-        canc.id_estado = 0
-        if canc.invoice_id and canc.monto_aplicado:
-            inv = db.session.get(Invoice, canc.invoice_id)
-            if inv is not None:
-                inv.doc_total_aply = max(0.0, float(inv.doc_total_aply or 0) - float(canc.monto_aplicado))
+        invoice_id = canc.invoice_id
+
+        # 1. Eliminar de bancos_estado_cuenta
+        db.session.execute(text(
+            "DELETE FROM bancos_estado_cuenta WHERE id_cancelacion = :id"
+        ), {'id': id_cancelacion})
+
+        # 2. Eliminar la cancelación
+        db.session.delete(canc)
+
+        # 3. Restablecer doc_status = 1 y doc_total_aply = 0 en invoice
+        if invoice_id:
+            db.session.execute(text(
+                "UPDATE invoice SET doc_status = 1, doc_total_aply = 0 WHERE invoice_id = :id"
+            ), {'id': invoice_id})
+
         db.session.commit()
         return jsonify({'success': True, 'message': f'Cancelación #{id_cancelacion} anulada correctamente.'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 400
+
+
+@main.route('/api/cancelaciones/<int:id_cancelacion>/imagen')
+@login_required
+def api_cancelacion_imagen(id_cancelacion):
+    canc = db.session.get(InvoiceCancelacion, id_cancelacion)
+    if not canc:
+        return jsonify({'imagen': None})
+    return jsonify({'imagen': canc.imagen or None})
 
 
 @main.route('/api/facturas-pendientes')

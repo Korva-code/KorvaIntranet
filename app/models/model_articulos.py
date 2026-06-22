@@ -61,6 +61,7 @@ class Item(db.Model):
     update_date   = db.Column(db.Date)
     PriceAfterVAT = db.Column(db.Numeric(18, 4))
     TipoBien      = db.Column(db.Integer)
+    ultimo_costo  = db.Column(db.Numeric(18, 4))
 
     grupo = db.relationship(
         'ItemGroup',
@@ -132,6 +133,7 @@ class Item(db.Model):
             'update_date':   dt(self.update_date),
             'PriceAfterVAT': num(self.PriceAfterVAT),
             'TipoBien':      self.TipoBien,
+            'ultimo_costo':  num(self.ultimo_costo),
             'barcode':       self.barcode,
         }
 

@@ -118,6 +118,22 @@
                    placeholder="Descripción del pago" />
           </div>
 
+          <!-- Imagen / Comprobante -->
+          <div class="mb-2">
+            <label class="form-label-sm">Imagen / Comprobante</label>
+            <input type="file" class="form-control form-control-sm" id="f_imagen_file"
+                   accept="image/*" onchange="procesarImagen(this)" />
+            <input type="hidden" name="imagen_b64" id="f_imagen_b64" />
+            <div id="imagenPreview" class="mt-2" style="display:none;">
+              <img id="imagenPreviewImg" src="" alt="Comprobante"
+                   style="max-width:100%; border-radius:6px; border:1px solid #e2e8f0; display:block;" />
+              <button type="button" class="btn btn-link btn-sm text-danger p-0 mt-1"
+                      onclick="quitarImagen()">
+                <i class="bi bi-trash me-1"></i>Quitar imagen
+              </button>
+            </div>
+          </div>
+
         </div><!-- /card-body -->
       </div>
     </div>
@@ -848,5 +864,40 @@ document.getElementById('f_moneda_pago').addEventListener('change', function () 
   }
   distribuirImporte();
 });
+
+/* ── Imagen / Comprobante ────────────────────────────────── */
+function procesarImagen(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const W = 400, H = 600;
+      const canvas = document.createElement('canvas');
+      canvas.width  = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      const scale = Math.min(W / img.width, H / img.height);
+      const w = img.width  * scale;
+      const h = img.height * scale;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+      const b64 = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('f_imagen_b64').value    = b64;
+      document.getElementById('imagenPreviewImg').src  = b64;
+      document.getElementById('imagenPreview').style.display = '';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function quitarImagen() {
+  document.getElementById('f_imagen_b64').value   = '';
+  document.getElementById('f_imagen_file').value  = '';
+  document.getElementById('imagenPreviewImg').src = '';
+  document.getElementById('imagenPreview').style.display = 'none';
+}
 </script>
 {% endblock %}

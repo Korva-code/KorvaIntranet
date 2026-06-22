@@ -273,6 +273,8 @@
               <div class="col-3"><span class="text-muted">Moneda:</span> <span id="refMonedaLabel"></span></div>
               <div class="col-3"><span class="text-muted">Fecha:</span> <span id="refFechaLabel"></span></div>
               <div class="col-12"><span class="text-muted">Total:</span> <strong id="refTotalLabel" class="text-primary"></strong></div>
+              <div class="col-6 d-flex align-items-center gap-1"><span class="text-muted">Estado:</span> <span id="refDocStatus"></span></div>
+              <div class="col-6 d-flex align-items-center gap-1"><span class="text-muted">SUNAT:</span> <span id="refSunatEstado"></span></div>
             </div>
           </div>
         </div>
@@ -695,6 +697,7 @@ function cerrarDrawer() {
 
 // ── Ítems en formulario nuevo ─────────────────────────────
 let _itemIdx = 0;
+let _refDocStatus = 1;
 function agregarItemFila(code='', desc='', qty=1, precio=0, tax='', wh='') {
   const idx = _itemIdx++;
   const tr  = document.createElement('tr');
@@ -785,6 +788,16 @@ async function buscarFactura() {
     document.getElementById('refInfoPanel').style.display  = '';
     document.getElementById('btnLimpiarFac').style.display = '';
 
+    // Badges doc_status y sunat_estado
+    const dsMap = {1:'Registrado',2:'Pagado',3:'Anulada',4:'Cerrado'};
+    const dsCls = {1:'bg-secondary-subtle text-secondary',2:'bg-success-subtle text-success',
+                   3:'bg-danger-subtle text-danger',4:'bg-dark-subtle text-dark'};
+    const ds = d.doc_status || 1;
+    _refDocStatus = ds;
+    document.getElementById('refDocStatus').innerHTML =
+      `<span class="badge ${dsCls[ds]||dsCls[1]}">${dsMap[ds]||'Registrado'}</span>`;
+    document.getElementById('refSunatEstado').innerHTML = sunatBadge(d.sunat_estado || '');
+
     // Autocompletar campos del formulario
     document.getElementById('fCardCode').value = d.card_code || '';
     // Moneda: cargar solo la del invoice
@@ -820,6 +833,9 @@ function limpiarRefFactura() {
   document.getElementById('fRefNumero').value            = '';
   document.getElementById('refInfoPanel').style.display  = 'none';
   document.getElementById('btnLimpiarFac').style.display = 'none';
+  document.getElementById('refDocStatus').innerHTML      = '';
+  document.getElementById('refSunatEstado').innerHTML    = '';
+  _refDocStatus = 1;
   const sel = document.getElementById('fMoneda');
   sel.innerHTML = '<option value="">—</option>';
   sel.disabled  = true;
@@ -864,6 +880,11 @@ async function guardarNC() {
   const card   = document.getElementById('fCardCode').value.trim();
   const fecha  = document.getElementById('fFecha').value;
   const mot    = document.getElementById('fMotivo').value;
+  if (_refDocStatus === 2 || _refDocStatus === 3) {
+    const label = _refDocStatus === 2 ? 'pagado' : 'anulado';
+    mostrarToast('danger', `El documento está ${label}. Se requiere anular el pago antes de continuar.`);
+    return;
+  }
   if (!idtype) return mostrarToast('warning','Seleccione el tipo de documento.');
   if (!serie)  return mostrarToast('warning','Seleccione el tipo para obtener la serie.');
   if (!num)    return mostrarToast('warning','No se pudo obtener el número correlativo.');

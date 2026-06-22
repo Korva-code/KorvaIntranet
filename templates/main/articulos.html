@@ -61,6 +61,7 @@
           <th class="text-end" style="width:90px;">Stock</th>
           <th class="text-end" style="width:100px;">P. Prom</th>
           <th class="text-end" style="width:100px;">P. c/IGV</th>
+          <th class="text-end" style="width:100px;">Últ. Costo</th>
           <th style="width:110px;">U.Venta</th>
           <th class="text-center" style="width:80px; position:relative; white-space:nowrap;">
             Estado
@@ -94,6 +95,9 @@
           <td class="text-end small">
             {{ 'S/ %.2f' | format(item.PriceAfterVAT | float) if item.PriceAfterVAT is not none else '—' }}
           </td>
+          <td class="text-end small text-muted">
+            {{ 'S/ %.4f' | format(item.ultimo_costo | float) if item.ultimo_costo is not none else '—' }}
+          </td>
           <td class="small text-muted">{{ item.sal_unit or '—' }}</td>
           <td class="text-center">
             {% if item.valid_for and item.valid_for.strip() == 'Y' %}
@@ -112,7 +116,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="10" class="text-center text-muted py-5">Sin artículos registrados.</td>
+          <td colspan="11" class="text-center text-muted py-5">Sin artículos registrados.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -244,6 +248,12 @@
             <input type="number" class="form-control form-control-sm"
                    name="PriceAfterVAT" id="f_PriceAfterVAT" step="0.0001" min="0" />
           </div>
+        </div>
+        <div class="col-12">
+          <label class="form-label-sm">Último Costo</label>
+          <select class="form-select form-select-sm" name="ultimo_costo" id="f_ultimo_costo">
+            <option value="">— Sin registros de compra —</option>
+          </select>
         </div>
       </div>
 
@@ -500,6 +510,29 @@ function cargarImpuestos() {
 }
 cargarImpuestos();
 
+/* ── Último Costo ──────────────────────────────────────── */
+function cargarUltimosCostos(itemCode, selectedVal) {
+  const sel = document.getElementById('f_ultimo_costo');
+  sel.innerHTML = '<option value="">— Sin registros de compra —</option>';
+  if (!itemCode) return;
+  fetch('/api/articulos/' + encodeURIComponent(itemCode) + '/costos')
+    .then(r => r.json())
+    .then(data => {
+      sel.innerHTML = '<option value="">— Seleccione —</option>';
+      data.forEach(c => {
+        const o = document.createElement('option');
+        o.value       = c.price;
+        o.textContent = 'S/ ' + parseFloat(c.price).toFixed(4);
+        sel.appendChild(o);
+      });
+      if (selectedVal !== null && selectedVal !== undefined && selectedVal !== '') {
+        sel.value = String(parseFloat(selectedVal).toFixed(4));
+        if (!sel.value) sel.value = String(selectedVal);
+      }
+    })
+    .catch(() => {});
+}
+
 /* ── Datos ─────────────────────────────────────────────── */
 const ITEMS_DATA = JSON.parse(document.getElementById('itemsData').textContent);
 const itemsMap   = {};
@@ -692,6 +725,7 @@ function cargarItem(code) {
   setVal('f_create_date',   d.create_date);
   setVal('f_update_date',   d.update_date);
 
+  cargarUltimosCostos(d.item_code, d.ultimo_costo);
   document.getElementById('f_itms_grp_cod').value = d.itms_grp_cod || '';
   document.getElementById('f_TipoBien').value     = d.TipoBien     ?? '';
   cargarBarcodes(code);
@@ -722,6 +756,7 @@ function limpiarForm() {
   const campos = ['f_item_name','f_frgn_name','f_avg_price','f_PriceAfterVAT',
                   'f_tax_code_ar','f_tax_code_ap'];
   campos.forEach(id => setVal(id, ''));
+  cargarUltimosCostos(null);
   setVal('f_item_code',    siguienteItemCode());
   setVal('f_create_date',  hoy);
   setVal('f_update_date',  hoy);

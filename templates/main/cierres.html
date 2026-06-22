@@ -1,0 +1,696 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} registros
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="cierresData" type="application/json">{{ datos_json | safe }}</script>
+
+<div class="card border-0 shadow-sm">
+
+  <!-- ── Cabecera ──────────────────────────────────────────────── -->
+  <div class="card-header bg-white border-bottom py-2 d-flex align-items-center gap-2 flex-wrap">
+    <h6 class="mb-0 fw-semibold text-nowrap">
+      <i class="bi bi-calendar-check-fill text-primary me-1"></i>Cierres por Proceso
+    </h6>
+
+    <!-- Filtros rápidos -->
+    <select class="form-select form-select-sm" id="filtroProceso" style="max-width:180px;"
+            onchange="renderTabla()">
+      <option value="">Todos los procesos</option>
+      <option value="VENTAS">Ventas</option>
+      <option value="CANCELACIONES">Cancelaciones</option>
+      <option value="ESTADOS_CUENTA">Estados de Cuenta</option>
+    </select>
+    <select class="form-select form-select-sm" id="filtroPeriodo" style="max-width:130px;"
+            onchange="renderTabla()">
+      <option value="">Todos</option>
+      <option value="DIA">Por Día</option>
+      <option value="MES">Por Mes</option>
+      <option value="ANIO">Por Año</option>
+    </select>
+    <select class="form-select form-select-sm" id="filtroAnio" style="max-width:100px;"
+            onchange="renderTabla()">
+      <option value="">Año</option>
+      {% for a in anios %}
+        <option value="{{ a }}" {% if a == hoy_anio %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="d-flex gap-2 ms-auto">
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer()">
+        <i class="bi bi-plus-lg me-1"></i>Nuevo Cierre
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Tabla ─────────────────────────────────────────────────── -->
+  <div class="table-responsive" style="min-height:350px;">
+    <table class="table table-hover align-middle mb-0" id="tablaCierres" style="font-size:.76rem;">
+      <thead class="table-light" style="font-size:.72rem;">
+        <tr>
+          <th class="ps-3" style="width:55px;">#</th>
+          <th style="min-width:140px;">Proceso</th>
+          <th style="width:80px;">Período</th>
+          <th style="min-width:130px;">Fecha Cierre</th>
+          <th class="text-end" style="width:80px;">Docs.</th>
+          <th class="text-end" style="width:110px;">Ventas</th>
+          <th class="text-end" style="width:80px;">Aplicados</th>
+          <th class="text-end" style="width:90px;">SUNAT Acep.</th>
+          <th class="text-end" style="width:80px;">Pendientes</th>
+          <th class="text-end" style="width:110px;">Margen</th>
+          <th class="text-center" style="width:80px;">Estado</th>
+          <th class="text-center" style="width:80px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyCierres"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="contadorVisible">{{ total }}</strong> cierres
+  </div>
+</div>
+
+
+<!-- ── Overlay ──────────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+<!-- ── Drawer ───────────────────────────────────────────────────── -->
+<aside class="articulos-drawer" id="cierreDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-primary" id="drawerBadge">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Cierre</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- Proceso y período -->
+    <div class="form-section-label">Proceso y Período</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <label class="form-label-sm">Proceso <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="f_tipo_proceso" onchange="onProcesoChange()">
+          <option value="VENTAS">Ventas</option>
+          <option value="CANCELACIONES">Cancelaciones de Ventas</option>
+          <option value="ESTADOS_CUENTA">Estados de Cuenta</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label-sm">Tipo de Período <span class="text-danger">*</span></label>
+        <div class="btn-group w-100" role="group" id="grupoPeriodo">
+          <input type="radio" class="btn-check" name="tipoPeriodo" id="rdDia"  value="DIA"  checked>
+          <label class="btn btn-outline-secondary btn-sm" for="rdDia">Por Día</label>
+          <input type="radio" class="btn-check" name="tipoPeriodo" id="rdMes"  value="MES">
+          <label class="btn btn-outline-secondary btn-sm" for="rdMes">Por Mes</label>
+          <input type="radio" class="btn-check" name="tipoPeriodo" id="rdAnio" value="ANIO">
+          <label class="btn btn-outline-secondary btn-sm" for="rdAnio">Por Año</label>
+        </div>
+      </div>
+
+      <!-- Año -->
+      <div class="col-4">
+        <label class="form-label-sm">Año <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="f_periodo_anio">
+          {% for a in anios %}
+            <option value="{{ a }}" {% if a == hoy_anio %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Mes -->
+      <div class="col-4" id="divMes">
+        <label class="form-label-sm">Mes <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm" id="f_periodo_mes">
+          {% for i in range(1, 13) %}
+            <option value="{{ i }}" {% if i == hoy_mes %}selected{% endif %}>
+              {{ meses[i-1] }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Día -->
+      <div class="col-4" id="divDia">
+        <label class="form-label-sm">Día <span class="text-danger">*</span></label>
+        <input type="number" class="form-control form-control-sm text-center"
+               id="f_periodo_dia" min="1" max="31" value="{{ hoy_dia }}">
+      </div>
+    </div>
+
+    <!-- Observaciones -->
+    <div class="mb-3">
+      <label class="form-label-sm">Observaciones</label>
+      <input type="text" class="form-control form-control-sm" id="f_observaciones"
+             placeholder="Nota opcional…" maxlength="300">
+    </div>
+
+    <!-- Botón calcular -->
+    <div class="d-grid mb-3">
+      <button type="button" class="btn btn-outline-primary btn-sm" id="btnCalcular"
+              onclick="calcular()">
+        <i class="bi bi-calculator me-1"></i>Calcular Estadísticas
+      </button>
+    </div>
+
+    <!-- Resultados -->
+    <div id="seccionResultados" style="display:none;">
+      <div class="form-section-label">Resultados del Período</div>
+      <div class="row g-2">
+        <div class="col-6">
+          <div class="stat-card">
+            <div class="stat-label">Total Documentos</div>
+            <div class="stat-val text-primary" id="r_total_documentos">0</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="stat-card">
+            <div class="stat-label">Total Importe</div>
+            <div class="stat-val text-dark fw-bold" id="r_total_importe">S/ 0.00</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card">
+            <div class="stat-label">Aplicados / Pagados</div>
+            <div class="stat-val text-success" id="r_total_aplicados">0</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card">
+            <div class="stat-label">SUNAT Aceptados</div>
+            <div class="stat-val text-info" id="r_total_sunat">0</div>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="stat-card" id="cardPendientes">
+            <div class="stat-label">Pendientes</div>
+            <div class="stat-val" id="r_total_pendientes">0</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="stat-card" id="cardAnulados">
+            <div class="stat-label">Anulados</div>
+            <div class="stat-val" id="r_total_anulados">0</div>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="stat-card" id="cardMargen">
+            <div class="stat-label">Margen Bruto <span class="text-muted fw-normal">(precio − costo) × cant.</span></div>
+            <div class="stat-val" id="r_total_margen">S/ 0.00</div>
+          </div>
+        </div>
+
+        <!-- Margen por tipo de bien/servicio -->
+        <div class="col-12 mt-1">
+          <div class="form-section-label">Margen por Tipo</div>
+        </div>
+        <div class="col-6">
+          <div class="stat-card" id="cardMargenBienes">
+            <div class="stat-label"><i class="bi bi-box-seam me-1"></i>Bienes</div>
+            <div class="stat-val" id="r_total_margen_bienes">S/ 0.00</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="stat-card" id="cardMargenServicios">
+            <div class="stat-label"><i class="bi bi-tools me-1"></i>Servicios</div>
+            <div class="stat-val" id="r_total_margen_servicios">S/ 0.00</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Campos ocultos con los valores calculados -->
+      <input type="hidden" id="h_id_cierre" value="0">
+      <input type="hidden" id="h_total_documentos">
+      <input type="hidden" id="h_total_importe">
+      <input type="hidden" id="h_total_aplicados">
+      <input type="hidden" id="h_total_sunat_aceptado">
+      <input type="hidden" id="h_total_pendientes">
+      <input type="hidden" id="h_total_anulados">
+      <input type="hidden" id="h_total_margen">
+      <input type="hidden" id="h_total_margen_bienes">
+      <input type="hidden" id="h_total_margen_servicios">
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-outline-danger btn-sm" id="btnAnularDrawer"
+            style="display:none;" onclick="anularDesdeDrawer()">
+      <i class="bi bi-x-circle me-1"></i>Anular
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar"
+            style="display:none;" onclick="guardar()">
+      <i class="bi bi-floppy me-1"></i>Guardar Cierre
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.form-section-label {
+  font-size: .7rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: #64748b;
+  border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-bottom: .6rem;
+}
+.form-label-sm { font-size: .78rem; font-weight: 600; margin-bottom: .2rem; }
+
+/* Stat cards */
+.stat-card {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: .6rem .75rem; text-align: center;
+}
+.stat-label { font-size: .68rem; color: #64748b; font-weight: 600; margin-bottom: .2rem; }
+.stat-val   { font-size: 1.35rem; font-weight: 700; line-height: 1.2; }
+
+/* Drawer */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+.articulos-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 600px; max-width: 96vw;
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%); transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body   { flex: 1; overflow-y: auto; padding: 1.25rem; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const CIERRES_DATA = JSON.parse(document.getElementById('cierresData').textContent);
+
+const PROCESO_LABEL = {
+  VENTAS: 'Ventas',
+  CANCELACIONES: 'Cancelaciones',
+  ESTADOS_CUENTA: 'Estados de Cuenta',
+};
+const PERIODO_LABEL = { DIA: 'Día', MES: 'Mes', ANIO: 'Año' };
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function periodoStr(c) {
+  const a = c.periodo_anio, m = c.periodo_mes, d = c.periodo_dia;
+  if (c.tipo_periodo === 'DIA')  return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${a}`;
+  if (c.tipo_periodo === 'MES')  return `${MESES[(m||1)-1]} ${a}`;
+  return String(a);
+}
+
+/* ── Render tabla ─────────────────────────────────────────────── */
+function renderTabla() {
+  const fProceso = document.getElementById('filtroProceso').value;
+  const fPeriodo = document.getElementById('filtroPeriodo').value;
+  const fAnio    = document.getElementById('filtroAnio').value;
+  const tbody    = document.getElementById('tbodyCierres');
+
+  const filas = CIERRES_DATA.filter(c => {
+    if (fProceso && c.tipo_proceso  !== fProceso) return false;
+    if (fPeriodo && c.tipo_periodo  !== fPeriodo) return false;
+    if (fAnio    && String(c.periodo_anio) !== fAnio)  return false;
+    return true;
+  });
+
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-5">Sin registros.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  filas.forEach(c => {
+    const pendBadge = c.total_pendientes > 0
+      ? `<span class="fw-semibold text-danger">${c.total_pendientes}</span>`
+      : `<span class="text-success">0</span>`;
+
+    const estadoBadge = c.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success border" style="font-size:.63rem;">Activo</span>'
+      : '<span class="badge bg-danger-subtle text-danger border" style="font-size:.63rem;">Anulado</span>';
+
+    const tr = document.createElement('tr');
+    if (c.id_estado !== 1) tr.style.opacity = '.5';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${c.id_cierre}</td>
+      <td>
+        <span class="fw-semibold">${escHtml(PROCESO_LABEL[c.tipo_proceso] || c.tipo_proceso)}</span>
+        ${c.observaciones ? `<div class="text-muted" style="font-size:.68rem;">${escHtml(c.observaciones)}</div>` : ''}
+      </td>
+      <td><span class="badge bg-secondary-subtle text-secondary border" style="font-size:.63rem;">${PERIODO_LABEL[c.tipo_periodo]||c.tipo_periodo}</span></td>
+      <td class="font-monospace">${escHtml(periodoStr(c))}</td>
+      <td class="text-end fw-semibold">${c.total_documentos}</td>
+      <td class="text-end fw-semibold">S/ ${parseFloat(c.total_importe).toFixed(2)}</td>
+      <td class="text-end text-success">${c.total_aplicados}</td>
+      <td class="text-end text-info">${c.total_sunat_aceptado}</td>
+      <td class="text-end">${pendBadge}</td>
+      <td class="text-end fw-semibold ${c.total_margen >= 0 ? 'text-success' : 'text-danger'}">
+        S/ ${parseFloat(c.total_margen || 0).toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2})}
+      </td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-xs btn-outline-primary py-0 px-2" style="font-size:.7rem;"
+                title="Ver / Editar" onclick="abrirDrawer(${c.id_cierre})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+}
+
+/* ── Helper: poblar sección de resultados ───────────────────────── */
+function poblarResultados(d) {
+  document.getElementById('r_total_documentos').textContent = d.total_documentos || 0;
+  document.getElementById('r_total_importe').textContent    = 'S/ ' + parseFloat(d.total_importe || 0).toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('r_total_aplicados').textContent  = d.total_aplicados  || 0;
+  document.getElementById('r_total_sunat').textContent      = d.total_sunat_aceptado || 0;
+
+  const pend = parseInt(d.total_pendientes || 0);
+  document.getElementById('r_total_pendientes').textContent = pend;
+  const cardPend = document.getElementById('cardPendientes');
+  const valPend  = document.getElementById('r_total_pendientes');
+  if (pend > 0) {
+    cardPend.style.background = '#fff1f2'; cardPend.style.borderColor = '#fca5a5';
+    valPend.className = 'stat-val text-danger';
+  } else {
+    cardPend.style.background = '#f0fdf4'; cardPend.style.borderColor = '#86efac';
+    valPend.className = 'stat-val text-success';
+  }
+
+  const anulados = parseInt(d.total_anulados || 0);
+  document.getElementById('r_total_anulados').textContent = anulados;
+  const cardAnul = document.getElementById('cardAnulados');
+  const valAnul  = document.getElementById('r_total_anulados');
+  if (anulados > 0) {
+    cardAnul.style.background = '#fff7ed'; cardAnul.style.borderColor = '#fdba74';
+    valAnul.className = 'stat-val text-warning';
+  } else {
+    cardAnul.style.background = '#f8fafc'; cardAnul.style.borderColor = '#e2e8f0';
+    valAnul.className = 'stat-val text-secondary';
+  }
+
+  const margen = parseFloat(d.total_margen || 0);
+  const cardMargen = document.getElementById('cardMargen');
+  const valMargen  = document.getElementById('r_total_margen');
+  valMargen.textContent = 'S/ ' + margen.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (margen >= 0) {
+    cardMargen.style.background = '#f0fdf4'; cardMargen.style.borderColor = '#86efac';
+    valMargen.className = 'stat-val text-success';
+  } else {
+    cardMargen.style.background = '#fff1f2'; cardMargen.style.borderColor = '#fca5a5';
+    valMargen.className = 'stat-val text-danger';
+  }
+
+  // Margen bienes
+  const margenBienes = parseFloat(d.total_margen_bienes || 0);
+  const cardMB = document.getElementById('cardMargenBienes');
+  const valMB  = document.getElementById('r_total_margen_bienes');
+  valMB.textContent = 'S/ ' + margenBienes.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (margenBienes >= 0) {
+    cardMB.style.background = '#f0fdf4'; cardMB.style.borderColor = '#86efac';
+    valMB.className = 'stat-val text-success';
+  } else {
+    cardMB.style.background = '#fff1f2'; cardMB.style.borderColor = '#fca5a5';
+    valMB.className = 'stat-val text-danger';
+  }
+
+  // Margen servicios
+  const margenServ = parseFloat(d.total_margen_servicios || 0);
+  const cardMS = document.getElementById('cardMargenServicios');
+  const valMS  = document.getElementById('r_total_margen_servicios');
+  valMS.textContent = 'S/ ' + margenServ.toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  if (margenServ >= 0) {
+    cardMS.style.background = '#f0fdf4'; cardMS.style.borderColor = '#86efac';
+    valMS.className = 'stat-val text-success';
+  } else {
+    cardMS.style.background = '#fff1f2'; cardMS.style.borderColor = '#fca5a5';
+    valMS.className = 'stat-val text-danger';
+  }
+
+  document.getElementById('h_total_documentos').value      = d.total_documentos      || 0;
+  document.getElementById('h_total_importe').value         = d.total_importe          || 0;
+  document.getElementById('h_total_aplicados').value       = d.total_aplicados        || 0;
+  document.getElementById('h_total_sunat_aceptado').value  = d.total_sunat_aceptado   || 0;
+  document.getElementById('h_total_pendientes').value      = d.total_pendientes       || 0;
+  document.getElementById('h_total_anulados').value        = d.total_anulados         || 0;
+  document.getElementById('h_total_margen').value          = d.total_margen           || 0;
+  document.getElementById('h_total_margen_bienes').value   = d.total_margen_bienes    || 0;
+  document.getElementById('h_total_margen_servicios').value= d.total_margen_servicios || 0;
+}
+
+/* ── Drawer ─────────────────────────────────────────────────────── */
+function abrirDrawer(id = null) {
+  const esEdicion = id != null;
+  const cierre    = esEdicion ? CIERRES_DATA.find(c => c.id_cierre === id) : null;
+
+  document.getElementById('drawerBadge').textContent = esEdicion ? `#${id}` : 'NUEVO';
+  document.getElementById('drawerBadge').className   = esEdicion ? 'badge bg-secondary' : 'badge bg-primary';
+  document.getElementById('drawerTitle').textContent = esEdicion ? 'Ver / Editar Cierre' : 'Nuevo Cierre';
+  document.getElementById('h_id_cierre').value       = id ?? 0;
+
+  if (esEdicion && cierre) {
+    document.getElementById('f_tipo_proceso').value = cierre.tipo_proceso || 'VENTAS';
+    const rdMap = { DIA: 'rdDia', MES: 'rdMes', ANIO: 'rdAnio' };
+    document.getElementById(rdMap[cierre.tipo_periodo] || 'rdDia').checked = true;
+    onPeriodoChange();
+    document.getElementById('f_periodo_anio').value = cierre.periodo_anio || '';
+    if (cierre.periodo_mes) document.getElementById('f_periodo_mes').value = cierre.periodo_mes;
+    if (cierre.periodo_dia) document.getElementById('f_periodo_dia').value = cierre.periodo_dia;
+    document.getElementById('f_observaciones').value = cierre.observaciones || '';
+
+    poblarResultados(cierre);
+    document.getElementById('seccionResultados').style.display = '';
+    document.getElementById('btnGuardar').style.display        = '';
+    document.getElementById('btnAnularDrawer').style.display   = cierre.id_estado === 1 ? '' : 'none';
+  } else {
+    document.getElementById('seccionResultados').style.display = 'none';
+    document.getElementById('btnGuardar').style.display        = 'none';
+    document.getElementById('btnAnularDrawer').style.display   = 'none';
+    document.getElementById('f_observaciones').value           = '';
+    document.getElementById('rdDia').checked                   = true;
+    onPeriodoChange();
+  }
+
+  document.getElementById('cierreDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+}
+
+function cerrarDrawer() {
+  document.getElementById('cierreDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+
+/* ── Cambios en tipo de período ─────────────────────────────────── */
+function onPeriodoChange() {
+  const tipo = document.querySelector('input[name="tipoPeriodo"]:checked')?.value || 'DIA';
+  document.getElementById('divMes').style.display = tipo !== 'ANIO' ? '' : 'none';
+  document.getElementById('divDia').style.display = tipo === 'DIA'  ? '' : 'none';
+  // Ocultar resultados al cambiar período
+  document.getElementById('seccionResultados').style.display = 'none';
+  document.getElementById('btnGuardar').style.display       = 'none';
+}
+
+function onProcesoChange() {
+  document.getElementById('seccionResultados').style.display = 'none';
+  document.getElementById('btnGuardar').style.display       = 'none';
+}
+
+document.querySelectorAll('input[name="tipoPeriodo"]').forEach(r =>
+  r.addEventListener('change', onPeriodoChange)
+);
+
+/* ── Calcular ───────────────────────────────────────────────────── */
+async function calcular() {
+  const tipo_proceso = document.getElementById('f_tipo_proceso').value;
+  const tipo_periodo = document.querySelector('input[name="tipoPeriodo"]:checked')?.value || 'DIA';
+  const anio = parseInt(document.getElementById('f_periodo_anio').value) || 0;
+  const mes  = parseInt(document.getElementById('f_periodo_mes').value)  || 0;
+  const dia  = parseInt(document.getElementById('f_periodo_dia').value)  || 0;
+
+  const btn = document.getElementById('btnCalcular');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Calculando…';
+
+  try {
+    const r = await fetch('/api/cierres/calcular', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        tipo_proceso, tipo_periodo,
+        periodo_anio: anio,
+        periodo_mes:  tipo_periodo !== 'ANIO' ? mes  : null,
+        periodo_dia:  tipo_periodo === 'DIA'  ? dia  : null,
+      }),
+    });
+    const d = await r.json();
+    if (!d.success) { mostrarToast('danger', d.message); return; }
+
+    poblarResultados(d);
+    document.getElementById('seccionResultados').style.display = '';
+    document.getElementById('btnGuardar').style.display        = '';
+  } catch(e) {
+    mostrarToast('danger', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-calculator me-1"></i>Calcular Estadísticas';
+  }
+}
+
+/* ── Guardar ────────────────────────────────────────────────────── */
+async function guardar() {
+  const tipo_proceso = document.getElementById('f_tipo_proceso').value;
+  const tipo_periodo = document.querySelector('input[name="tipoPeriodo"]:checked')?.value || 'DIA';
+  const anio = parseInt(document.getElementById('f_periodo_anio').value) || 0;
+  const mes  = parseInt(document.getElementById('f_periodo_mes').value)  || 0;
+  const dia  = parseInt(document.getElementById('f_periodo_dia').value)  || 0;
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const r = await fetch('/maestras/cierres/guardar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        id_cierre:    parseInt(document.getElementById('h_id_cierre').value) || 0,
+        tipo_proceso, tipo_periodo,
+        periodo_anio: anio,
+        periodo_mes:  tipo_periodo !== 'ANIO' ? mes : null,
+        periodo_dia:  tipo_periodo === 'DIA'  ? dia : null,
+        total_documentos:     parseInt(document.getElementById('h_total_documentos').value)     || 0,
+        total_importe:        parseFloat(document.getElementById('h_total_importe').value)      || 0,
+        total_aplicados:      parseInt(document.getElementById('h_total_aplicados').value)      || 0,
+        total_sunat_aceptado: parseInt(document.getElementById('h_total_sunat_aceptado').value) || 0,
+        total_pendientes:     parseInt(document.getElementById('h_total_pendientes').value)     || 0,
+        total_anulados:         parseInt(document.getElementById('h_total_anulados').value)         || 0,
+        total_margen:           parseFloat(document.getElementById('h_total_margen').value)          || 0,
+        total_margen_bienes:    parseFloat(document.getElementById('h_total_margen_bienes').value)   || 0,
+        total_margen_servicios: parseFloat(document.getElementById('h_total_margen_servicios').value)|| 0,
+        observaciones: document.getElementById('f_observaciones').value.trim(),
+      }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      mostrarToast('success', d.message);
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      mostrarToast('danger', d.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar Cierre';
+  }
+}
+
+/* ── Anular ─────────────────────────────────────────────────────── */
+async function anular(id) {
+  if (!confirm(`¿Anular el cierre #${id}?`)) return;
+  try {
+    const r = await fetch(`/maestras/cierres/${id}/anular`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+    });
+    const d = await r.json();
+    if (d.success) {
+      const c = CIERRES_DATA.find(x => x.id_cierre === id);
+      if (c) c.id_estado = 0;
+      renderTabla();
+      mostrarToast('success', d.message);
+    } else {
+      mostrarToast('danger', d.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error: ' + e.message);
+  }
+}
+
+async function anularDesdeDrawer() {
+  const id = parseInt(document.getElementById('h_id_cierre').value) || 0;
+  if (!id) return;
+  await anular(id);
+  cerrarDrawer();
+}
+
+/* ── Excel ──────────────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#','Proceso','Período','Fecha','Docs.','Importe','Aplicados','SUNAT Acep.','Pendientes','Margen','Estado']];
+  CIERRES_DATA.forEach(c => filas.push([
+    c.id_cierre,
+    PROCESO_LABEL[c.tipo_proceso] || c.tipo_proceso,
+    PERIODO_LABEL[c.tipo_periodo] || c.tipo_periodo,
+    periodoStr(c),
+    c.total_documentos,
+    parseFloat(c.total_importe).toFixed(2),
+    c.total_aplicados,
+    c.total_sunat_aceptado,
+    c.total_pendientes,
+    parseFloat(c.total_margen || 0).toFixed(2),
+    c.id_estado === 1 ? 'Activo' : 'Anulado',
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cierres');
+  XLSX.writeFile(wb, 'cierres.xlsx');
+}
+
+/* ── Toast ──────────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+/* ── Init ───────────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

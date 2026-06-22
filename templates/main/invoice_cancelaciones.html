@@ -226,6 +226,11 @@
         <div class="info-label">Concepto</div>
         <div class="info-val text-muted" id="d_concepto">—</div>
       </div>
+      <div class="col-12" id="divImagenCanc" style="display:none;">
+        <div class="info-label">Comprobante</div>
+        <img id="d_imagen_canc" src="" alt="Comprobante"
+             style="max-width:100%; border-radius:6px; border:1px solid #e2e8f0; margin-top:4px;" />
+      </div>
     </div>
 
     <div class="form-section-label">Registro</div>
@@ -548,9 +553,9 @@ function anularCancelacion() {
           btn.innerHTML = '<i class="bi bi-slash-circle me-1"></i>Anular';
           if (data.success) {
             mostrarToast('success', data.message);
-            // Actualizar estado en cache y grilla
-            const c = CANC_DATA.find(x => x.id_cancelacion === _currentId);
-            if (c) c.id_estado = 0;
+            // Eliminar del cache y actualizar grilla
+            const idx = CANC_DATA.findIndex(x => x.id_cancelacion === _currentId);
+            if (idx > -1) CANC_DATA.splice(idx, 1);
             cerrarDrawer();
             renderTabla();
           } else {
@@ -594,6 +599,19 @@ function abrirDrawer(id) {
   document.getElementById('d_fecha_registro').textContent = c.fecha_registro   ? c.fecha_registro.substring(0,16).replace('T',' ') : '—';
 
   document.getElementById('btnAnular').style.display = c.id_estado === 1 ? '' : 'none';
+
+  // Imagen: ocultar mientras carga
+  document.getElementById('divImagenCanc').style.display = 'none';
+  document.getElementById('d_imagen_canc').src = '';
+  fetch(`/api/cancelaciones/${id}/imagen`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.imagen) {
+        document.getElementById('d_imagen_canc').src = data.imagen;
+        document.getElementById('divImagenCanc').style.display = '';
+      }
+    })
+    .catch(() => {});
 
   document.getElementById('cancDrawer').classList.add('open');
   document.getElementById('drawerOverlay').classList.add('active');

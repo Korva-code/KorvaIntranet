@@ -739,9 +739,8 @@ body.login-body {
 .intranet-toast.toast-info .intranet-toast-icon { color: #60a5fa; }
 
 /* Modal de confirmación — por encima de drawers (z-index 1100) */
-#modalConfirmar         { z-index: 1300 !important; }
-#modalConfirmar + .modal-backdrop,
-.modal-backdrop         { z-index: 1295 !important; }
+#modalConfirmar                   { z-index: 1300 !important; }
+#modalConfirmar + .modal-backdrop { z-index: 1295 !important; }
 
 @keyframes intranetToastIn {
   from { opacity: 0; transform: translateX(60px); }

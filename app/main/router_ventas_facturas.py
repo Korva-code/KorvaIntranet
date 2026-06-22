@@ -43,7 +43,11 @@ def ventas_facturas():
             COALESCE(i.sunat_hash, '') AS sunat_hash,
             COALESCE(i.sunat_xml,  '') AS sunat_xml,
             COALESCE(i.sunat_cdr,  '') AS sunat_cdr,
-            COALESCE(i.doc_total_aply, 0) AS doc_total_aply
+            COALESCE(i.doc_total_aply, 0)     AS doc_total_aply,
+            COALESCE(i.doc_status, 1)         AS doc_status,
+            COALESCE(i.nota_credito_serie, '') AS nota_credito_serie,
+            i.nota_credito_numero,
+            i.nota_credito_total
         FROM invoice i
         LEFT JOIN business_partners bp ON bp.card_code = i.card_code
         LEFT JOIN warehouses w ON TRIM(w.whs_code) = TRIM(i.invoice_wh)
@@ -57,7 +61,8 @@ def ventas_facturas():
     if inv_ids:
         for r in db.session.execute(text("""
             SELECT invoice_id, item_code, quantity, price_after_vat,
-                   tax_code, warehouse_code, costing_code, costing_code2, costing_code3
+                   tax_code, warehouse_code, costing_code, costing_code2, costing_code3,
+                   price, price_cost
             FROM invoice_item
             WHERE invoice_id = ANY(:ids)
             ORDER BY invoice_id
@@ -71,6 +76,8 @@ def ventas_facturas():
                 'costing_code':    r[6] or '',
                 'costing_code2':   r[7] or '',
                 'costing_code3':   r[8] or '',
+                'price':           float(r[9])  if r[9]  is not None else 0,
+                'price_cost':      float(r[10]) if r[10] is not None else 0,
             })
 
     def _dt(v): return v.isoformat() if v else ''
@@ -99,7 +106,11 @@ def ventas_facturas():
         'sunat_hash':     r[21] or '',
         'sunat_xml':      r[22] or '',
         'sunat_cdr':      r[23] or '',
-        'doc_total_aply': float(r[24]) if r[24] is not None else 0.0,
+        'doc_total_aply':       float(r[24]) if r[24] is not None else 0.0,
+        'doc_status':           int(r[25])   if r[25] is not None else 1,
+        'nota_credito_serie':   r[26] or '',
+        'nota_credito_numero':  int(r[27])   if r[27] is not None else None,
+        'nota_credito_total':   float(r[28]) if r[28] is not None else None,
         'items':          det_by_inv.get(r[0], []),
     } for r in fact_rows]
 
@@ -408,6 +419,31 @@ def ventas_facturas_nueva():
 
             if row and row[0]:
                 db.session.commit()
+                # Guardar price y price_cost en invoice_item (el SP no los maneja)
+                new_inv_id = row[3]
+                for it in items_list:
+                    code = (it.get('item_code') or '').strip()
+                    if not code:
+                        continue
+                    try:
+                        db.session.execute(text("""
+                            UPDATE invoice_item
+                               SET price      = :price,
+                                   price_cost = :price_cost
+                             WHERE invoice_id = :inv_id
+                               AND item_code  = :code
+                        """), {
+                            'price':      float(it.get('price', 0) or 0),
+                            'price_cost': float(it.get('price_cost', 0) or 0),
+                            'inv_id':     new_inv_id,
+                            'code':       code,
+                        })
+                    except Exception:
+                        pass
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
                 # Registrar movimientos de salida en el kardex
                 try:
                     from app.main.router_almacen_kardex import registrar_movimientos_venta
@@ -523,10 +559,12 @@ def ventas_facturas_editar(invoice_id):
             db.session.execute(text("""
                 INSERT INTO invoice_item
                     (invoice_id, item_code, quantity, price_after_vat,
-                     tax_code, warehouse_code, costing_code, costing_code2, costing_code3)
+                     tax_code, warehouse_code, costing_code, costing_code2, costing_code3,
+                     price, price_cost)
                 VALUES
                     (:invoice_id, :item_code, :quantity, :price_after_vat,
-                     :tax_code, :warehouse_code, :costing_code, :costing_code2, :costing_code3)
+                     :tax_code, :warehouse_code, :costing_code, :costing_code2, :costing_code3,
+                     :price, :price_cost)
             """), {
                 'invoice_id':      invoice_id,
                 'item_code':       it.get('item_code', ''),
@@ -537,6 +575,8 @@ def ventas_facturas_editar(invoice_id):
                 'costing_code':    it.get('costing_code', ''),
                 'costing_code2':   it.get('costing_code2', ''),
                 'costing_code3':   it.get('costing_code3', ''),
+                'price':           float(it.get('price', 0) or 0),
+                'price_cost':      float(it.get('price_cost', 0) or 0),
             })
 
         db.session.commit()
