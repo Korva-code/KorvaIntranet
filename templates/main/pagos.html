@@ -1,0 +1,818 @@
+{% extends 'maestras/base.html' %}
+
+{% block content %}
+
+<script id="suscData"       type="application/json">{{ suscripciones_json    | safe }}</script>
+<script id="mediosData"     type="application/json">{{ medios_json           | safe }}</script>
+<script id="pagosData"      type="application/json">{{ pagos_mensuales_json  | safe }}</script>
+<script id="contratadosData" type="application/json">{{ contratados_json     | safe }}</script>
+
+<div class="row g-4">
+
+  <!-- ── Columna izquierda: perfil + nav ──────────────────────── -->
+  <div class="col-12 col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center py-4">
+        <div class="profile-avatar mx-auto mb-3">{{ current_user.initials }}</div>
+        <h6 class="mb-1 fw-bold">{{ current_user.full_name or current_user.id_usuario }}</h6>
+        <p class="text-muted mb-0 small">{{ current_user.email or '' }}</p>
+      </div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('main.mi_perfil') }}"
+           class="list-group-item list-group-item-action py-2 px-3 small">
+          <i class="bi bi-person-lines-fill me-2 text-muted"></i>Mi Perfil
+        </a>
+        <a href="{{ url_for('main.mi_perfil_pagos') }}"
+           class="list-group-item list-group-item-action py-2 px-3 small active fw-semibold">
+          <i class="bi bi-credit-card-2-front-fill me-2"></i>Información de Pagos
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Columna derecha ──────────────────────────────────────── -->
+  <div class="col-12 col-lg-9">
+
+    <!-- ── Catálogo de Servicios ──────────────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-grid-fill text-info me-2"></i>Planes Disponibles
+        </h6>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% for s in servicios %}
+          <div class="col-md-4">
+            <div class="card border h-100" style="border-radius:10px;">
+              <div class="card-body text-center py-3">
+                <div class="mb-2">
+                  {% if 'Base de Datos' in s.nombre %}
+                    <i class="bi bi-database-fill text-primary" style="font-size:2rem;"></i>
+                  {% elif 'Alojamiento' in s.nombre %}
+                    <i class="bi bi-server text-success" style="font-size:2rem;"></i>
+                  {% else %}
+                    <i class="bi bi-cloud-fill text-warning" style="font-size:2rem;"></i>
+                  {% endif %}
+                </div>
+                <h6 class="fw-bold mb-1" style="font-size:.82rem;">{{ s.nombre }}</h6>
+                <p class="text-muted mb-2" style="font-size:.72rem;">{{ s.descripcion or '' }}</p>
+                <div class="fw-bold text-primary" style="font-size:1.2rem;">
+                  S/ {{ '%.2f' | format(s.precio) }}
+                  {% if s.incluye_igv %}
+                    <span class="text-muted fw-normal" style="font-size:.68rem;">+ IGV</span>
+                  {% endif %}
+                </div>
+                <div class="text-muted mb-3" style="font-size:.7rem;">/ {{ s.periodicidad | lower }}</div>
+                <button class="btn btn-sm btn-outline-primary w-100"
+                        onclick="abrirModalServicio({{ s.id_servicio }})">
+                  <i class="bi bi-plus-circle me-1"></i>Contratar
+                </button>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Servicios adquiridos ───────────────────────────────── -->
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-box-seam-fill text-primary me-2"></i>Servicios Adquiridos
+        </h6>
+        <button class="btn btn-sm btn-primary ms-auto" onclick="abrirModalServicio()">
+          <i class="bi bi-plus-lg me-1"></i>Agregar Servicio
+        </button>
+      </div>
+
+      <!-- Resumen de servicios contratados -->
+      <div class="px-3 pt-3 pb-2" id="resumenContratados"></div>
+
+      <!-- Grid de pagos mensuales -->
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" style="font-size:.78rem;">
+          <thead class="table-light" style="font-size:.72rem;">
+            <tr>
+              <th class="ps-3" style="width:40px;">#</th>
+              <th style="width:130px;">Mes</th>
+              <th class="text-end" style="width:100px;">Subtotal</th>
+              <th class="text-end" style="width:80px;">IGV</th>
+              <th class="text-end" style="width:110px;">Total</th>
+              <th class="text-center" style="width:100px;">Estado</th>
+              <th class="text-center" style="width:105px;">Fecha Pago</th>
+              <th class="text-center" style="width:115px;">Próx. Vencimiento</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyPagos">
+            <tr><td colspan="7" class="text-center text-muted py-4">
+              <i class="bi bi-calendar3 me-2"></i>Sin plan generado aún. Haga clic en <strong>Pagar</strong> para generar el plan anual.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card-footer bg-white py-2 px-3 d-flex align-items-center flex-wrap gap-2">
+        <span class="text-muted small">
+          Año {{ anio_actual }} —
+          <span id="contPagados" class="text-success fw-semibold">0</span> pagados,
+          <span id="contPendientes" class="text-warning fw-semibold">0</span> pendientes
+        </span>
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <span class="small">
+            Total mensual:
+            <strong class="text-primary" id="lblTotalMensual">S/ 0.00</strong>
+          </span>
+          <button class="btn btn-success btn-sm px-3" onclick="abrirTicket()">
+            <i class="bi bi-cash-coin me-1"></i>Pagar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Métodos de Pago ────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+        <h6 class="mb-0 fw-semibold">
+          <i class="bi bi-wallet2 text-success me-2"></i>Métodos de Pago
+        </h6>
+        <button class="btn btn-sm btn-outline-success ms-auto" onclick="abrirModalMedio('TARJETA')">
+          <i class="bi bi-credit-card me-1"></i>Agregar Tarjeta
+        </button>
+        <button class="btn btn-sm btn-outline-warning" onclick="abrirModalMedio('YAPE')">
+          <i class="bi bi-phone me-1"></i>Agregar Yape
+        </button>
+      </div>
+      <div class="card-body" id="seccionMedios">
+        <p class="text-muted small text-center py-3" id="sinMedios">Sin métodos de pago registrados.</p>
+        <div class="row g-3" id="gridMedios"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ── Modal: Agregar Servicio ───────────────────────────────────── -->
+<div class="modal fade" id="modalServicio" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-3">
+        <h6 class="modal-title fw-bold">
+          <i class="bi bi-plus-circle-fill text-primary me-2"></i>Contratar Servicio
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Servicio <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" id="ms_servicio">
+            <option value="">— Seleccione —</option>
+            {% for s in servicios %}
+            <option value="{{ s.id_servicio }}"
+                    data-precio="{{ '%.2f' | format(s.precio) }}"
+                    data-igv="{{ 'true' if s.incluye_igv else 'false' }}">
+              {{ s.nombre }} — S/ {{ '%.2f' | format(s.precio) }}{% if s.incluye_igv %} + IGV{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div id="ms_resumen" style="display:none;" class="alert alert-info py-2 small mb-3">
+          <div class="d-flex justify-content-between">
+            <span>Precio base:</span><strong id="ms_precio_base">S/ 0.00</strong>
+          </div>
+          <div class="d-flex justify-content-between" id="ms_row_igv" style="display:none!important;">
+            <span>IGV (18%):</span><strong id="ms_igv">S/ 0.00</strong>
+          </div>
+          <div class="d-flex justify-content-between border-top mt-1 pt-1">
+            <span class="fw-bold">Total:</span><strong class="text-primary" id="ms_total">S/ 0.00</strong>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.7rem;">
+            <i class="bi bi-calendar3 me-1"></i>Vigencia: 30 días desde hoy
+          </div>
+        </div>
+        <div class="mb-2">
+          <label class="form-label fw-semibold small">Observaciones</label>
+          <input type="text" class="form-control form-control-sm" id="ms_obs" maxlength="300"
+                 placeholder="Opcional…">
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-primary" id="btnGuardarServicio"
+                onclick="guardarServicio()">
+          <i class="bi bi-check-lg me-1"></i>Contratar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Modal: Agregar Método de Pago ─────────────────────────────── -->
+<div class="modal fade" id="modalMedio" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-3">
+        <h6 class="modal-title fw-bold" id="modalMedioTitle">
+          <i class="bi bi-credit-card-fill text-success me-2"></i>Agregar Tarjeta
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Tarjeta -->
+        <div id="secTarjeta">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Marca</label>
+            <div class="d-flex gap-2 flex-wrap" id="marcaOptions">
+              {% for marca in ['VISA','MASTERCARD','AMEX','DINERS'] %}
+              <button type="button" class="btn btn-sm btn-outline-secondary marca-btn"
+                      data-marca="{{ marca }}" onclick="selMarca(this)">
+                <i class="bi bi-credit-card me-1"></i>{{ marca }}
+              </button>
+              {% endfor %}
+            </div>
+            <input type="hidden" id="mm_marca">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Número de Tarjeta <span class="text-danger">*</span></label>
+            <input type="text" class="form-control form-control-sm font-monospace" id="mm_numero"
+                   placeholder="•••• •••• •••• ••••" maxlength="19"
+                   oninput="formatCardNumber(this)">
+            <div class="form-text text-muted" style="font-size:.68rem;">
+              Solo guardamos los últimos 4 dígitos.
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold small">Vencimiento</label>
+              <input type="text" class="form-control form-control-sm font-monospace" id="mm_vencimiento"
+                     placeholder="MM/AA" maxlength="5" oninput="formatExpiry(this)">
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold small">Titular</label>
+              <input type="text" class="form-control form-control-sm" id="mm_titular"
+                     placeholder="Nombre en la tarjeta" maxlength="100">
+            </div>
+          </div>
+        </div>
+
+        <!-- Yape -->
+        <div id="secYape" style="display:none;">
+          <div class="text-center mb-3">
+            <div class="rounded p-3 d-inline-block" style="background:#7b2d8b;">
+              <i class="bi bi-phone-fill text-white" style="font-size:2.5rem;"></i>
+            </div>
+            <div class="fw-bold mt-2" style="color:#7b2d8b;">Yape</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Número de celular Yape <span class="text-danger">*</span></label>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-phone text-muted"></i></span>
+              <input type="tel" class="form-control form-control-sm" id="mm_yape"
+                     placeholder="9XX XXX XXX" maxlength="12">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-semibold small">Titular (opcional)</label>
+            <input type="text" class="form-control form-control-sm" id="mm_yape_titular"
+                   placeholder="Nombre del titular" maxlength="100">
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-success" id="btnGuardarMedio"
+                onclick="guardarMedio()">
+          <i class="bi bi-check-lg me-1"></i>Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Ticket de Pago ──────────────────────────────────────── -->
+<div class="modal fade" id="modalTicket" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+    <div class="modal-content">
+      <div class="modal-header py-3 border-0" style="background:#1e293b;">
+        <div class="text-white">
+          <div class="fw-bold" style="font-size:.95rem;">
+            <i class="bi bi-receipt me-2"></i>Resumen de Pago
+          </div>
+          <div style="font-size:.72rem; opacity:.7;" id="tk_subtitulo">Plan Mensual</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body p-0">
+        <!-- Ticket body -->
+        <div style="background:#f8fafc; padding:1.25rem 1.5rem;">
+
+          <!-- Fecha y empresa -->
+          <div class="d-flex justify-content-between mb-3" style="font-size:.75rem; color:#64748b;">
+            <span><i class="bi bi-building me-1"></i>Empresa ID {{ current_user.id_empresa }}</span>
+            <span id="tk_fecha"></span>
+          </div>
+
+          <!-- Línea punteada superior -->
+          <div style="border-top:2px dashed #cbd5e1; margin-bottom:1rem;"></div>
+
+          <!-- Servicios -->
+          <div id="tk_servicios" class="mb-3"></div>
+
+          <!-- Línea punteada inferior -->
+          <div style="border-top:2px dashed #cbd5e1; margin-bottom:.75rem;"></div>
+
+          <!-- Totales -->
+          <div class="d-flex justify-content-between mb-1" style="font-size:.78rem;">
+            <span class="text-muted">Subtotal</span>
+            <span class="fw-semibold" id="tk_subtotal">S/ 0.00</span>
+          </div>
+          <div class="d-flex justify-content-between mb-2" style="font-size:.78rem;" id="tk_row_igv">
+            <span class="text-muted">IGV (18%)</span>
+            <span class="fw-semibold" id="tk_igv">S/ 0.00</span>
+          </div>
+          <div class="d-flex justify-content-between p-2 rounded" style="background:#1e293b; font-size:.92rem;">
+            <span class="text-white fw-bold">TOTAL A PAGAR</span>
+            <span class="text-warning fw-bold" id="tk_total">S/ 0.00</span>
+          </div>
+
+          <!-- Selector de mes -->
+          <div class="mt-3">
+            <label class="form-label fw-semibold small">Mes a pagar</label>
+            <select class="form-select form-select-sm" id="tk_mes">
+              {% for i in range(1, 13) %}
+              <option value="{{ i }}" {% if i == mes_actual %}selected{% endif %}>
+                {{ ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][i-1] }}
+                {{ anio_actual }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <!-- Método de pago -->
+        <div style="background:#fff; padding:1rem 1.5rem; border-top:1px solid #e2e8f0;">
+          <label class="form-label fw-semibold small mb-2">Método de Pago</label>
+          <select class="form-select form-select-sm" id="tk_medio">
+            <option value="">— Seleccione un método —</option>
+          </select>
+          <div class="mt-2 text-center">
+            <a href="#" onclick="event.preventDefault(); bootstrap.Modal.getInstance(document.getElementById('modalTicket')).hide(); abrirModalMedio('TARJETA');"
+               class="small text-primary">
+              <i class="bi bi-plus-circle me-1"></i>Agregar nuevo método de pago
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer py-3 border-0" style="background:#f8fafc;">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-success btn-sm px-4 fw-semibold" id="btnConfirmarPago"
+                onclick="confirmarPago()">
+          <i class="bi bi-cash-coin me-2"></i>Confirmar Pago
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.profile-avatar {
+  width:70px; height:70px;
+  background:linear-gradient(135deg,#2563eb,#7c3aed);
+  border-radius:50%; display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:1.6rem; font-weight:800;
+  box-shadow:0 4px 16px rgba(37,99,235,.3);
+}
+.marca-btn.active {
+  background:#0d6efd; color:#fff; border-color:#0d6efd;
+}
+.medio-card {
+  border:1px solid #e2e8f0; border-radius:12px; padding:1rem;
+  position:relative; background:#f8fafc;
+}
+.medio-card .btn-eliminar {
+  position:absolute; top:.5rem; right:.5rem;
+}
+.badge-estado { font-size:.65rem; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const SUSC_DATA       = JSON.parse(document.getElementById('suscData').textContent);
+const MEDIOS_DATA     = JSON.parse(document.getElementById('mediosData').textContent);
+const PAGOS_DATA      = JSON.parse(document.getElementById('pagosData').textContent);
+const CONTRATADOS     = JSON.parse(document.getElementById('contratadosData').textContent);
+const MES_ACTUAL      = {{ mes_actual }};
+const ANIO_ACTUAL     = {{ anio_actual }};
+const MESES           = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                         'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+let _tipoMedioActual = 'TARJETA';
+
+/* ── Resumen de servicios contratados ───────────────────────────── */
+function renderResumenContratados() {
+  const cont = document.getElementById('resumenContratados');
+  if (!CONTRATADOS.length) { cont.innerHTML = ''; return; }
+  let subtotal = 0, igvTotal = 0;
+  let filas = CONTRATADOS.map(s => {
+    const igv = s.incluye_igv ? round2(s.precio * 0.18) : 0;
+    subtotal += s.precio;
+    igvTotal += igv;
+    return `<div class="d-flex justify-content-between align-items-center py-1" style="font-size:.78rem; border-bottom:1px dashed #e2e8f0;">
+      <span>${escHtml(s.nombre)}</span>
+      <span class="fw-semibold">S/ ${s.precio.toFixed(2)}${s.incluye_igv ? ' <span class="text-muted fw-normal" style="font-size:.68rem;">+ IGV</span>':''}</span>
+    </div>`;
+  }).join('');
+  const total = round2(subtotal + igvTotal);
+  document.getElementById('lblTotalMensual').textContent = 'S/ ' + total.toFixed(2);
+  cont.innerHTML = `
+    <div class="p-2 rounded" style="background:#f1f5f9; border:1px solid #e2e8f0;">
+      <div class="fw-semibold mb-2" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#64748b;">
+        <i class="bi bi-list-check me-1"></i>Servicios activos contratados
+      </div>
+      ${filas}
+      <div class="d-flex justify-content-between mt-2 pt-1" style="font-size:.8rem; color:#0f172a; border-top:1px solid #cbd5e1;">
+        <span class="fw-bold">Total mensual</span>
+        <span class="fw-bold text-primary">S/ ${total.toFixed(2)}</span>
+      </div>
+    </div>`;
+}
+
+/* ── Grid de pagos mensuales ────────────────────────────────────── */
+function renderPagosMensuales() {
+  const tbody = document.getElementById('tbodyPagos');
+  if (!PAGOS_DATA.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">
+      <i class="bi bi-calendar3 me-2"></i>Sin plan generado aún. Haga clic en <strong>Pagar</strong> para generar el plan anual.
+    </td></tr>`;
+    document.getElementById('contPagados').textContent   = 0;
+    document.getElementById('contPendientes').textContent = 0;
+    return;
+  }
+  let pagados = 0, pendientes = 0;
+  tbody.innerHTML = '';
+  PAGOS_DATA.forEach(p => {
+    const esPagado   = p.id_estado_pago === 1;
+    const esMesActual = p.mes === MES_ACTUAL;
+    if (esPagado) pagados++; else pendientes++;
+    const estadoBadge = esPagado
+      ? '<span class="badge bg-success-subtle text-success border" style="font-size:.63rem;">Pagado</span>'
+      : '<span class="badge bg-warning-subtle text-warning border" style="font-size:.63rem;">Pendiente</span>';
+    const tr = document.createElement('tr');
+    if (esMesActual) tr.style.background = '#f0fdf4';
+    const hoyMs  = new Date().setHours(0,0,0,0);
+    let vencFmt  = '—';
+    let vencida  = false;
+    if (p.fecha_pago) {
+      const [y,mo,d] = p.fecha_pago.split('-').map(Number);
+      const vencDate = new Date(y, mo - 1, d + 30);
+      vencFmt  = `${String(vencDate.getDate()).padStart(2,'0')}/${String(vencDate.getMonth()+1).padStart(2,'0')}/${vencDate.getFullYear()}`;
+      vencida  = vencDate.getTime() < hoyMs && !esPagado;
+    }
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${p.mes}</td>
+      <td class="fw-semibold ${esMesActual ? 'text-success' : ''}">
+        ${escHtml(p.mes_nombre)}${esMesActual ? ' <span class="badge bg-success ms-1" style="font-size:.6rem;">Actual</span>' : ''}
+      </td>
+      <td class="text-end">S/ ${p.total_servicios.toFixed(2)}</td>
+      <td class="text-end text-muted">S/ ${p.total_igv.toFixed(2)}</td>
+      <td class="text-end fw-semibold text-primary">S/ ${p.total_pago.toFixed(2)}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center text-muted">${p.fecha_pago ? fmtFecha(p.fecha_pago) : '—'}</td>
+      <td class="text-center ${esPagado ? 'text-success' : vencida ? 'text-danger fw-semibold' : 'text-muted'}">${vencFmt}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('contPagados').textContent    = pagados;
+  document.getElementById('contPendientes').textContent = pendientes;
+}
+
+/* ── Modal Ticket ───────────────────────────────────────────────── */
+function abrirTicket() {
+  if (!CONTRATADOS.length) {
+    mostrarToast('warning', 'No tiene servicios contratados. Contrate al menos uno para continuar.');
+    return;
+  }
+  // Calcular totales
+  let subtotal = 0, igvTotal = 0;
+  let filas = '';
+  CONTRATADOS.forEach(s => {
+    const igv = s.incluye_igv ? round2(s.precio * 0.18) : 0;
+    subtotal  += s.precio;
+    igvTotal  += igv;
+    filas += `<div class="d-flex justify-content-between mb-2" style="font-size:.78rem;">
+      <span>${escHtml(s.nombre)}</span>
+      <span class="fw-semibold">S/ ${s.precio.toFixed(2)}${s.incluye_igv ? '<span class="text-muted ms-1" style="font-size:.65rem;">+IGV</span>':''}</span>
+    </div>`;
+  });
+  const total = round2(subtotal + igvTotal);
+
+  document.getElementById('tk_servicios').innerHTML = filas;
+  document.getElementById('tk_subtotal').textContent = 'S/ ' + subtotal.toFixed(2);
+  document.getElementById('tk_igv').textContent      = 'S/ ' + igvTotal.toFixed(2);
+  document.getElementById('tk_total').textContent    = 'S/ ' + total.toFixed(2);
+  document.getElementById('tk_row_igv').style.display = igvTotal > 0 ? '' : 'none';
+
+  const hoy = new Date();
+  document.getElementById('tk_fecha').textContent =
+    hoy.toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
+  document.getElementById('tk_subtitulo').textContent =
+    `${MESES[MES_ACTUAL-1]} ${ANIO_ACTUAL}`;
+
+  // Poblar métodos de pago
+  const sel = document.getElementById('tk_medio');
+  sel.innerHTML = '<option value="">— Seleccione un método —</option>';
+  MEDIOS_DATA.forEach(m => {
+    const label = m.tipo === 'YAPE'
+      ? `Yape — ${m.telefono_yape}${m.titular ? ' ('+m.titular+')':''}`
+      : `${m.marca || 'Tarjeta'} ${m.numero_masked}${m.titular ? ' — '+m.titular:''}`;
+    sel.innerHTML += `<option value="${m.id_medio}">${label}</option>`;
+  });
+
+  new bootstrap.Modal(document.getElementById('modalTicket')).show();
+}
+
+async function confirmarPago() {
+  const btn = document.getElementById('btnConfirmarPago');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando…';
+  try {
+    const mes = parseInt(document.getElementById('tk_mes').value) || MES_ACTUAL;
+    const r = await fetch('/api/pagos/confirmar-pago', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ mes }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      mostrarToast('success', d.message);
+      bootstrap.Modal.getInstance(document.getElementById('modalTicket')).hide();
+      setTimeout(() => location.reload(), 1000);
+    } else { mostrarToast('danger', d.message); }
+  } catch(e) { mostrarToast('danger', 'Error: ' + e.message); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cash-coin me-2"></i>Confirmar Pago';
+  }
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
+/* ── Render suscripciones ──────────────────────────────────────── */
+const ESTADO_LABEL = { 0:'Pendiente', 1:'Pagado', 2:'Vencido' };
+const ESTADO_CLASS = { 0:'bg-warning-subtle text-warning', 1:'bg-success-subtle text-success', 2:'bg-danger-subtle text-danger' };
+
+function renderSusc() {
+  const tbody = document.getElementById('tbodySusc');
+  if (!tbody) return;
+  if (!SUSC_DATA.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Sin servicios contratados.</td></tr>';
+    document.getElementById('contadorSusc').textContent = 0;
+    return;
+  }
+  tbody.innerHTML = '';
+  SUSC_DATA.forEach(s => {
+    const estado = s.vencido ? 2 : (s.id_estado_pago || 0);
+    const btnPagar = estado !== 1
+      ? `<button class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:.68rem;"
+                 onclick="cambiarEstado(${s.id_suscripcion},1)">
+           <i class="bi bi-check-circle me-1"></i>Marcar Pagado
+         </button>`
+      : `<button class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:.68rem;"
+                 onclick="cambiarEstado(${s.id_suscripcion},0)">
+           <i class="bi bi-arrow-counterclockwise me-1"></i>Revertir
+         </button>`;
+    const tr = document.createElement('tr');
+    if (estado === 2) tr.style.opacity = '.6';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${s.id_suscripcion}</td>
+      <td>
+        <div class="fw-semibold">${escHtml(s.servicio)}</div>
+        ${s.observaciones ? `<div class="text-muted" style="font-size:.68rem;">${escHtml(s.observaciones)}</div>` : ''}
+      </td>
+      <td class="text-end fw-semibold">S/ ${parseFloat(s.precio_acordado).toFixed(2)}</td>
+      <td class="text-center text-muted">${fmtFecha(s.fecha_inicio)}</td>
+      <td class="text-center ${estado===2?'text-danger fw-semibold':''}">${fmtFecha(s.fecha_vencimiento)}</td>
+      <td class="text-center">
+        <span class="badge badge-estado ${ESTADO_CLASS[estado]}">${ESTADO_LABEL[estado]}</span>
+      </td>
+      <td class="text-center">${btnPagar}</td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('contadorSusc').textContent = SUSC_DATA.length;
+}
+
+function renderMedios() {
+  const grid    = document.getElementById('gridMedios');
+  const sinMsg  = document.getElementById('sinMedios');
+  grid.innerHTML = '';
+  if (!MEDIOS_DATA.length) { sinMsg.style.display = ''; return; }
+  sinMsg.style.display = 'none';
+  MEDIOS_DATA.forEach(m => {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 col-lg-4';
+    const iconos = { VISA:'bi-credit-card-fill text-primary', MASTERCARD:'bi-credit-card-2-front-fill text-danger',
+                     AMEX:'bi-credit-card text-info', DINERS:'bi-credit-card-2-back text-secondary' };
+    const iconCls = iconos[m.marca] || 'bi-credit-card text-muted';
+    if (m.tipo === 'TARJETA') {
+      col.innerHTML = `
+        <div class="medio-card">
+          <button class="btn btn-xs btn-outline-danger py-0 px-1 btn-eliminar" style="font-size:.65rem;"
+                  onclick="eliminarMedio(${m.id_medio})"><i class="bi bi-x-lg"></i></button>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi ${iconCls}" style="font-size:1.5rem;"></i>
+            <span class="fw-bold small">${escHtml(m.marca || 'Tarjeta')}</span>
+          </div>
+          <div class="font-monospace fw-semibold" style="letter-spacing:.1em;">${escHtml(m.numero_masked || '•••• •••• •••• ••••')}</div>
+          <div class="d-flex justify-content-between mt-2 text-muted" style="font-size:.72rem;">
+            <span>${escHtml(m.titular || '—')}</span>
+            <span>${escHtml(m.vencimiento || '—')}</span>
+          </div>
+        </div>`;
+    } else {
+      col.innerHTML = `
+        <div class="medio-card">
+          <button class="btn btn-xs btn-outline-danger py-0 px-1 btn-eliminar" style="font-size:.65rem;"
+                  onclick="eliminarMedio(${m.id_medio})"><i class="bi bi-x-lg"></i></button>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-phone-fill" style="font-size:1.5rem; color:#7b2d8b;"></i>
+            <span class="fw-bold small" style="color:#7b2d8b;">Yape</span>
+          </div>
+          <div class="fw-semibold">${escHtml(m.telefono_yape || '—')}</div>
+          <div class="text-muted mt-1" style="font-size:.72rem;">${escHtml(m.titular || '')}</div>
+        </div>`;
+    }
+    grid.appendChild(col);
+  });
+}
+
+function fmtFecha(iso) {
+  if (!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function escHtml(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Modal Servicio ─────────────────────────────────────────────── */
+function abrirModalServicio(idSvc = null) {
+  const sel = document.getElementById('ms_servicio');
+  if (idSvc) sel.value = idSvc;
+  calcResumen();
+  new bootstrap.Modal(document.getElementById('modalServicio')).show();
+}
+
+document.getElementById('ms_servicio').addEventListener('change', calcResumen);
+
+function calcResumen() {
+  const opt = document.getElementById('ms_servicio').selectedOptions[0];
+  const res = document.getElementById('ms_resumen');
+  if (!opt || !opt.value) { res.style.display = 'none'; return; }
+  const precio = parseFloat(opt.dataset.precio || 0);
+  const igv    = opt.dataset.igv === 'true';
+  const igvVal = igv ? precio * 0.18 : 0;
+  const total  = precio + igvVal;
+  document.getElementById('ms_precio_base').textContent = 'S/ ' + precio.toFixed(2);
+  document.getElementById('ms_igv').textContent         = 'S/ ' + igvVal.toFixed(2);
+  document.getElementById('ms_total').textContent       = 'S/ ' + total.toFixed(2);
+  document.getElementById('ms_row_igv').style.display   = igv ? '' : 'none';
+  res.style.display = '';
+}
+
+async function guardarServicio() {
+  const id_servicio = parseInt(document.getElementById('ms_servicio').value) || 0;
+  if (!id_servicio) { mostrarToast('warning', 'Seleccione un servicio.'); return; }
+  const btn = document.getElementById('btnGuardarServicio');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/pagos/suscripciones/nueva', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id_servicio, observaciones: document.getElementById('ms_obs').value.trim() }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      mostrarToast('success', d.message);
+      bootstrap.Modal.getInstance(document.getElementById('modalServicio')).hide();
+      setTimeout(() => location.reload(), 900);
+    } else { mostrarToast('danger', d.message); }
+  } catch(e) { mostrarToast('danger', 'Error: ' + e.message); }
+  finally { btn.disabled = false; }
+}
+
+/* ── Cambiar estado suscripción ─────────────────────────────────── */
+async function cambiarEstado(id, estado) {
+  try {
+    const r = await fetch(`/api/pagos/suscripciones/${id}/estado`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id_estado_pago: estado }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      const s = SUSC_DATA.find(x => x.id_suscripcion === id);
+      if (s) { s.id_estado_pago = estado; s.vencido = false; }
+      renderSusc();
+      mostrarToast('success', d.message);
+    } else { mostrarToast('danger', d.message); }
+  } catch(e) { mostrarToast('danger', 'Error: ' + e.message); }
+}
+
+/* ── Modal Medio de Pago ────────────────────────────────────────── */
+function abrirModalMedio(tipo) {
+  _tipoMedioActual = tipo;
+  document.getElementById('secTarjeta').style.display = tipo === 'TARJETA' ? '' : 'none';
+  document.getElementById('secYape').style.display    = tipo === 'YAPE'    ? '' : 'none';
+  document.getElementById('modalMedioTitle').innerHTML =
+    tipo === 'TARJETA'
+      ? '<i class="bi bi-credit-card-fill text-success me-2"></i>Agregar Tarjeta de Crédito/Débito'
+      : '<i class="bi bi-phone-fill me-2" style="color:#7b2d8b;"></i>Agregar Yape';
+  // Limpiar
+  ['mm_numero','mm_vencimiento','mm_titular','mm_yape','mm_yape_titular'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.getElementById('mm_marca').value = '';
+  document.querySelectorAll('.marca-btn').forEach(b => b.classList.remove('active'));
+  new bootstrap.Modal(document.getElementById('modalMedio')).show();
+}
+
+function selMarca(btn) {
+  document.querySelectorAll('.marca-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mm_marca').value = btn.dataset.marca;
+}
+
+function formatCardNumber(el) {
+  let v = el.value.replace(/\D/g,'').substring(0,16);
+  el.value = v.replace(/(.{4})/g,'$1 ').trim();
+}
+
+function formatExpiry(el) {
+  let v = el.value.replace(/\D/g,'');
+  if (v.length >= 2) v = v.substring(0,2) + '/' + v.substring(2,4);
+  el.value = v;
+}
+
+async function guardarMedio() {
+  const btn = document.getElementById('btnGuardarMedio');
+  const payload = { tipo: _tipoMedioActual };
+  if (_tipoMedioActual === 'TARJETA') {
+    payload.numero    = document.getElementById('mm_numero').value.replace(/\s/g,'');
+    payload.marca     = document.getElementById('mm_marca').value;
+    payload.vencimiento = document.getElementById('mm_vencimiento').value;
+    payload.titular   = document.getElementById('mm_titular').value.trim();
+  } else {
+    payload.telefono_yape = document.getElementById('mm_yape').value.trim();
+    payload.titular       = document.getElementById('mm_yape_titular').value.trim();
+  }
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/pagos/medios/guardar', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (d.success) {
+      mostrarToast('success', d.message);
+      bootstrap.Modal.getInstance(document.getElementById('modalMedio')).hide();
+      setTimeout(() => location.reload(), 900);
+    } else { mostrarToast('danger', d.message); }
+  } catch(e) { mostrarToast('danger', 'Error: ' + e.message); }
+  finally { btn.disabled = false; }
+}
+
+function eliminarMedio(id) {
+  confirmarAccion('¿Desea eliminar este método de pago?', async () => {
+    try {
+      const r = await fetch(`/api/pagos/medios/${id}/eliminar`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+      });
+      const d = await r.json();
+      if (d.success) {
+        const i = MEDIOS_DATA.findIndex(x => x.id_medio === id);
+        if (i > -1) MEDIOS_DATA.splice(i, 1);
+        renderMedios();
+        mostrarToast('success', d.message);
+      } else { mostrarToast('danger', d.message); }
+    } catch(e) { mostrarToast('danger', 'Error: ' + e.message); }
+  }, { titulo: 'Eliminar método de pago', tipo: 'danger', txtBtn: 'Eliminar' });
+}
+
+/* ── Init ───────────────────────────────────────────────────────── */
+renderResumenContratados();
+renderPagosMensuales();
+renderSusc();
+renderMedios();
+</script>
+{% endblock %}

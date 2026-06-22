@@ -31,6 +31,9 @@ from app.main import router_ventas_nc                   # noqa: E402, F401
 from app.main import router_sunat_nota_credito          # noqa: E402, F401
 from app.main import router_ventas_lista_precios        # noqa: E402, F401
 from app.main import router_impuestos                   # noqa: E402, F401
+from app.main import router_cierres                     # noqa: E402, F401
+from app.main import router_pagos                       # noqa: E402, F401
+from app.main import router_punto_venta                 # noqa: E402, F401
 
 
 @main.context_processor
