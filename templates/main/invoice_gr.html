@@ -19,22 +19,39 @@
 <div class="card border-0 shadow-sm">
 
   <div class="card-header bg-white border-bottom py-2 px-3">
-    <div class="d-flex flex-wrap align-items-center gap-2">
+    <!-- Fila 1: Título + botones -->
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
       <h6 class="mb-0 fw-semibold text-nowrap me-auto">
         <i class="bi bi-truck text-warning me-1"></i> Guías de Remisión
       </h6>
-      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0">
-        <div class="input-group input-group-sm flex-grow-1" style="min-width:160px; max-width:280px;">
-          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
-          <input type="search" class="form-control" id="buscarGR" placeholder="Serie, número, destinatario…">
-        </div>
-        <button class="btn btn-sm btn-warning text-nowrap" onclick="abrirDrawer('new')">
-          <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nueva Guía</span><span class="d-sm-none">Nueva</span>
-        </button>
-        <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
-          <i class="bi bi-file-earmark-excel me-1"></i>Excel
-        </button>
+      <button class="btn btn-sm btn-warning text-nowrap" onclick="abrirDrawer('new')">
+        <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nueva Guía</span><span class="d-sm-none">Nueva</span>
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+    <!-- Fila 2: Filtros -->
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="input-group input-group-sm" style="min-width:160px; max-width:260px;">
+        <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+        <input type="search" class="form-control" id="buscarGR" placeholder="Serie, número…">
       </div>
+      <div class="input-group input-group-sm" style="width:155px;">
+        <span class="input-group-text bg-light" style="font-size:.72rem;">Desde</span>
+        <input type="date" class="form-control form-control-sm" id="filtFechaDesde">
+      </div>
+      <div class="input-group input-group-sm" style="width:155px;">
+        <span class="input-group-text bg-light" style="font-size:.72rem;">Hasta</span>
+        <input type="date" class="form-control form-control-sm" id="filtFechaHasta">
+      </div>
+      <div class="input-group input-group-sm flex-grow-1" style="min-width:160px; max-width:260px;">
+        <span class="input-group-text bg-light"><i class="bi bi-person text-muted"></i></span>
+        <input type="search" class="form-control" id="filtDestinatario" placeholder="Destinatario…">
+      </div>
+      <button class="btn btn-sm btn-outline-secondary text-nowrap" onclick="limpiarFiltros()" title="Limpiar filtros">
+        <i class="bi bi-x-circle"></i>
+      </button>
     </div>
   </div>
 
@@ -42,13 +59,13 @@
     <table class="table table-hover align-middle mb-0" id="tablaGR">
       <thead class="table-light" style="font-size:.73rem;">
         <tr>
-          <th class="ps-3" style="width:65px;">GR-ID</th>
-          <th style="width:100px;">Serie-Nro.</th>
-          <th style="width:95px;">F. Emisión</th>
-          <th style="width:95px;">F. Traslado</th>
-          <th style="min-width:160px;">Destinatario</th>
+          <th class="ps-3 sortable" data-col="gr_id" style="width:65px;">GR-ID <span class="sort-icon text-muted">↕</span></th>
+          <th class="sortable" data-col="serie" style="width:100px;">Serie-Nro. <span class="sort-icon text-muted">↕</span></th>
+          <th class="sortable" data-col="fecha_emision" style="width:95px;">F. Emisión <span class="sort-icon text-muted">↕</span></th>
+          <th class="sortable" data-col="fecha_inicio_traslado" style="width:95px;">F. Traslado <span class="sort-icon text-muted">↕</span></th>
+          <th class="sortable" data-col="dest_denominacion" style="min-width:160px;">Destinatario <span class="sort-icon text-muted">↕</span></th>
           <th style="width:120px;">Doc. Ref.</th>
-          <th style="min-width:140px;">Transportista</th>
+          <th class="sortable" data-col="transp_denominacion" style="min-width:140px;">Transportista <span class="sort-icon text-muted">↕</span></th>
           <th style="width:70px;" class="text-center">Estado</th>
           <th style="width:60px;" class="text-center">Ver</th>
         </tr>
@@ -520,6 +537,8 @@
 /* ── Tabla principal ────────────────────────────────────────── */
 .badge-estado-1 { background: #dcfce7; color: #16a34a; }
 .badge-estado-0 { background: #fee2e2; color: #dc2626; }
+th.sortable:hover { background: #f1f5f9; }
+th.sortable .sort-icon { font-size:.7rem; vertical-align: middle; }
 </style>
 {% endblock %}
 
@@ -669,16 +688,69 @@ function onSerieChange() {
   }
 }
 
+/* ── Filtros y ordenamiento ──────────────────────────────────── */
+let _sortCol = null, _sortDir = 1;
+
+function _getFilters() {
+  return {
+    q:          (document.getElementById('buscarGR').value      || '').toLowerCase().trim(),
+    dest:       (document.getElementById('filtDestinatario').value || '').toLowerCase().trim(),
+    desde:      document.getElementById('filtFechaDesde').value || '',
+    hasta:      document.getElementById('filtFechaHasta').value || '',
+  };
+}
+
+function limpiarFiltros() {
+  document.getElementById('buscarGR').value        = '';
+  document.getElementById('filtDestinatario').value = '';
+  document.getElementById('filtFechaDesde').value   = '';
+  document.getElementById('filtFechaHasta').value   = '';
+  _sortCol = null; _sortDir = 1;
+  _actualizarIconosSort();
+  renderTabla(GR_DATA);
+}
+
+function _actualizarIconosSort() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const icon = th.querySelector('.sort-icon');
+    if (!icon) return;
+    if (th.dataset.col === _sortCol) {
+      icon.textContent = _sortDir === 1 ? '↑' : '↓';
+      icon.className = 'sort-icon text-warning';
+    } else {
+      icon.textContent = '↕';
+      icon.className = 'sort-icon text-muted';
+    }
+  });
+}
+
 /* ── Render tabla principal ─────────────────────────────────── */
 function renderTabla(data) {
-  const q = (document.getElementById('buscarGR').value || '').toLowerCase();
+  const f     = _getFilters();
   const tbody = document.getElementById('tbodyGR');
-  let html = '', cnt = 0;
-  data.forEach(d => {
-    const txt = [d.serie, d.numero, d.dest_denominacion, d.dest_num_doc,
-                 d.doc_rel_serie, d.doc_rel_numero, d.transp_denominacion].join(' ').toLowerCase();
-    if (q && !txt.includes(q)) return;
-    cnt++;
+
+  let filas = data.filter(d => {
+    if (f.q) {
+      const txt = [d.serie, d.numero, d.dest_num_doc,
+                   d.doc_rel_serie, d.doc_rel_numero, d.transp_denominacion].join(' ').toLowerCase();
+      if (!txt.includes(f.q)) return false;
+    }
+    if (f.dest && !(d.dest_denominacion || '').toLowerCase().includes(f.dest)) return false;
+    if (f.desde && (d.fecha_emision || '') < f.desde) return false;
+    if (f.hasta && (d.fecha_emision || '') > f.hasta) return false;
+    return true;
+  });
+
+  if (_sortCol) {
+    filas = filas.slice().sort((a, b) => {
+      let va = a[_sortCol] ?? '', vb = b[_sortCol] ?? '';
+      if (typeof va === 'number' && typeof vb === 'number') return _sortDir * (va - vb);
+      return _sortDir * String(va).localeCompare(String(vb), 'es', {numeric: true});
+    });
+  }
+
+  let html = '';
+  filas.forEach(d => {
     const est = d.id_estado === 1
       ? '<span class="badge badge-estado-1">Activa</span>'
       : '<span class="badge badge-estado-0">Anulada</span>';
@@ -700,10 +772,26 @@ function renderTabla(data) {
     </tr>`;
   });
   tbody.innerHTML = html || '<tr><td colspan="9" class="text-center text-muted py-5">Sin guías registradas.</td></tr>';
-  document.getElementById('countLabel').textContent = cnt;
+  document.getElementById('countLabel').textContent = filas.length;
 }
+
+/* ── Eventos filtros ─────────────────────────────────────────── */
+['buscarGR','filtDestinatario','filtFechaDesde','filtFechaHasta'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => renderTabla(GR_DATA));
+});
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.style.cursor = 'pointer'; th.style.userSelect = 'none';
+  th.addEventListener('click', () => {
+    if (_sortCol === th.dataset.col) {
+      _sortDir = _sortDir === 1 ? -1 : 1;
+    } else {
+      _sortCol = th.dataset.col; _sortDir = 1;
+    }
+    _actualizarIconosSort();
+    renderTabla(GR_DATA);
+  });
+});
 renderTabla(GR_DATA);
-document.getElementById('buscarGR').addEventListener('input', () => renderTabla(GR_DATA));
 
 /* ── Sub-tablas ─────────────────────────────────────────────── */
 function _condOpts(selNum) {

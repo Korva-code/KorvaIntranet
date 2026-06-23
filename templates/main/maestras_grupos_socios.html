@@ -1,0 +1,335 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} registros
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="gruposData" type="application/json">{{ grupos_json | safe }}</script>
+
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom py-2 px-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h6 class="mb-0 fw-semibold text-nowrap me-auto">
+        <i class="bi bi-diagram-3 text-primary me-1"></i> Grupos de Socios de Negocio
+      </h6>
+      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0">
+        <div class="input-group input-group-sm flex-grow-1" style="min-width:160px; max-width:260px;">
+          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+          <input type="search" class="form-control" id="buscarInput" placeholder="Buscar código o nombre…">
+        </div>
+        <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer(null)">
+          <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nuevo Grupo</span><span class="d-sm-none">Nuevo</span>
+        </button>
+        <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:350px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.77rem;">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:60px;">#</th>
+          <th style="width:130px;">Código</th>
+          <th>Nombre</th>
+          <th class="text-center" style="width:90px;">Estado</th>
+          <th class="text-center" style="width:120px;">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyGrupos"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="contadorVisible">{{ total }}</strong> registros
+  </div>
+</div>
+
+
+<!-- ── Overlay ──────────────────────────────────────────────── -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+<!-- ── Drawer ───────────────────────────────────────────────── -->
+<aside class="articulos-drawer" id="grupoDrawer">
+
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nuevo Grupo</h6>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+    <input type="hidden" id="f_es_nuevo" value="1">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold" style="font-size:.82rem;">
+        Código <span class="text-danger">*</span>
+      </label>
+      <input type="text" class="form-control form-control-sm font-monospace"
+             id="f_group_code" placeholder="Ej: CLIEN" maxlength="20"
+             oninput="this.value = this.value.toUpperCase()">
+      <div class="form-text">Solo letras y números. No se puede cambiar después de creado.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold" style="font-size:.82rem;">
+        Nombre <span class="text-danger">*</span>
+      </label>
+      <input type="text" class="form-control form-control-sm"
+             id="f_group_name" placeholder="Ej: Clientes Nacionales" maxlength="200"
+             oninput="document.getElementById('charCount').textContent = this.value.length">
+      <div class="form-text text-end">
+        <span id="charCount">0</span> / 200 caracteres
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar" onclick="guardar()">
+      <i class="bi bi-check-lg me-1"></i>Guardar
+    </button>
+  </div>
+
+</aside>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+.articulos-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 420px; max-width: 96vw;
+  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.articulos-drawer.open { transform: translateX(0); }
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: 1rem 1.25rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body   { flex: 1; overflow-y: auto; padding: 1.25rem; }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; justify-content: flex-end;
+  gap: .5rem; flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+let GRUPOS_DATA = JSON.parse(document.getElementById('gruposData').textContent);
+let busqueda    = '';
+
+document.getElementById('buscarInput').addEventListener('input', function() {
+  busqueda = this.value.toLowerCase();
+  renderTabla();
+});
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Render tabla ─────────────────────────────────────────── */
+function renderTabla() {
+  const tbody = document.getElementById('tbodyGrupos');
+  const filas = GRUPOS_DATA.filter(g =>
+    !busqueda ||
+    g.group_code.toLowerCase().includes(busqueda) ||
+    g.group_name.toLowerCase().includes(busqueda)
+  );
+
+  if (!filas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">Sin resultados.</td></tr>';
+    document.getElementById('contadorVisible').textContent = 0;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  filas.forEach((g, i) => {
+    const estadoBadge = g.id_estado === 1
+      ? '<span class="badge bg-success-subtle text-success border" style="font-size:.65rem;">Activo</span>'
+      : '<span class="badge bg-danger-subtle  text-danger  border" style="font-size:.65rem;">Inactivo</span>';
+
+    const btnEstado = g.id_estado === 1
+      ? `<button class="btn btn-xs btn-outline-warning py-0 px-2" style="font-size:.7rem;"
+                 title="Desactivar" onclick="cambiarEstado('${escHtml(g.group_code)}', 0)">
+           <i class="bi bi-pause-circle"></i>
+         </button>`
+      : `<button class="btn btn-xs btn-outline-success py-0 px-2" style="font-size:.7rem;"
+                 title="Activar" onclick="cambiarEstado('${escHtml(g.group_code)}', 1)">
+           <i class="bi bi-play-circle"></i>
+         </button>`;
+
+    const tr = document.createElement('tr');
+    if (g.id_estado !== 1) tr.style.opacity = '.55';
+    tr.innerHTML = `
+      <td class="ps-3 text-muted">${i + 1}</td>
+      <td class="font-monospace fw-semibold">${escHtml(g.group_code)}</td>
+      <td>${escHtml(g.group_name)}</td>
+      <td class="text-center">${estadoBadge}</td>
+      <td class="text-center">
+        <button class="btn btn-xs btn-outline-primary py-0 px-2 me-1" style="font-size:.7rem;"
+                onclick="abrirDrawer('${escHtml(g.group_code)}')">
+          <i class="bi bi-pencil"></i>
+        </button>
+        ${btnEstado}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('contadorVisible').textContent = filas.length;
+}
+
+/* ── Drawer ────────────────────────────────────────────────── */
+function abrirDrawer(code) {
+  const g = code ? GRUPOS_DATA.find(x => x.group_code === code) : null;
+  const esNuevo = !g;
+
+  document.getElementById('f_es_nuevo').value  = esNuevo ? '1' : '0';
+  document.getElementById('f_group_code').value = g ? g.group_code : '';
+  document.getElementById('f_group_name').value = g ? g.group_name : '';
+  document.getElementById('charCount').textContent = g ? g.group_name.length : 0;
+
+  // Código solo editable al crear
+  document.getElementById('f_group_code').readOnly = !esNuevo;
+  document.getElementById('f_group_code').classList.toggle('bg-light', !esNuevo);
+
+  const badge = document.getElementById('drawerBadge');
+  const title = document.getElementById('drawerTitle');
+  if (esNuevo) {
+    badge.textContent = 'NUEVO'; badge.className = 'badge bg-primary';
+    title.textContent = 'Nuevo Grupo de Socios';
+  } else {
+    badge.textContent = 'EDITAR'; badge.className = 'badge bg-warning text-dark';
+    title.textContent = `Editar: ${g.group_name}`;
+  }
+
+  document.getElementById('grupoDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  setTimeout(() => document.getElementById(esNuevo ? 'f_group_code' : 'f_group_name').focus(), 200);
+}
+
+function cerrarDrawer() {
+  document.getElementById('grupoDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+
+/* ── Guardar ───────────────────────────────────────────────── */
+async function guardar() {
+  const code   = document.getElementById('f_group_code').value.trim().toUpperCase();
+  const name   = document.getElementById('f_group_name').value.trim();
+  const esNuevo = document.getElementById('f_es_nuevo').value === '1';
+
+  if (!code) { mostrarToast('warning', 'El código es obligatorio.'); return; }
+  if (!name) { mostrarToast('warning', 'El nombre es obligatorio.'); return; }
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const resp = await fetch('{{ url_for("main.maestras_grupos_socios_guardar") }}', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({ group_code: code, group_name: name, es_nuevo: esNuevo }),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      mostrarToast('success', res.message);
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 800);
+    } else {
+      mostrarToast('danger', res.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Guardar';
+  }
+}
+
+/* ── Cambiar estado ────────────────────────────────────────── */
+async function cambiarEstado(code, estado) {
+  const accion = estado === 1 ? 'activar' : 'desactivar';
+  if (!confirm(`¿Desea ${accion} este grupo?`)) return;
+
+  try {
+    const resp = await fetch(`/maestras/grupos-socios/${encodeURIComponent(code)}/estado`, {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({id_estado: estado}),
+    });
+    const res = await resp.json();
+    if (res.success) {
+      const g = GRUPOS_DATA.find(x => x.group_code === code);
+      if (g) g.id_estado = estado;
+      renderTabla();
+      mostrarToast('success', res.message);
+    } else {
+      mostrarToast('danger', res.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  }
+}
+
+/* ── Excel ─────────────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#', 'Código', 'Nombre', 'Estado']];
+  GRUPOS_DATA.forEach((g, i) => filas.push([
+    i + 1, g.group_code, g.group_name, g.id_estado === 1 ? 'Activo' : 'Inactivo',
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Grupos Socios');
+  XLSX.writeFile(wb, 'grupos_socios_negocio.xlsx');
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastContainer');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'toastContainer';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.cssText = 'min-width:260px;font-size:.82rem;';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+/* ── Init ──────────────────────────────────────────────────── */
+renderTabla();
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}
