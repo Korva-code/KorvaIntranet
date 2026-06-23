@@ -13,40 +13,40 @@
 <div class="card border-0 shadow-sm">
 
   <!-- ── Cabecera ───────────────────────────────────────────── -->
-  <div class="card-header bg-white border-bottom py-2">
-    <div class="d-flex align-items-center gap-2 flex-wrap">
+  <div class="card-header bg-white border-bottom py-2 px-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
 
-      <h6 class="mb-0 fw-semibold text-nowrap">
+      <h6 class="mb-0 fw-semibold text-nowrap me-auto">
         <i class="bi bi-currency-exchange text-primary me-1"></i> Tipos de Cambio
       </h6>
 
-      <!-- Filtro año/mes -->
-      <form method="GET" class="d-flex align-items-center gap-2 ms-2" id="formFiltro">
-        <select name="anio" class="form-select form-select-sm" style="width:90px;"
-                onchange="document.getElementById('formFiltro').submit()">
-          {% for a in anios %}
-          <option value="{{ a }}" {% if a == sel_anio %}selected{% endif %}>{{ a }}</option>
-          {% endfor %}
-        </select>
-        <select name="mes" class="form-select form-select-sm" style="width:130px;"
-                onchange="document.getElementById('formFiltro').submit()">
-          {% for nombre in meses %}
-          <option value="{{ loop.index }}" {% if loop.index == sel_mes %}selected{% endif %}>{{ nombre }}</option>
-          {% endfor %}
-        </select>
-      </form>
+      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0 flex-wrap">
+        <!-- Filtro año/mes -->
+        <form method="GET" class="d-flex align-items-center gap-2" id="formFiltro">
+          <select name="anio" class="form-select form-select-sm" style="width:90px;"
+                  onchange="document.getElementById('formFiltro').submit()">
+            {% for a in anios %}
+            <option value="{{ a }}" {% if a == sel_anio %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+          <select name="mes" class="form-select form-select-sm" style="width:130px;"
+                  onchange="document.getElementById('formFiltro').submit()">
+            {% for nombre in meses %}
+            <option value="{{ loop.index }}" {% if loop.index == sel_mes %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </form>
 
-      <div class="d-flex gap-2 ms-auto">
         <!-- Botón importar SUNAT -->
         {% if scraping_ok %}
         <button class="btn btn-sm btn-outline-danger text-nowrap" id="btnSunat"
                 onclick="importarSunat()">
-          <i class="bi bi-cloud-download me-1"></i>Importar SUNAT
+          <i class="bi bi-cloud-download me-1"></i><span class="d-none d-sm-inline">Importar SUNAT</span><span class="d-sm-none">SUNAT</span>
         </button>
         {% else %}
         <button class="btn btn-sm btn-outline-secondary text-nowrap" disabled
                 title="Instale: pip install requests beautifulsoup4">
-          <i class="bi bi-cloud-slash me-1"></i>Importar SUNAT
+          <i class="bi bi-cloud-slash me-1"></i><span class="d-none d-sm-inline">Importar SUNAT</span><span class="d-sm-none">SUNAT</span>
         </button>
         {% endif %}
         <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">

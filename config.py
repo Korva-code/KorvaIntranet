@@ -23,6 +23,7 @@ class Config:
     APISUNAT_TOKEN = os.getenv('APISUNAT_TOKEN', '')
     _base = _SUNAT_BASE.get(os.getenv('APISUNAT_MODO', 'sandbox'), _SUNAT_BASE['sandbox'])
     APISUNAT_URL      = os.getenv('APISUNAT_URL')      or f'{_base}/documents'
+    APISUNAT_GR_URL   = os.getenv('APISUNAT_GR_URL')   or f'{_base}/dispatches'
     APISUNAT_VOID_URL = os.getenv('APISUNAT_VOID_URL') or f'{_base}/voided'
 
 

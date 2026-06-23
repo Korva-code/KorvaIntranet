@@ -37,8 +37,11 @@ def _apply_bp_fields(bp, form) -> None:
     bp.u_cl_fecmig    = _parse_date(form.get('u_cl_fecmig'))
     bp.email          = form.get('email', '').strip() or None
     bp.phone          = form.get('phone', '').strip() or None
-    bp.IsCredit       = int(form['IsCredit'])  if form.get('IsCredit')  else None
-    bp.Creditday      = int(form['Creditday']) if form.get('Creditday') else None
+    bp.IsCredit               = int(form['IsCredit'])  if form.get('IsCredit')  else None
+    bp.Creditday              = int(form['Creditday']) if form.get('Creditday') else None
+    bp.transp_num_mtc         = form.get('transp_num_mtc',         '').strip() or None
+    bp.transp_num_autorizacion= form.get('transp_num_autorizacion','').strip() or None
+    bp.transp_cod_entidad     = form.get('transp_cod_entidad',     '').strip() or None
 
 
 def _save_addresses(card_code, addresses_json):
@@ -53,8 +56,8 @@ def _save_addresses(card_code, addresses_json):
         if not any([a.get('address_name'), a.get('street'), a.get('city')]):
             continue
         db.session.execute(text("""
-            INSERT INTO business_partners_addresses (bp_code, address_name, street, street_no, city, country)
-            VALUES (:code, :name, :street, :street_no, :city, :country)
+            INSERT INTO business_partners_addresses (bp_code, address_name, street, street_no, city, country, ubigeo)
+            VALUES (:code, :name, :street, :street_no, :city, :country, :ubigeo)
         """), {
             'code':      card_code,
             'name':      (a.get('address_name') or '').strip(),
@@ -62,6 +65,55 @@ def _save_addresses(card_code, addresses_json):
             'street_no': (a.get('street_no')     or '').strip(),
             'city':      (a.get('city')          or '').strip(),
             'country':   (a.get('country')       or '').strip(),
+            'ubigeo':    (a.get('ubigeo')        or '').strip() or None,
+        })
+
+
+def _save_conductores(card_code, conductores_json):
+    try:
+        conductores = json.loads(conductores_json) if conductores_json else []
+    except (ValueError, TypeError):
+        conductores = []
+    db.session.execute(text(
+        "DELETE FROM bp_conductores WHERE card_code = :code"
+    ), {'code': card_code})
+    for c in conductores:
+        if not any([c.get('nombres'), c.get('apellidos'), c.get('numero_de_documento')]):
+            continue
+        db.session.execute(text("""
+            INSERT INTO bp_conductores
+                   (card_code, conductor, tipo_de_documento, numero_de_documento,
+                    nombres, apellidos, numero_licencia_conducir)
+            VALUES (:code, :conductor, :tipo_doc, :num_doc, :nombres, :apellidos, :licencia)
+        """), {
+            'code':       card_code,
+            'conductor':  (c.get('conductor')              or 'principal').strip(),
+            'tipo_doc':   (c.get('tipo_de_documento')      or '1').strip(),
+            'num_doc':    (c.get('numero_de_documento')    or '').strip(),
+            'nombres':    (c.get('nombres')                or '').strip(),
+            'apellidos':  (c.get('apellidos')              or '').strip(),
+            'licencia':   (c.get('numero_licencia_conducir') or '').strip(),
+        })
+
+
+def _save_vehiculos(card_code, vehiculos_json):
+    try:
+        vehiculos = json.loads(vehiculos_json) if vehiculos_json else []
+    except (ValueError, TypeError):
+        vehiculos = []
+    db.session.execute(text(
+        "DELETE FROM bp_vehiculos WHERE card_code = :code"
+    ), {'code': card_code})
+    for v in vehiculos:
+        if not v.get('numero_de_placa'):
+            continue
+        db.session.execute(text("""
+            INSERT INTO bp_vehiculos (card_code, vehiculo, numero_de_placa)
+            VALUES (:code, :vehiculo, :placa)
+        """), {
+            'code':    card_code,
+            'vehiculo': (v.get('vehiculo') or 'principal').strip(),
+            'placa':    (v.get('numero_de_placa') or '').strip().upper(),
         })
 
 
@@ -118,7 +170,10 @@ def socios_negocio():
             bp.u_vs_afprcp,
             bp.u_cl_estmig,
             bp.u_cl_resmig,
-            bp.u_cl_fecmig
+            bp.u_cl_fecmig,
+            COALESCE(bp.transp_num_mtc, '')         AS transp_num_mtc,
+            COALESCE(bp.transp_num_autorizacion, '') AS transp_num_autorizacion,
+            COALESCE(bp.transp_cod_entidad, '')      AS transp_cod_entidad
         FROM business_partners bp
         LEFT JOIN anexo_tipo at2  ON at2.id_tipo_anexo        = bp.card_type
         LEFT JOIN business_partners_group bpg ON TRIM(bpg.group_code) = TRIM(bp.group_code)
@@ -153,7 +208,10 @@ def socios_negocio():
         'u_vs_afprcp':    (r[17] or '').strip(),
         'u_cl_estmig':    (r[18] or '').strip(),
         'u_cl_resmig':    r[19] or '',
-        'u_cl_fecmig':    r[20].isoformat() if r[20] else '',
+        'u_cl_fecmig':            r[20].isoformat() if r[20] else '',
+        'transp_num_mtc':         r[21] or '',
+        'transp_num_autorizacion':r[22] or '',
+        'transp_cod_entidad':     r[23] or '',
     } for r in rows]
 
     socios_json = json.dumps(socios_list, ensure_ascii=False)
@@ -179,6 +237,8 @@ def socio_nuevo():
     db.session.flush()
     _save_addresses(card_code, request.form.get('addresses_json', ''))
     _save_descuentos(bp.federal_tax_id or '', request.form.get('descuentos_json', ''))
+    _save_conductores(card_code, request.form.get('conductores_json', ''))
+    _save_vehiculos(card_code, request.form.get('vehiculos_json', ''))
     db.session.commit()
     flash(f'Socio «{card_code}» registrado correctamente.', 'success')
     return redirect(url_for('main.socios_negocio'))
@@ -194,6 +254,8 @@ def socio_editar(card_code):
     _apply_bp_fields(bp, request.form)
     _save_addresses(card_code, request.form.get('addresses_json', ''))
     _save_descuentos(bp.federal_tax_id or '', request.form.get('descuentos_json', ''))
+    _save_conductores(card_code, request.form.get('conductores_json', ''))
+    _save_vehiculos(card_code, request.form.get('vehiculos_json', ''))
     db.session.commit()
     flash(f'Socio «{card_code}» actualizado correctamente.', 'success')
     return redirect(url_for('main.socios_negocio'))
@@ -203,7 +265,7 @@ def socio_editar(card_code):
 @login_required
 def api_socio_direcciones(card_code):
     rows = db.session.execute(text("""
-        SELECT address_name, street, street_no, city, country
+        SELECT address_name, street, street_no, city, country, COALESCE(ubigeo, '') AS ubigeo
         FROM business_partners_addresses
         WHERE bp_code = :code
         ORDER BY address_name
@@ -211,7 +273,42 @@ def api_socio_direcciones(card_code):
     return jsonify([{
         'address_name': r[0] or '', 'street':    r[1] or '',
         'street_no':    r[2] or '', 'city':      r[3] or '',
-        'country':      r[4] or '',
+        'country':      r[4] or '', 'ubigeo':    r[5] or '',
+    } for r in rows])
+
+
+@main.route('/api/socios/<path:card_code>/conductores')
+@login_required
+def api_socio_conductores(card_code):
+    rows = db.session.execute(text("""
+        SELECT conductor, tipo_de_documento, numero_de_documento,
+               nombres, apellidos, numero_licencia_conducir
+        FROM bp_conductores
+        WHERE card_code = :code
+        ORDER BY id
+    """), {'code': card_code}).fetchall()
+    return jsonify([{
+        'conductor':               r[0] or 'principal',
+        'tipo_de_documento':       r[1] or '1',
+        'numero_de_documento':     r[2] or '',
+        'nombres':                 r[3] or '',
+        'apellidos':               r[4] or '',
+        'numero_licencia_conducir':r[5] or '',
+    } for r in rows])
+
+
+@main.route('/api/socios/<path:card_code>/vehiculos')
+@login_required
+def api_socio_vehiculos(card_code):
+    rows = db.session.execute(text("""
+        SELECT vehiculo, numero_de_placa
+        FROM bp_vehiculos
+        WHERE card_code = :code
+        ORDER BY id
+    """), {'code': card_code}).fetchall()
+    return jsonify([{
+        'vehiculo':        r[0] or 'principal',
+        'numero_de_placa': r[1] or '',
     } for r in rows])
 
 

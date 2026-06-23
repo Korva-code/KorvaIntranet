@@ -1,0 +1,1218 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+    {{ total }} guía{{ 's' if total != 1 else '' }}
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="grData"          type="application/json">{{ gr_json | safe }}</script>
+<script id="invTypesData"   type="application/json">{{ inv_types_json | safe }}</script>
+<script id="transpData"     type="application/json">{{ transportistas_json | safe }}</script>
+<script id="whsData"        type="application/json">{{ warehouses_json | default('[]') | safe }}</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom py-2 px-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h6 class="mb-0 fw-semibold text-nowrap me-auto">
+        <i class="bi bi-truck text-warning me-1"></i> Guías de Remisión
+      </h6>
+      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0">
+        <div class="input-group input-group-sm flex-grow-1" style="min-width:160px; max-width:280px;">
+          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+          <input type="search" class="form-control" id="buscarGR" placeholder="Serie, número, destinatario…">
+        </div>
+        <button class="btn btn-sm btn-warning text-nowrap" onclick="abrirDrawer('new')">
+          <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nueva Guía</span><span class="d-sm-none">Nueva</span>
+        </button>
+        <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:450px;">
+    <table class="table table-hover align-middle mb-0" id="tablaGR">
+      <thead class="table-light" style="font-size:.73rem;">
+        <tr>
+          <th class="ps-3" style="width:65px;">GR-ID</th>
+          <th style="width:100px;">Serie-Nro.</th>
+          <th style="width:95px;">F. Emisión</th>
+          <th style="width:95px;">F. Traslado</th>
+          <th style="min-width:160px;">Destinatario</th>
+          <th style="width:120px;">Doc. Ref.</th>
+          <th style="min-width:140px;">Transportista</th>
+          <th style="width:70px;" class="text-center">Estado</th>
+          <th style="width:60px;" class="text-center">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyGR"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 text-muted small">
+    Total: <strong id="countLabel">{{ total }}</strong> guías
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER
+     ══════════════════════════════════════════════════════════ -->
+<aside class="gr-drawer" id="grDrawer">
+
+  <!-- Cabecera del drawer -->
+  <div class="drawer-header">
+    <div class="d-flex align-items-center gap-2">
+      <span id="drawerBadge" class="badge bg-warning text-dark">NUEVA</span>
+      <h6 class="mb-0 fw-bold" id="drawerTitle">Nueva Guía de Remisión</h6>
+    </div>
+    <div class="ms-auto d-flex gap-2">
+      <button id="btnAnular" class="btn btn-sm btn-outline-danger d-none"
+              onclick="anularGR()">
+        <i class="bi bi-x-circle me-1"></i>Anular
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="cerrarDrawer()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Cuerpo del drawer (scroll) -->
+  <div class="drawer-body" id="drawerBody">
+
+    <input type="hidden" id="f_gr_id" value="0">
+
+    <!-- ── EMPRESA EMISORA ───────────────────────────────── -->
+    <div class="empresa-bar mb-3">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div>
+          <div class="form-label-xs mb-1">RUC Emisor</div>
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 id="f_doc_rel_ruc_emisor" maxlength="11" placeholder="20000000000"
+                 style="width:130px;">
+        </div>
+        <div class="flex-grow-1">
+          <div class="form-label-xs mb-1">Empresa</div>
+          <div id="lbl_empresa_descripcion"
+               style="font-size:.78rem; font-weight:600; color:#1e293b; padding:.28rem 0;">
+            —
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 1. DOCUMENTO ──────────────────────────────────── -->
+    <div class="sec-label">Documento</div>
+    <div class="row g-2 mb-3">
+      <div class="col-4 col-sm-3">
+        <label class="form-label-xs">Serie <span class="text-danger">*</span></label>
+        <select class="form-select form-select-sm font-monospace" id="f_serie"
+                onchange="onSerieChange()">
+          <option value="">— cargando —</option>
+        </select>
+      </div>
+      <div class="col-4 col-sm-3">
+        <label class="form-label-xs">Número <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_numero" maxlength="8" placeholder="1" readonly>
+      </div>
+      <div class="col-4 col-sm-3">
+        <label class="form-label-xs">F. Emisión</label>
+        <input type="date" class="form-control form-control-sm" id="f_fecha_emision">
+      </div>
+      <div class="col-6 col-sm-3">
+        <label class="form-label-xs">Hora Emisión</label>
+        <input type="time" class="form-control form-control-sm" id="f_hora_emision">
+      </div>
+      <div class="col-6 col-sm-4">
+        <label class="form-label-xs">F. Inicio Traslado <span class="text-danger">*</span></label>
+        <input type="date" class="form-control form-control-sm" id="f_fecha_inicio_traslado">
+      </div>
+      <div class="col-6 col-sm-4">
+        <label class="form-label-xs">Modalidad Transporte</label>
+        <select class="form-select form-select-sm" id="f_modalidad_transporte">
+          <option value="01">01 – Transporte Público</option>
+          <option value="02" selected>02 – Transporte Privado</option>
+        </select>
+      </div>
+      <div class="col-6 col-sm-4">
+        <label class="form-label-xs">Motivo de Traslado</label>
+        <select class="form-select form-select-sm" id="f_motivo_traslado">
+          <option value="01" selected>01 – Venta</option>
+          <option value="02">02 – Compra</option>
+          <option value="03">03 – Traslado entre establecimientos</option>
+          <option value="04">04 – Consignación</option>
+          <option value="05">05 – Devolución</option>
+          <option value="06">06 – Traslado entre mismos establecimientos</option>
+          <option value="07">07 – Traslado para transformación</option>
+          <option value="08">08 – Importación</option>
+          <option value="09">09 – Exportación</option>
+          <option value="13">13 – Otros</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── 2. DOCUMENTO RELACIONADO ─────────────────────── -->
+    <div class="sec-label">Documento Relacionado</div>
+    <div class="row g-2 mb-3">
+      <div class="col-5 col-sm-3">
+        <label class="form-label-xs">Tipo</label>
+        <select class="form-select form-select-sm" id="f_doc_rel_tipo">
+          <option value="">— Tipo —</option>
+        </select>
+      </div>
+      <div class="col-3 col-sm-2">
+        <label class="form-label-xs">Serie</label>
+        <input type="text" class="form-control form-control-sm font-monospace text-uppercase"
+               id="f_doc_rel_serie" maxlength="4" placeholder="F001"
+               oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="col-4 col-sm-7">
+        <label class="form-label-xs">Número</label>
+        <div class="input-group input-group-sm">
+          <input type="text" class="form-control form-control-sm font-monospace"
+                 id="f_doc_rel_numero" maxlength="8" placeholder="3108">
+          <button class="btn btn-outline-primary" type="button" onclick="buscarFactura()"
+                  title="Buscar y cargar factura">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 3. DESTINATARIO ───────────────────────────────── -->
+    <div class="sec-label">Destinatario</div>
+    <div class="row g-2 mb-3">
+      <div class="col-4 col-sm-3">
+        <label class="form-label-xs">Tipo Doc.</label>
+        <select class="form-select form-select-sm" id="f_dest_tipo_doc">
+          <option value="1">1 – DNI</option>
+          <option value="4">4 – Carnet Extranjería</option>
+          <option value="6" selected>6 – RUC</option>
+          <option value="7">7 – Pasaporte</option>
+        </select>
+      </div>
+      <div class="col-8 col-sm-4">
+        <label class="form-label-xs">Nro. Documento <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_dest_num_doc" maxlength="15" placeholder="20000000000">
+      </div>
+      <div class="col-12 col-sm-5">
+        <label class="form-label-xs">Denominación <span class="text-danger">*</span></label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_dest_denominacion" maxlength="200" placeholder="Razón social o nombre">
+      </div>
+      <div class="col-12">
+        <label class="form-label-xs">Dirección</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_dest_direccion" maxlength="300" placeholder="Dirección del destinatario">
+      </div>
+    </div>
+
+    <!-- ── 4. PUNTOS DE TRASLADO ─────────────────────────── -->
+    <div class="sec-label">Puntos de Traslado</div>
+    <div class="row g-2 mb-3">
+      <div class="col-12">
+        <div class="d-flex align-items-center gap-1 mb-1">
+          <i class="bi bi-geo-alt-fill text-success" style="font-size:.8rem;"></i>
+          <span style="font-size:.72rem; font-weight:700; color:#16a34a;">PARTIDA</span>
+        </div>
+      </div>
+      <div class="col-12 col-sm-4">
+        <label class="form-label-xs">Almacén</label>
+        <select class="form-select form-select-sm" id="f_partida_whs" onchange="onWhsSelect(this)">
+          <option value="">— Seleccione —</option>
+        </select>
+      </div>
+      <div class="col-4 col-sm-2">
+        <label class="form-label-xs">Ubigeo</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_partida_ubigeo" maxlength="6" placeholder="150132">
+      </div>
+      <div class="col-8 col-sm-6">
+        <label class="form-label-xs">Dirección de Partida</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_partida_direccion" maxlength="300" placeholder="Dirección de origen">
+      </div>
+      <div class="col-12">
+        <div class="d-flex align-items-center gap-1 mb-1 mt-1">
+          <i class="bi bi-geo-alt-fill text-danger" style="font-size:.8rem;"></i>
+          <span style="font-size:.72rem; font-weight:700; color:#dc2626;">LLEGADA</span>
+        </div>
+      </div>
+      <div class="col-8 col-sm-9">
+        <label class="form-label-xs">Dirección de Llegada</label>
+        <select class="form-select form-select-sm" id="f_llegada_direccion"
+                onchange="onLlegadaSelect(this)">
+          <option value="">— busque una factura para cargar direcciones —</option>
+        </select>
+      </div>
+      <div class="col-4 col-sm-3">
+        <label class="form-label-xs">Ubigeo</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_llegada_ubigeo" maxlength="6" placeholder="150122">
+      </div>
+    </div>
+
+    <!-- ── 5. CARGA ──────────────────────────────────────── -->
+    <div class="sec-label">Carga</div>
+    <div class="row g-2 mb-3">
+      <div class="col-5 col-sm-3">
+        <label class="form-label-xs">Peso Bruto Total</label>
+        <input type="number" class="form-control form-control-sm text-end"
+               id="f_peso_bruto_total" min="0" step="0.01" placeholder="0.00">
+      </div>
+      <div class="col-4 col-sm-2">
+        <label class="form-label-xs">Unidad</label>
+        <select class="form-select form-select-sm" id="f_peso_bruto_uom">
+          <option value="KGM" selected>KGM</option>
+          <option value="TNE">TNE</option>
+          <option value="GRM">GRM</option>
+        </select>
+      </div>
+      <div class="col-3 col-sm-2">
+        <label class="form-label-xs">Bultos</label>
+        <input type="number" class="form-control form-control-sm text-center"
+               id="f_numero_bultos" min="1" step="1" value="1">
+      </div>
+      <div class="col-12 col-sm-5">
+        <label class="form-label-xs">Observaciones</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_observaciones" maxlength="500" placeholder="Observaciones opcionales">
+      </div>
+    </div>
+
+    <!-- ── 6. TRANSPORTISTA ──────────────────────────────── -->
+    <div class="sec-label">Transportista</div>
+    <input type="hidden" id="f_transp_ruc">
+    <div class="row g-2 mb-3">
+      <div class="col-12 col-sm-6">
+        <label class="form-label-xs">Buscar Transportista</label>
+        <input type="text" class="form-control form-control-sm"
+               id="f_transp_search" list="listTransp" autocomplete="off"
+               placeholder="Escriba nombre o código…"
+               oninput="onTranspSelect(this)">
+        <datalist id="listTransp"></datalist>
+      </div>
+      <div class="col-12 col-sm-6">
+        <label class="form-label-xs">Denominación</label>
+        <input type="text" class="form-control form-control-sm bg-light"
+               id="f_transp_denominacion" maxlength="200" placeholder="Razón social" readonly>
+      </div>
+      <div class="col-4">
+        <label class="form-label-xs">Nro. Registro MTC</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_transp_num_mtc" maxlength="50" placeholder="123">
+      </div>
+      <div class="col-4">
+        <label class="form-label-xs">Nro. Autorización</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_transp_num_autorizacion" maxlength="50" placeholder="123">
+      </div>
+      <div class="col-4">
+        <label class="form-label-xs">Cód. Entidad</label>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               id="f_transp_cod_entidad" maxlength="50" placeholder="123">
+      </div>
+    </div>
+
+    <!-- ── 7. CONDUCTORES ────────────────────────────────── -->
+    <div class="sec-label d-flex justify-content-between align-items-center">
+      <span>Conductores</span>
+      <button class="btn btn-xs btn-outline-success" onclick="agregarConductor()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar
+      </button>
+    </div>
+    <div class="mb-3">
+      <div id="tablaConductores" class="gr-subtable"></div>
+    </div>
+
+    <!-- ── 8. VEHÍCULOS ──────────────────────────────────── -->
+    <div class="sec-label d-flex justify-content-between align-items-center">
+      <span>Vehículos</span>
+      <button class="btn btn-xs btn-outline-success" onclick="agregarVehiculo()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar
+      </button>
+    </div>
+    <div class="mb-3">
+      <div id="tablaVehiculos" class="gr-subtable"></div>
+    </div>
+
+    <!-- ── 9. ITEMS ──────────────────────────────────────── -->
+    <div class="sec-label d-flex justify-content-between align-items-center">
+      <span>Items a Transportar</span>
+      <div class="d-flex gap-1">
+        <button class="btn btn-xs btn-outline-primary" onclick="buscarFactura(true)"
+                title="Importar ítems desde la factura de referencia">
+          <i class="bi bi-download me-1"></i>Importar de factura
+        </button>
+        <button class="btn btn-xs btn-outline-success" onclick="agregarItem()">
+          <i class="bi bi-plus-lg me-1"></i>Agregar
+        </button>
+      </div>
+    </div>
+    <div class="mb-2">
+      <div id="tablaItems" class="gr-subtable"></div>
+    </div>
+
+  </div><!-- /drawer-body -->
+
+  <!-- Footer -->
+  <div class="drawer-footer">
+    <button class="btn btn-outline-secondary btn-sm" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button class="btn btn-warning btn-sm px-4 fw-semibold" onclick="guardarGR()">
+      <i class="bi bi-check-lg me-1"></i>
+      <span id="btnGuardarTxt">Registrar Guía</span>
+    </button>
+    <button id="btnSunatGR" class="btn btn-success btn-sm px-3 fw-semibold d-none"
+            onclick="enviarSunatGR()">
+      <i class="bi bi-send-check me-1"></i>SUNAT
+    </button>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL SUNAT — Preview + Enviar
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalSunatGR" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title fw-semibold">
+          <i class="bi bi-send-check me-2 text-success"></i>Enviar a SUNAT — Guía de Remisión
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <!-- Barra de configuración -->
+        <div class="d-flex align-items-center gap-2 px-3 py-2 bg-light border-bottom" style="font-size:.8rem;">
+          <span class="text-muted">Modo:</span>
+          <span id="sunatGrModo" class="badge bg-secondary">—</span>
+          <span class="text-muted ms-2">URL:</span>
+          <span id="sunatGrUrl" class="text-truncate text-muted font-monospace" style="max-width:340px;">—</span>
+        </div>
+        <!-- JSON preview -->
+        <pre id="sunatGrJson"
+             class="m-0 p-3 bg-dark text-success font-monospace"
+             style="font-size:.72rem; max-height:420px; overflow-y:auto; white-space:pre-wrap;"></pre>
+      </div>
+      <div class="modal-footer py-2 gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+          <i class="bi bi-x me-1"></i>Cerrar
+        </button>
+        <button type="button" class="btn btn-success btn-sm px-4 fw-semibold"
+                id="btnEnviarSunatGR" onclick="enviarSunatGR()">
+          <i class="bi bi-send me-1"></i>Enviar a SUNAT
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Layout drawer ──────────────────────────────────────────── */
+.drawer-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px);
+  z-index: 1090;
+}
+.drawer-overlay.active { display: block; }
+
+.gr-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 780px; max-width: 98vw;
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100;
+  display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.gr-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center; gap: .75rem;
+  padding: .85rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fffbeb;
+  flex-shrink: 0;
+}
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
+}
+.drawer-body::-webkit-scrollbar { width: 4px; }
+.drawer-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.drawer-footer {
+  padding: .75rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  display: flex; justify-content: flex-end; gap: .5rem;
+  flex-shrink: 0;
+}
+
+/* ── Formulario ─────────────────────────────────────────────── */
+.sec-label {
+  font-size: .62rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: .2rem; margin-bottom: .6rem;
+}
+.form-label-xs {
+  display: block; font-size: .72rem;
+  font-weight: 600; color: #475569;
+  margin-bottom: .15rem;
+}
+.btn-xs {
+  font-size: .65rem; padding: .18rem .55rem;
+  line-height: 1.4;
+}
+
+/* ── Sub-tablas (conductores/vehículos/items) ────────────────── */
+.gr-subtable { border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden; }
+.gr-subtable table { width: 100%; margin: 0; font-size: .72rem; }
+.gr-subtable thead th {
+  background: #f8fafc; padding: .3rem .5rem;
+  font-size: .67rem; font-weight: 700; color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+}
+.gr-subtable tbody td { padding: .25rem .4rem; border-bottom: 1px solid #f1f5f9; }
+.gr-subtable tbody tr:last-child td { border-bottom: none; }
+.gr-subtable .form-control, .gr-subtable .form-select {
+  font-size: .72rem; padding: .2rem .4rem; height: auto;
+}
+.gr-empty {
+  text-align: center; color: #94a3b8;
+  padding: .6rem; font-size: .72rem;
+  font-style: italic;
+}
+
+/* ── Empresa emisora bar ────────────────────────────────────── */
+.empresa-bar {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: .6rem .9rem;
+}
+
+/* ── Tabla principal ────────────────────────────────────────── */
+.badge-estado-1 { background: #dcfce7; color: #16a34a; }
+.badge-estado-0 { background: #fee2e2; color: #dc2626; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+/* ── Datos ─────────────────────────────────────────────────── */
+const GR_DATA      = JSON.parse(document.getElementById('grData').textContent);
+const INV_TYPES    = JSON.parse(document.getElementById('invTypesData').textContent);
+const TRANSP_DATA  = JSON.parse(document.getElementById('transpData').textContent);
+const WHS_DATA     = JSON.parse(document.getElementById('whsData').textContent);
+let   grMap        = {};
+const transpMap    = {};
+const whsMap       = {};
+GR_DATA.forEach(d => grMap[d.gr_id] = d);
+TRANSP_DATA.forEach(t => transpMap[t.card_code] = t);
+WHS_DATA.forEach(w => whsMap[w.whs_code] = w);
+
+/* ── Poblar datalist transportistas ──────────────────────────── */
+(function() {
+  const dl = document.getElementById('listTransp');
+  TRANSP_DATA.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t.card_code;
+    o.label = t.card_name;
+    dl.appendChild(o);
+  });
+})();
+
+/* ── Poblar select almacenes (partida) ───────────────────────── */
+(function() {
+  const sel = document.getElementById('f_partida_whs');
+  WHS_DATA.forEach(w => {
+    const o = document.createElement('option');
+    o.value       = w.whs_code;
+    o.textContent = w.whs_name;
+    sel.appendChild(o);
+  });
+})();
+
+function onWhsSelect(sel) {
+  const w = whsMap[sel.value];
+  setVal('f_partida_ubigeo',    w ? w.ubigeo  : '');
+  setVal('f_partida_direccion', w ? w.address : '');
+}
+
+function onLlegadaSelect(sel) {
+  const opt = sel.options[sel.selectedIndex];
+  setVal('f_llegada_ubigeo', opt ? (opt.dataset.ubigeo || '') : '');
+}
+
+function onTranspSelect(inp) {
+  const t = transpMap[inp.value];
+  if (t) {
+    setVal('f_transp_ruc',              t.ruc);
+    setVal('f_transp_denominacion',     t.card_name);
+    setVal('f_transp_num_mtc',          t.transp_num_mtc          || '');
+    setVal('f_transp_num_autorizacion', t.transp_num_autorizacion || '');
+    setVal('f_transp_cod_entidad',      t.transp_cod_entidad      || '');
+    cargarConductoresBP(inp.value);
+    cargarVehiculosBP(inp.value);
+  }
+}
+
+// Poblar select de tipo de documento relacionado al cargar la página
+(function poblarTipoDoc() {
+  const sel = document.getElementById('f_doc_rel_tipo');
+  INV_TYPES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value       = t.idtype;
+    opt.textContent = t.invoice_type;
+    sel.appendChild(opt);
+  });
+  if (INV_TYPES.length) sel.value = INV_TYPES[0].idtype;
+})();
+
+const MOTIVOS = {
+  '01':'Venta','02':'Compra','03':'Traslado Estab.',
+  '04':'Consignación','05':'Devolución','06':'Mismos Estab.',
+  '07':'Transformación','08':'Importación','09':'Exportación','13':'Otros'
+};
+
+/* ── Estado del drawer ──────────────────────────────────────── */
+let _conductores   = [];
+let _conductoresBP = []; // conductores del transportista seleccionado
+let _vehiculos     = [];
+let _vehiculosBP   = []; // vehículos del transportista seleccionado
+let _items         = [];
+let _seriesGR      = [];   // [{serie, invoice_number}, ...]
+let _empresa       = null; // {ruc, descripcion, direccion}
+let _invoiceId     = null; // invoice_id del documento relacionado cargado
+
+/* ── Cargar datos de empresa emisora ────────────────────────── */
+async function cargarEmpresa() {
+  if (_empresa) return;
+  try {
+    const res  = await fetch('/api/gr/empresa');
+    const data = await res.json();
+    if (data.success) _empresa = data;
+  } catch (_) {}
+}
+
+function aplicarEmpresa() {
+  if (!_empresa) return;
+  setVal('f_doc_rel_ruc_emisor', _empresa.ruc);
+  document.getElementById('lbl_empresa_descripcion').textContent =
+    _empresa.descripcion || '—';
+}
+
+/* ── Cargar series disponibles ──────────────────────────────── */
+async function cargarSeries() {
+  if (_seriesGR.length) return;   // ya cargadas
+  try {
+    const res  = await fetch('/api/gr/series');
+    const data = await res.json();
+    console.log('[GR series]', data);
+    if (data.success) {
+      _seriesGR = data.series;
+    } else {
+      mostrarToast('warning', 'Series: ' + (data.message || 'sin datos'));
+    }
+  } catch (e) {
+    console.error('[GR series] error fetch', e);
+    mostrarToast('danger', 'Error al cargar las series de GR.');
+  }
+}
+
+function poblarSelectSerie(serieActual) {
+  const sel = document.getElementById('f_serie');
+  sel.innerHTML = _seriesGR.length
+    ? _seriesGR.map(s =>
+        `<option value="${s.serie}" data-next="${s.invoice_number + 1}"
+          ${s.serie === serieActual ? 'selected' : ''}>${s.serie}</option>`
+      ).join('')
+    : '<option value="">Sin series configuradas</option>';
+  onSerieChange();
+}
+
+function onSerieChange() {
+  const sel = document.getElementById('f_serie');
+  const opt = sel.options[sel.selectedIndex];
+  const next = opt ? opt.dataset.next : '';
+  const inp  = document.getElementById('f_numero');
+  // Solo sobreescribe el número si estamos en modo NUEVA (gr_id = 0)
+  if (!parseInt(document.getElementById('f_gr_id').value || '0')) {
+    inp.value = next || '';
+  }
+}
+
+/* ── Render tabla principal ─────────────────────────────────── */
+function renderTabla(data) {
+  const q = (document.getElementById('buscarGR').value || '').toLowerCase();
+  const tbody = document.getElementById('tbodyGR');
+  let html = '', cnt = 0;
+  data.forEach(d => {
+    const txt = [d.serie, d.numero, d.dest_denominacion, d.dest_num_doc,
+                 d.doc_rel_serie, d.doc_rel_numero, d.transp_denominacion].join(' ').toLowerCase();
+    if (q && !txt.includes(q)) return;
+    cnt++;
+    const est = d.id_estado === 1
+      ? '<span class="badge badge-estado-1">Activa</span>'
+      : '<span class="badge badge-estado-0">Anulada</span>';
+    html += `<tr style="font-size:.74rem;">
+      <td class="ps-3">${d.gr_id}</td>
+      <td class="font-monospace fw-semibold">${d.serie}-${d.numero}</td>
+      <td>${d.fecha_emision || '—'}</td>
+      <td>${d.fecha_inicio_traslado || '—'}</td>
+      <td>${escHtml(d.dest_denominacion) || '—'}</td>
+      <td class="font-monospace">${escHtml(d.doc_rel_serie)}-${escHtml(d.doc_rel_numero)}</td>
+      <td>${escHtml(d.transp_denominacion) || '—'}</td>
+      <td class="text-center">${est}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-warning py-0 px-2"
+                onclick="abrirDrawer('edit', ${d.gr_id})" style="font-size:.7rem;">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html || '<tr><td colspan="9" class="text-center text-muted py-5">Sin guías registradas.</td></tr>';
+  document.getElementById('countLabel').textContent = cnt;
+}
+renderTabla(GR_DATA);
+document.getElementById('buscarGR').addEventListener('input', () => renderTabla(GR_DATA));
+
+/* ── Sub-tablas ─────────────────────────────────────────────── */
+function _condOpts(selNum) {
+  if (!_conductoresBP.length) {
+    const txt = selNum ? escHtml(selNum) : '— sin conductores cargados —';
+    return `<option value="${selNum ? escHtml(selNum) : ''}" selected>${txt}</option>`;
+  }
+  let found = false;
+  const opts = _conductoresBP.map(c => {
+    const val   = escHtml(c.numero_de_documento);
+    const lbl   = `${escHtml(c.numero_de_documento)} — ${escHtml(c.nombres)} ${escHtml(c.apellidos)}`;
+    const isSel = c.numero_de_documento === selNum;
+    if (isSel) found = true;
+    return `<option value="${val}"${isSel ? ' selected' : ''}>${lbl}</option>`;
+  }).join('');
+  // Si el número guardado no está en la lista BP, mostrarlo igual como opción seleccionada
+  const extra = (selNum && !found)
+    ? `<option value="${escHtml(selNum)}" selected>${escHtml(selNum)}</option>`
+    : '';
+  return extra + opts;
+}
+
+function renderConductores() {
+  const div = document.getElementById('tablaConductores');
+  if (!_conductores.length) { div.innerHTML = '<div class="gr-empty">Sin conductores.</div>'; return; }
+  let html = `<table><thead><tr>
+    <th>Nro. Documento</th><th>Nombres</th><th>Apellidos</th><th>Licencia</th><th></th>
+  </tr></thead><tbody>`;
+  _conductores.forEach((c, i) => {
+    html += `<tr>
+      <td><select class="form-select" onchange="onConductorSelect(${i},this)">
+        <option value="">— Seleccione —</option>
+        ${_condOpts(c.numero_de_documento)}
+      </select></td>
+      <td><input class="form-control bg-light" id="cond-nom-${i}"
+           value="${escHtml(c.nombres)}" readonly></td>
+      <td><input class="form-control bg-light" id="cond-ape-${i}"
+           value="${escHtml(c.apellidos)}" readonly></td>
+      <td><input class="form-control bg-light" id="cond-lic-${i}"
+           value="${escHtml(c.numero_licencia_conducir)}" readonly></td>
+      <td><button class="btn btn-xs btn-outline-danger" onclick="quitarConductor(${i})">
+        <i class="bi bi-trash3"></i></button></td>
+    </tr>`;
+  });
+  div.innerHTML = html + '</tbody></table>';
+}
+
+function _vehOpts(selPlaca) {
+  if (!_vehiculosBP.length) {
+    const txt = selPlaca ? escHtml(selPlaca) : '— sin vehículos cargados —';
+    return `<option value="${selPlaca ? escHtml(selPlaca) : ''}" selected>${txt}</option>`;
+  }
+  let found = false;
+  const opts = _vehiculosBP.map(v => {
+    const val   = escHtml(v.numero_de_placa);
+    const lbl   = `${escHtml(v.numero_de_placa)} (${escHtml(v.vehiculo)})`;
+    const isSel = v.numero_de_placa === selPlaca;
+    if (isSel) found = true;
+    return `<option value="${val}"${isSel ? ' selected' : ''}>${lbl}</option>`;
+  }).join('');
+  // Si la placa guardada no está en la lista BP, mostrarla igual como opción seleccionada
+  const extra = (selPlaca && !found)
+    ? `<option value="${escHtml(selPlaca)}" selected>${escHtml(selPlaca)}</option>`
+    : '';
+  return extra + opts;
+}
+
+function renderVehiculos() {
+  const div = document.getElementById('tablaVehiculos');
+  if (!_vehiculos.length) { div.innerHTML = '<div class="gr-empty">Sin vehículos.</div>'; return; }
+  let html = `<table><thead><tr>
+    <th>Nro. de Placa</th><th></th>
+  </tr></thead><tbody>`;
+  _vehiculos.forEach((v, i) => {
+    html += `<tr>
+      <td><select class="form-select font-monospace" onchange="onVehiculoSelect(${i},this)">
+        <option value="">— Seleccione —</option>
+        ${_vehOpts(v.numero_de_placa)}
+      </select></td>
+      <td><button class="btn btn-xs btn-outline-danger" onclick="quitarVehiculo(${i})">
+        <i class="bi bi-trash3"></i></button></td>
+    </tr>`;
+  });
+  div.innerHTML = html + '</tbody></table>';
+}
+
+function renderItems() {
+  const div = document.getElementById('tablaItems');
+  if (!_items.length) { div.innerHTML = '<div class="gr-empty">Sin ítems.</div>'; return; }
+  let html = `<table><thead><tr>
+    <th>Código</th><th>Descripción</th><th>UOM</th><th class="text-end">Cantidad</th><th></th>
+  </tr></thead><tbody>`;
+  _items.forEach((it, i) => {
+    html += `<tr>
+      <td><input class="form-control font-monospace" value="${escHtml(it.codigo_interno)}"
+           oninput="_items[${i}].codigo_interno=this.value" maxlength="30" style="min-width:80px;"></td>
+      <td><input class="form-control" value="${escHtml(it.descripcion)}"
+           oninput="_items[${i}].descripcion=this.value" style="min-width:140px;"></td>
+      <td><input class="form-control font-monospace" value="${escHtml(it.unidad_medida)}"
+           oninput="_items[${i}].unidad_medida=this.value.toUpperCase()" maxlength="6" style="width:60px;"></td>
+      <td><input type="number" class="form-control text-end" value="${it.cantidad}"
+           oninput="_items[${i}].cantidad=parseFloat(this.value)||0" min="0" step="0.001" style="width:75px;"></td>
+      <td><button class="btn btn-xs btn-outline-danger" onclick="quitarItem(${i})">
+        <i class="bi bi-trash3"></i></button></td>
+    </tr>`;
+  });
+  div.innerHTML = html + '</tbody></table>';
+}
+
+/* ── Acciones sub-tablas ─────────────────────────────────────── */
+function agregarConductor() {
+  _conductores.push({ conductor:'principal', tipo_de_documento:'1',
+    numero_de_documento:'', nombres:'', apellidos:'', numero_licencia_conducir:'' });
+  renderConductores();
+}
+function quitarConductor(i) { _conductores.splice(i, 1); renderConductores(); }
+
+function onConductorSelect(i, sel) {
+  const num = sel.value;
+  const bp  = _conductoresBP.find(c => c.numero_de_documento === num) || {};
+  _conductores[i].numero_de_documento      = num;
+  _conductores[i].nombres                  = bp.nombres                  || '';
+  _conductores[i].apellidos                = bp.apellidos                || '';
+  _conductores[i].numero_licencia_conducir = bp.numero_licencia_conducir || '';
+  _conductores[i].tipo_de_documento        = bp.tipo_de_documento        || '1';
+  _conductores[i].conductor                = bp.conductor                || 'principal';
+  const el = id => document.getElementById(id);
+  if (el(`cond-nom-${i}`)) el(`cond-nom-${i}`).value = _conductores[i].nombres;
+  if (el(`cond-ape-${i}`)) el(`cond-ape-${i}`).value = _conductores[i].apellidos;
+  if (el(`cond-lic-${i}`)) el(`cond-lic-${i}`).value = _conductores[i].numero_licencia_conducir;
+}
+
+function cargarConductoresBP(cardCode, mantenerConductores = false) {
+  _conductoresBP = [];
+  if (!mantenerConductores) _conductores = [];
+  renderConductores();
+  if (!cardCode) return;
+  fetch('/api/socios/' + encodeURIComponent(cardCode) + '/conductores')
+    .then(r => r.json())
+    .then(list => { _conductoresBP = list; renderConductores(); })
+    .catch(() => {});
+}
+
+function agregarVehiculo() {
+  _vehiculos.push({ vehiculo:'principal', numero_de_placa:'' });
+  renderVehiculos();
+}
+function quitarVehiculo(i) { _vehiculos.splice(i, 1); renderVehiculos(); }
+
+function onVehiculoSelect(i, sel) {
+  const placa = sel.value;
+  const bp    = _vehiculosBP.find(v => v.numero_de_placa === placa) || {};
+  _vehiculos[i].numero_de_placa = placa;
+  _vehiculos[i].vehiculo        = bp.vehiculo || 'principal';
+}
+
+function cargarVehiculosBP(cardCode, mantenerVehiculos = false) {
+  _vehiculosBP = [];
+  if (!mantenerVehiculos) _vehiculos = [];
+  renderVehiculos();
+  if (!cardCode) return;
+  fetch('/api/socios/' + encodeURIComponent(cardCode) + '/vehiculos')
+    .then(r => r.json())
+    .then(list => { _vehiculosBP = list; renderVehiculos(); })
+    .catch(() => {});
+}
+
+function agregarItem() {
+  _items.push({ codigo_interno:'', descripcion:'', unidad_medida:'NIU', cantidad:1 });
+  renderItems();
+}
+function quitarItem(i) { _items.splice(i, 1); renderItems(); }
+
+/* ── Buscar factura ─────────────────────────────────────────── */
+async function buscarFactura(soloItems = false) {
+  const idtype = (document.getElementById('f_doc_rel_tipo').value  || '').trim();
+  const serie  = (document.getElementById('f_doc_rel_serie').value  || '').trim();
+  const numero = (document.getElementById('f_doc_rel_numero').value || '').trim();
+  if (!serie || !numero) {
+    mostrarToast('warning', 'Complete la Serie y Número del documento relacionado primero.');
+    return;
+  }
+  try {
+    const url  = `/api/gr/buscar-factura?idtype=${encodeURIComponent(idtype)}&serie=${encodeURIComponent(serie)}&numero=${encodeURIComponent(numero)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (!data.success) {
+      console.warn('[buscarFactura]', data);
+      mostrarToast('warning', data.message || 'Documento no encontrado.');
+      return;
+    }
+    const f = data.factura;
+    _invoiceId = f.invoice_id || null;
+    if (!soloItems) {
+      setVal('f_dest_tipo_doc',     f.dest_tipo_doc);
+      setVal('f_dest_num_doc',      f.dest_num_doc);
+      setVal('f_dest_denominacion', f.dest_nombre);
+      setVal('f_dest_direccion',    f.dest_direccion);
+
+      // Poblar select de dirección de llegada
+      const selLlegada = document.getElementById('f_llegada_direccion');
+      selLlegada.innerHTML = '<option value="">— Seleccione dirección —</option>';
+      (f.direcciones || []).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value          = d.direccion;
+        opt.dataset.ubigeo = d.ubigeo || '';
+        opt.textContent    = `${d.label} — ${d.direccion}`;
+        selLlegada.appendChild(opt);
+      });
+    }
+    if (data.items && data.items.length) {
+      _items = data.items;
+      renderItems();
+      mostrarToast('success', `${data.items.length} ítem(s) importado(s) de la factura.`);
+    } else {
+      mostrarToast('warning', 'La factura no tiene ítems.');
+    }
+  } catch (e) {
+    mostrarToast('danger', 'Error al consultar la factura.');
+  }
+}
+
+
+/* ── Abrir / cerrar drawer ──────────────────────────────────── */
+async function abrirDrawer(mode, grId) {
+  _conductores = []; _conductoresBP = []; _vehiculos = []; _vehiculosBP = []; _items = [];
+  if (mode === 'edit' && grId != null) {
+    cargarGR(grId);
+  } else {
+    _seriesGR = [];   // siempre re-fetch al abrir "Nuevo" para obtener el correlativo actual
+    await limpiarForm();
+  }
+  document.getElementById('grDrawer').classList.add('open');
+  document.getElementById('drawerOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('drawerBody').scrollTop = 0;
+}
+
+function cerrarDrawer() {
+  document.getElementById('grDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarDrawer(); });
+
+/* ── Cargar GR en el drawer ──────────────────────────────────── */
+async function cargarGR(grId) {
+  const d = grMap[grId];
+  if (!d) return;
+  setVal('f_gr_id', d.gr_id);
+  // Poblar series + empresa en paralelo
+  await Promise.all([cargarEmpresa(), cargarSeries()]);
+  aplicarEmpresa();
+  poblarSelectSerie(d.serie);
+  // Restaurar número original (poblarSelectSerie lo sobreescribe solo en NUEVA)
+  setVal('f_numero', d.numero);
+  setVal('f_numero',                 d.numero);
+  setVal('f_fecha_emision',          d.fecha_emision);
+  setVal('f_hora_emision',           d.hora_emision);
+  setVal('f_modalidad_transporte',   d.modalidad_transporte);
+  setVal('f_motivo_traslado',        d.motivo_traslado);
+  setVal('f_fecha_inicio_traslado',  d.fecha_inicio_traslado);
+  setVal('f_dest_tipo_doc',          d.dest_tipo_doc);
+  setVal('f_dest_num_doc',           d.dest_num_doc);
+  setVal('f_dest_denominacion',      d.dest_denominacion);
+  setVal('f_dest_direccion',         d.dest_direccion);
+  document.getElementById('f_partida_whs').value = d.whs_code || '';
+  setVal('f_partida_ubigeo',         d.partida_ubigeo);
+  setVal('f_partida_direccion',      d.partida_direccion);
+  setVal('f_llegada_ubigeo',         d.llegada_ubigeo);
+  // Restaurar dirección de llegada guardada como opción en el select
+  const selLL = document.getElementById('f_llegada_direccion');
+  selLL.innerHTML = '';
+  if (d.llegada_direccion) {
+    const opt = document.createElement('option');
+    opt.value = d.llegada_direccion;
+    opt.textContent = d.llegada_direccion;
+    opt.selected = true;
+    selLL.appendChild(opt);
+  } else {
+    selLL.innerHTML = '<option value="">— busque una factura para cargar direcciones —</option>';
+  }
+  setVal('f_peso_bruto_total',       d.peso_bruto_total);
+  setVal('f_peso_bruto_uom',         d.peso_bruto_uom);
+  setVal('f_numero_bultos',          d.numero_bultos);
+  setVal('f_observaciones',          d.observaciones);
+  setVal('f_doc_rel_tipo',           d.doc_rel_tipo);
+  setVal('f_doc_rel_serie',          d.doc_rel_serie);
+  setVal('f_doc_rel_numero',         d.doc_rel_numero);
+  setVal('f_doc_rel_ruc_emisor',     d.doc_rel_ruc_emisor);
+  setVal('f_transp_ruc',             d.transp_ruc);
+  setVal('f_transp_denominacion',    d.transp_denominacion);
+  // Restaurar búsqueda: mostrar siempre el RUC guardado; nombre solo en denominación
+  const transpFound = TRANSP_DATA.find(t => t.ruc === d.transp_ruc || t.card_code === d.transp_ruc);
+  setVal('f_transp_search', d.transp_ruc || '');
+  setVal('f_transp_num_mtc',         d.transp_num_mtc);
+  setVal('f_transp_num_autorizacion',d.transp_num_autorizacion);
+  setVal('f_transp_cod_entidad',     d.transp_cod_entidad);
+
+  _conductores = JSON.parse(JSON.stringify(d.conductores || []));
+  _vehiculos   = JSON.parse(JSON.stringify(d.vehiculos   || []));
+  _items       = JSON.parse(JSON.stringify(d.items       || []));
+  // Cargar conductores y vehículos del BP sin borrar los ya asignados al GR
+  if (transpFound) {
+    cargarConductoresBP(transpFound.card_code, true);
+    cargarVehiculosBP(transpFound.card_code, true);
+  } else {
+    renderConductores();
+    renderVehiculos();
+  }
+  renderItems();
+
+  const anulado = d.id_estado === 0;
+  document.getElementById('drawerBadge').textContent  = anulado ? 'ANULADA' : 'EDITANDO';
+  document.getElementById('drawerBadge').className    = anulado ? 'badge bg-danger' : 'badge bg-warning text-dark';
+  document.getElementById('drawerTitle').textContent  = `Guía ${d.serie}-${d.numero}`;
+  document.getElementById('btnGuardarTxt').textContent= 'Guardar Cambios';
+  document.getElementById('btnSunatGR').classList.remove('d-none');
+  document.getElementById('btnAnular').classList.toggle('d-none', anulado);
+}
+
+/* ── Limpiar (modo nuevo) ───────────────────────────────────── */
+async function limpiarForm() {
+  // Fecha y hora actuales
+  const now   = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const hora  = now.toTimeString().slice(0, 5); // HH:MM
+
+  document.getElementById('f_llegada_direccion').innerHTML =
+    '<option value="">— busque una factura para cargar direcciones —</option>';
+
+  document.getElementById('f_partida_whs').value = '';
+  ['f_gr_id','f_numero',
+   'f_dest_num_doc','f_dest_denominacion','f_dest_direccion',
+   'f_partida_ubigeo','f_partida_direccion',
+   'f_llegada_ubigeo',
+   'f_observaciones',
+   'f_doc_rel_serie','f_doc_rel_numero','f_doc_rel_ruc_emisor',
+   'f_transp_search','f_transp_ruc','f_transp_denominacion',
+   'f_transp_num_mtc','f_transp_num_autorizacion','f_transp_cod_entidad',
+  ].forEach(id => setVal(id, id === 'f_gr_id' ? '0' : ''));
+  setVal('f_fecha_emision',         today);
+  setVal('f_hora_emision',          hora);
+  setVal('f_fecha_inicio_traslado', today);
+  setVal('f_modalidad_transporte',  '02');
+  setVal('f_motivo_traslado',       '01');
+  setVal('f_dest_tipo_doc',         '6');
+  setVal('f_peso_bruto_total',      '');
+  setVal('f_peso_bruto_uom',        'KGM');
+  setVal('f_numero_bultos',         '1');
+  if (INV_TYPES.length) setVal('f_doc_rel_tipo', INV_TYPES[0].idtype);
+  _conductores = []; _conductoresBP = []; _vehiculos = []; _vehiculosBP = []; _items = [];
+  renderConductores(); renderVehiculos(); renderItems();
+  document.getElementById('drawerBadge').textContent  = 'NUEVA';
+  document.getElementById('drawerBadge').className    = 'badge bg-warning text-dark';
+  document.getElementById('drawerTitle').textContent  = 'Nueva Guía de Remisión';
+  document.getElementById('btnGuardarTxt').textContent= 'Registrar Guía';
+  document.getElementById('btnSunatGR').classList.add('d-none');
+  document.getElementById('btnAnular').classList.add('d-none');
+
+  // Cargar empresa emisora y series en paralelo
+  await Promise.all([cargarEmpresa(), cargarSeries()]);
+  aplicarEmpresa();
+  poblarSelectSerie('');   // selecciona la primera por defecto
+}
+
+/* ── Guardar ─────────────────────────────────────────────────── */
+async function guardarGR() {
+  const serie  = (document.getElementById('f_serie').value  || '').trim();
+  const numero = (document.getElementById('f_numero').value || '').trim();
+  const fIni   = (document.getElementById('f_fecha_inicio_traslado').value || '').trim();
+  const destNum= (document.getElementById('f_dest_num_doc').value || '').trim();
+  if (!serie)   { mostrarToast('warning', 'La Serie es obligatoria.'); return; }
+  if (!numero)  { mostrarToast('warning', 'El Número es obligatorio.'); return; }
+  if (!fIni)    { mostrarToast('warning', 'La Fecha de Inicio de Traslado es obligatoria.'); return; }
+  if (!destNum) { mostrarToast('warning', 'El Nro. de documento del destinatario es obligatorio.'); return; }
+  if (!_items.length) { mostrarToast('warning', 'Debe agregar al menos un ítem.'); return; }
+
+  const payload = {
+    gr_id:                   parseInt(document.getElementById('f_gr_id').value) || 0,
+    serie,
+    numero,
+    fecha_emision:           document.getElementById('f_fecha_emision').value || null,
+    hora_emision:            document.getElementById('f_hora_emision').value || null,
+    modalidad_transporte:    document.getElementById('f_modalidad_transporte').value,
+    motivo_traslado:         document.getElementById('f_motivo_traslado').value,
+    fecha_inicio_traslado:   fIni,
+    dest_tipo_doc:           document.getElementById('f_dest_tipo_doc').value,
+    dest_num_doc:            destNum,
+    dest_denominacion:       document.getElementById('f_dest_denominacion').value.trim(),
+    dest_direccion:          document.getElementById('f_dest_direccion').value.trim(),
+    whs_code:                document.getElementById('f_partida_whs').value.trim(),
+    partida_ubigeo:          document.getElementById('f_partida_ubigeo').value.trim(),
+    partida_direccion:       document.getElementById('f_partida_direccion').value.trim(),
+    llegada_ubigeo:          document.getElementById('f_llegada_ubigeo').value.trim(),
+    llegada_direccion:       document.getElementById('f_llegada_direccion').value.trim(),
+    peso_bruto_total:        parseFloat(document.getElementById('f_peso_bruto_total').value) || 0,
+    peso_bruto_uom:          document.getElementById('f_peso_bruto_uom').value,
+    numero_bultos:           parseInt(document.getElementById('f_numero_bultos').value) || 1,
+    observaciones:           document.getElementById('f_observaciones').value.trim() || null,
+    doc_rel_tipo:            document.getElementById('f_doc_rel_tipo').value,
+    doc_rel_serie:           document.getElementById('f_doc_rel_serie').value.trim(),
+    doc_rel_numero:          document.getElementById('f_doc_rel_numero').value.trim(),
+    doc_rel_ruc_emisor:      document.getElementById('f_doc_rel_ruc_emisor').value.trim(),
+    transp_ruc:              document.getElementById('f_transp_search').value.trim(),
+    transp_denominacion:     document.getElementById('f_transp_denominacion').value.trim(),
+    transp_num_mtc:          document.getElementById('f_transp_num_mtc').value.trim(),
+    transp_num_autorizacion: document.getElementById('f_transp_num_autorizacion').value.trim(),
+    transp_cod_entidad:      document.getElementById('f_transp_cod_entidad').value.trim(),
+    conductores:             _conductores,
+    vehiculos:               _vehiculos,
+    items:                   _items,
+  };
+
+  try {
+    const res  = await fetch('/api/gr/guardar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.success) { mostrarToast('danger', data.message || 'Error al guardar.'); return; }
+    mostrarToast('success', `Guía ${serie}-${numero} guardada correctamente.`);
+    _seriesGR = [];   // forzar re-fetch en el próximo "Nuevo"
+    cerrarDrawer();
+    setTimeout(() => location.reload(), 900);
+  } catch (e) {
+    mostrarToast('danger', 'Error de red al guardar.');
+  }
+}
+
+/* ── Anular ──────────────────────────────────────────────────── */
+function anularGR() {
+  const grId = parseInt(document.getElementById('f_gr_id').value) || 0;
+  if (!grId) return;
+  confirmarAccion('¿Anular esta Guía de Remisión? Esta acción no se puede revertir.', async () => {
+    const res  = await fetch(`/api/gr/${grId}/anular`, { method: 'POST' });
+    const data = await res.json();
+    if (!data.success) { mostrarToast('danger', data.message || 'Error al anular.'); return; }
+    mostrarToast('success', 'Guía anulada.');
+    cerrarDrawer();
+    setTimeout(() => location.reload(), 900);
+  });
+}
+
+/* ── Exportar Excel ──────────────────────────────────────────── */
+function exportarExcel() {
+  const hdrs = ['GR-ID','Serie','Número','F.Emisión','F.Traslado',
+                'Destinatario','Nro.Doc.','Transportista','Estado'];
+  const rows = GR_DATA.map(d => [
+    d.gr_id, d.serie, d.numero, d.fecha_emision, d.fecha_inicio_traslado,
+    d.dest_denominacion, d.dest_num_doc, d.transp_denominacion,
+    d.id_estado === 1 ? 'Activa' : 'Anulada',
+  ]);
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns="http://www.w3.org/TR/REC-html40">
+    <head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>`;
+  hdrs.forEach(h => { html += `<th style="background:#1d6f42;color:#fff;font-weight:bold;">${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => { html += '<tr>'; r.forEach(c => { html += `<td>${c ?? ''}</td>`; }); html += '</tr>'; });
+  html += '</tbody></table></body></html>';
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `guias_remision_${new Date().toISOString().slice(0,10)}.xls`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = v ?? '';
+}
+function escHtml(s) {
+  return (s || '').toString()
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── SUNAT Guía de Remisión ──────────────────────────────────── */
+async function enviarSunatGR() {
+  const grId  = parseInt(document.getElementById('f_gr_id').value) || 0;
+  const serie  = (document.getElementById('f_serie').value  || '').trim();
+  const numero = (document.getElementById('f_numero').value || '').trim();
+  if (!grId)   { mostrarToast('warning', 'Guarde la guía antes de enviar a SUNAT.'); return; }
+  if (!serie)  { mostrarToast('warning', 'La Serie es obligatoria.'); return; }
+  if (!numero) { mostrarToast('warning', 'El Número es obligatorio.'); return; }
+
+  const btn = document.getElementById('btnSunatGR');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando…';
+
+  try {
+    const res  = await fetch(`/api/sunat/gr/enviar/${grId}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      mostrarToast('success', data.message || 'Enviado a SUNAT correctamente.');
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      mostrarToast('danger', data.message || 'SUNAT rechazó el documento.');
+    }
+  } catch (e) {
+    mostrarToast('danger', 'Error de red al enviar a SUNAT.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send-check me-1"></i>SUNAT';
+  }
+}
+</script>
+{% endblock %}

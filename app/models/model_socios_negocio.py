@@ -22,8 +22,11 @@ class BusinessPartner(db.Model):
     u_cl_fecmig    = db.Column(db.Date)
     email          = db.Column(db.Text)
     phone          = db.Column(db.Text)
-    IsCredit       = db.Column('IsCredit',  db.Integer)
-    Creditday      = db.Column('Creditday', db.Integer)
+    IsCredit              = db.Column('IsCredit',  db.Integer)
+    Creditday             = db.Column('Creditday', db.Integer)
+    transp_num_mtc        = db.Column(db.Text)
+    transp_num_autorizacion = db.Column(db.Text)
+    transp_cod_entidad    = db.Column(db.Text)
 
     TIPO_LABELS = {
         'cCustomer': 'Cliente',
@@ -58,8 +61,11 @@ class BusinessPartner(db.Model):
             'u_cl_fecmig':    dt(self.u_cl_fecmig),
             'email':          self.email or '',
             'phone':          self.phone or '',
-            'IsCredit':       self.IsCredit,
-            'Creditday':      self.Creditday,
+            'IsCredit':               self.IsCredit,
+            'Creditday':              self.Creditday,
+            'transp_num_mtc':         self.transp_num_mtc or '',
+            'transp_num_autorizacion':self.transp_num_autorizacion or '',
+            'transp_cod_entidad':     self.transp_cod_entidad or '',
         }
 
     def __repr__(self) -> str:

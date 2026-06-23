@@ -15,21 +15,23 @@
      ══════════════════════════════════════════════════════════ -->
 <div class="card border-0 shadow-sm">
 
-  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
-    <h6 class="mb-0 fw-semibold text-nowrap">
-      <i class="bi bi-people text-primary me-1"></i> Socios de Negocio
-    </h6>
-    <div class="input-group input-group-sm" style="max-width:260px;">
-      <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
-      <input type="search" class="form-control" id="buscarSocio" placeholder="Buscar código, nombre, RUC…">
-    </div>
-    <div class="d-flex gap-2 ms-auto">
-      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
-        <i class="bi bi-plus-lg me-1"></i>Nuevo Socio
-      </button>
-      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
-        <i class="bi bi-file-earmark-excel me-1"></i>Excel
-      </button>
+  <div class="card-header bg-white border-bottom py-2 px-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h6 class="mb-0 fw-semibold text-nowrap me-auto">
+        <i class="bi bi-people text-primary me-1"></i> Socios de Negocio
+      </h6>
+      <div class="d-flex align-items-center gap-2 flex-grow-1 flex-md-grow-0">
+        <div class="input-group input-group-sm flex-grow-1" style="min-width:160px; max-width:280px;">
+          <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+          <input type="search" class="form-control" id="buscarSocio" placeholder="Buscar código, nombre, RUC…">
+        </div>
+        <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
+          <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nuevo Socio</span><span class="d-sm-none">Nuevo</span>
+        </button>
+        <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+          <i class="bi bi-file-earmark-excel me-1"></i>Excel
+        </button>
+      </div>
     </div>
   </div>
 
@@ -258,6 +260,18 @@
             <i class="bi bi-percent me-1"></i>Descuentos
           </button>
         </li>
+        <li class="nav-item d-none" id="tab-transp-li">
+          <button class="nav-link py-1 px-3" id="tab-transp-btn"
+                  data-bs-toggle="tab" data-bs-target="#tab-transp" type="button">
+            <i class="bi bi-truck me-1"></i>Transportista
+          </button>
+        </li>
+        <li class="nav-item d-none" id="tab-vehiculos-li">
+          <button class="nav-link py-1 px-3" id="tab-vehiculos-btn"
+                  data-bs-toggle="tab" data-bs-target="#tab-vehiculos" type="button">
+            <i class="bi bi-car-front me-1"></i>Vehículos
+          </button>
+        </li>
       </ul>
 
       <div class="tab-content border border-top-0 rounded-bottom p-2 mb-2">
@@ -277,8 +291,9 @@
                 <tr>
                   <th style="min-width:155px;">Nombre</th>
                   <th style="min-width:120px;">Calle</th>
-                  <th style="width:100px;">N°</th>
-                  <th style="min-width:90px;">Ciudad</th>
+                  <th style="width:80px;">N°</th>
+                  <th style="min-width:80px;">Ciudad</th>
+                  <th style="width:70px;">Ubigeo</th>
                   <th style="width:34px;"></th>
                 </tr>
               </thead>
@@ -312,10 +327,87 @@
           </div>
         </div>
 
+        <!-- Tab Transportista -->
+        <div class="tab-pane fade" id="tab-transp">
+          <!-- Datos habilitación -->
+          <div class="row g-2 mt-1 mb-2">
+            <div class="col-12 col-md-4">
+              <label class="form-label-sm">N° Registro MTC</label>
+              <input type="text" class="form-control form-control-sm" id="f_transp_num_mtc"
+                     placeholder="Ej. MTC-0001" />
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label-sm">N° Autorización</label>
+              <input type="text" class="form-control form-control-sm" id="f_transp_num_autorizacion"
+                     placeholder="N° de autorización" />
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label-sm">Cód. Entidad Autorizadora</label>
+              <input type="text" class="form-control form-control-sm" id="f_transp_cod_entidad"
+                     placeholder="Cód. entidad" />
+            </div>
+          </div>
+
+          <!-- Grilla conductores -->
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="form-section-label mb-0" style="border:none;">Conductores</span>
+            <button type="button" class="btn btn-outline-primary py-0 px-2"
+                    style="font-size:.7rem;" onclick="agregarConductor()">
+              <i class="bi bi-plus me-1"></i>Agregar
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0" id="tablaConductores"
+                   style="font-size:.72rem;">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:90px;">Tipo</th>
+                  <th style="width:80px;">Rol</th>
+                  <th style="width:110px;">N° Doc.</th>
+                  <th style="min-width:100px;">Nombres</th>
+                  <th style="min-width:100px;">Apellidos</th>
+                  <th style="width:100px;">Licencia</th>
+                  <th style="width:34px;"></th>
+                </tr>
+              </thead>
+              <tbody id="tbodyConductores"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab Vehículos -->
+        <div class="tab-pane fade" id="tab-vehiculos">
+          <div class="d-flex align-items-center justify-content-between mb-1 mt-1">
+            <span class="form-section-label mb-0" style="border:none;">Vehículos</span>
+            <button type="button" class="btn btn-outline-primary py-0 px-2"
+                    style="font-size:.7rem;" onclick="agregarVehiculo()">
+              <i class="bi bi-plus me-1"></i>Agregar
+            </button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0" id="tablaVehiculos"
+                   style="font-size:.72rem;">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:130px;">Tipo</th>
+                  <th style="min-width:140px;">N° Placa</th>
+                  <th style="width:34px;"></th>
+                </tr>
+              </thead>
+              <tbody id="tbodyVehiculos"></tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
 
-      <input type="hidden" name="addresses_json"  id="f_addresses_json" />
-      <input type="hidden" name="descuentos_json" id="f_descuentos_json" />
+      <input type="hidden" name="addresses_json"          id="f_addresses_json" />
+      <input type="hidden" name="descuentos_json"         id="f_descuentos_json" />
+      <input type="hidden" name="conductores_json"        id="f_conductores_json" />
+      <input type="hidden" name="vehiculos_json"          id="f_vehiculos_json" />
+      <input type="hidden" name="transp_num_mtc"          id="hf_transp_num_mtc" />
+      <input type="hidden" name="transp_num_autorizacion" id="hf_transp_num_autorizacion" />
+      <input type="hidden" name="transp_cod_entidad"      id="hf_transp_cod_entidad" />
 
     </div><!-- /drawer-body -->
 
@@ -358,7 +450,7 @@
 
 .articulos-drawer {
   position: fixed; top: 0; right: 0; bottom: 0;
-  width: 520px; max-width: 96vw;
+  width: 676px; max-width: 96vw;
   background: #fff;
   box-shadow: -8px 0 32px rgba(0,0,0,.18);
   z-index: 1100; display: flex; flex-direction: column;
@@ -614,8 +706,14 @@ function cargarSocio(code) {
   setCheck('f_u_validc', d.u_validc === 'Y');
   setCheck('f_IsCredit', d.IsCredit == 1);
   document.getElementById('f_Creditday').disabled = !(d.IsCredit == 1);
+  setVal('f_transp_num_mtc',          d.transp_num_mtc          || '');
+  setVal('f_transp_num_autorizacion', d.transp_num_autorizacion || '');
+  setVal('f_transp_cod_entidad',      d.transp_cod_entidad      || '');
+  toggleTranspTab((d.card_type || '').trim());
   cargarDirecciones(code);
   cargarDescuentos(d.federal_tax_id);
+  cargarConductores(code);
+  cargarVehiculos(code);
 }
 
 /* ── Limpiar (modo nuevo) ──────────────────────────────────── */
@@ -628,11 +726,44 @@ function limpiarForm() {
   setCheck('f_IsCredit', false);
   setCheck('f_u_validc', true);
   document.getElementById('f_Creditday').disabled = true;
+  setVal('f_transp_num_mtc',          '');
+  setVal('f_transp_num_autorizacion', '');
+  setVal('f_transp_cod_entidad',      '');
+  toggleTranspTab('');
   limpiarDirecciones();
   limpiarDescuentos();
+  limpiarConductores();
+  limpiarVehiculos();
   document.getElementById('f_card_code').removeAttribute('readonly');
   setTimeout(() => document.getElementById('f_card_code').focus(), 320);
 }
+
+/* ── Tabs Transportista / Vehículos (solo card_type='5') ───── */
+function toggleTranspTab(cardType) {
+  const isTransp = cardType === '5';
+  const dirBtn   = document.getElementById('tab-dir-btn');
+
+  ['tab-transp-li','tab-vehiculos-li'].forEach(liId => {
+    const li  = document.getElementById(liId);
+    const panelId = liId === 'tab-transp-li' ? 'tab-transp' : 'tab-vehiculos';
+    const btn = document.getElementById(liId.replace('-li','-btn'));
+    if (isTransp) {
+      li.classList.remove('d-none');
+    } else {
+      li.classList.add('d-none');
+      if (btn.classList.contains('active')) {
+        btn.classList.remove('active');
+        document.getElementById(panelId).classList.remove('show','active');
+        dirBtn.classList.add('active');
+        document.getElementById('tab-dir').classList.add('show','active');
+      }
+    }
+  });
+}
+
+document.getElementById('f_card_type').addEventListener('change', function() {
+  toggleTranspTab(this.value);
+});
 
 /* ── Cambiar modo ──────────────────────────────────────────── */
 function setFormMode(mode, code) {
@@ -686,6 +817,8 @@ function agregarDireccion(d) {
          value="${esc(d.street_no)}" style="font-size:.7rem;width:100%;" /></td>
     <td><input type="text" class="form-control form-control-sm addr-city"
          value="${esc(d.city)}" style="font-size:.7rem;" /></td>
+    <td><input type="text" class="form-control form-control-sm addr-ubigeo font-monospace"
+         value="${esc(d.ubigeo||'')}" maxlength="6" style="font-size:.7rem;" placeholder="150101" /></td>
     <td class="text-center">
       <button type="button" class="btn p-0 px-1 text-danger" title="Eliminar"
               onclick="this.closest('tr').remove()">
@@ -715,6 +848,7 @@ document.getElementById('socioForm').addEventListener('submit', function() {
       street_no:    tr.querySelector('.addr-street-no').value,
       city:         tr.querySelector('.addr-city').value,
       country:      'PE',
+      ubigeo:       tr.querySelector('.addr-ubigeo').value,
     });
   });
   document.getElementById('f_addresses_json').value = JSON.stringify(addrRows);
@@ -729,7 +863,113 @@ document.getElementById('socioForm').addEventListener('submit', function() {
     });
   });
   document.getElementById('f_descuentos_json').value = JSON.stringify(descRows);
+
+  document.getElementById('hf_transp_num_mtc').value         = document.getElementById('f_transp_num_mtc').value;
+  document.getElementById('hf_transp_num_autorizacion').value = document.getElementById('f_transp_num_autorizacion').value;
+  document.getElementById('hf_transp_cod_entidad').value      = document.getElementById('f_transp_cod_entidad').value;
+
+  const condRows = [];
+  document.querySelectorAll('#tbodyConductores tr').forEach(tr => {
+    condRows.push({
+      conductor:               tr.querySelector('.cond-rol').value,
+      tipo_de_documento:       tr.querySelector('.cond-tipo').value,
+      numero_de_documento:     tr.querySelector('.cond-numdoc').value,
+      nombres:                 tr.querySelector('.cond-nombres').value,
+      apellidos:               tr.querySelector('.cond-apellidos').value,
+      numero_licencia_conducir:tr.querySelector('.cond-licencia').value,
+    });
+  });
+  document.getElementById('f_conductores_json').value = JSON.stringify(condRows);
+
+  const vehRows = [];
+  document.querySelectorAll('#tbodyVehiculos tr').forEach(tr => {
+    vehRows.push({
+      vehiculo:        tr.querySelector('.veh-rol').value,
+      numero_de_placa: tr.querySelector('.veh-placa').value,
+    });
+  });
+  document.getElementById('f_vehiculos_json').value = JSON.stringify(vehRows);
 });
+
+/* ── Conductores ───────────────────────────────────────────── */
+const TIPO_DOC_OPTS = [
+  {v:'1', l:'DNI'}, {v:'4', l:'Carnet Ext.'}, {v:'7', l:'Pasaporte'}, {v:'A', l:'Ced. Diplo.'},
+];
+
+function tipoDocOpts(sel) {
+  return TIPO_DOC_OPTS.map(o =>
+    `<option value="${o.v}"${o.v === sel ? ' selected' : ''}>${o.l}</option>`
+  ).join('');
+}
+
+function agregarConductor(d) {
+  d = d || {};
+  const rol  = d.conductor || 'principal';
+  const tipo = d.tipo_de_documento || '1';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select class="form-select form-select-sm cond-tipo" style="font-size:.7rem;">
+      ${tipoDocOpts(tipo)}
+    </select></td>
+    <td><select class="form-select form-select-sm cond-rol" style="font-size:.7rem;">
+      <option value="principal"${rol==='principal'?' selected':''}>Principal</option>
+      <option value="secundario"${rol==='secundario'?' selected':''}>Secundario</option>
+    </select></td>
+    <td><input type="text" class="form-control form-control-sm cond-numdoc"
+         value="${esc(d.numero_de_documento||'')}" style="font-size:.7rem;" placeholder="N° doc." /></td>
+    <td><input type="text" class="form-control form-control-sm cond-nombres"
+         value="${esc(d.nombres||'')}" style="font-size:.7rem;" /></td>
+    <td><input type="text" class="form-control form-control-sm cond-apellidos"
+         value="${esc(d.apellidos||'')}" style="font-size:.7rem;" /></td>
+    <td><input type="text" class="form-control form-control-sm cond-licencia"
+         value="${esc(d.numero_licencia_conducir||'')}" style="font-size:.7rem;" /></td>
+    <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+         onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td>`;
+  document.getElementById('tbodyConductores').appendChild(tr);
+}
+
+function limpiarConductores() {
+  document.getElementById('tbodyConductores').innerHTML = '';
+}
+
+function cargarConductores(card_code) {
+  limpiarConductores();
+  fetch('/api/socios/' + encodeURIComponent(card_code) + '/conductores')
+    .then(r => r.json())
+    .then(list => list.forEach(c => agregarConductor(c)))
+    .catch(() => {});
+}
+
+/* ── Vehículos ─────────────────────────────────────────────── */
+function agregarVehiculo(d) {
+  d = d || {};
+  const rol = d.vehiculo || 'principal';
+  const tr  = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select class="form-select form-select-sm veh-rol" style="font-size:.7rem;">
+      <option value="principal"${rol==='principal'?' selected':''}>Principal</option>
+      <option value="secundario"${rol==='secundario'?' selected':''}>Secundario</option>
+    </select></td>
+    <td><input type="text" class="form-control form-control-sm veh-placa"
+         value="${esc(d.numero_de_placa||'')}" style="font-size:.7rem;text-transform:uppercase;"
+         placeholder="Ej. ABC-123"
+         oninput="this.value=this.value.toUpperCase()" /></td>
+    <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+         onclick="this.closest('tr').remove()"><i class="bi bi-trash3"></i></button></td>`;
+  document.getElementById('tbodyVehiculos').appendChild(tr);
+}
+
+function limpiarVehiculos() {
+  document.getElementById('tbodyVehiculos').innerHTML = '';
+}
+
+function cargarVehiculos(card_code) {
+  limpiarVehiculos();
+  fetch('/api/socios/' + encodeURIComponent(card_code) + '/vehiculos')
+    .then(r => r.json())
+    .then(list => list.forEach(v => agregarVehiculo(v)))
+    .catch(() => {});
+}
 
 /* ── Descuentos ────────────────────────────────────────────── */
 let ITEMS_CACHE = null;
