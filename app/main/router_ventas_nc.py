@@ -240,6 +240,12 @@ def ventas_nc_nueva():
                 db.session.execute(text(
                     "DELETE FROM movimientos_almacen WHERE invoice_id = :inv_id"
                 ), {'inv_id': invoice_id})
+            db.session.execute(text("""
+                UPDATE invoce_doc_number
+                   SET invoice_number = :num
+                 WHERE idtype = :idtype
+                   AND TRIM(invoice_serie) = :serie
+            """), {'num': nc_number, 'idtype': idtype, 'serie': nc_serie})
             db.session.commit()
             return jsonify({'success': True, 'message': row[1], 'id_nc': row[2]})
         db.session.rollback()

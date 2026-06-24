@@ -13,6 +13,13 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-change-in-production')
     SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///intranet.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,      # verifica la conexión antes de usarla
+        'pool_recycle':  1800,      # descarta conexiones después de 30 min idle
+        'pool_timeout':  30,        # espera máx 30 s para obtener una conexión
+        'pool_size':     5,
+        'max_overflow':  10,
+    }
     APP_NAME = os.getenv('APP_NAME', 'Intranet')
     COMPANY_NAME = os.getenv('COMPANY_NAME', 'Mi Empresa')
     COMPANY_LOGO = os.getenv('COMPANY_LOGO', 'img/logo.png')

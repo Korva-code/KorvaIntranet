@@ -38,8 +38,9 @@ def registrar_movimientos_venta(invoice_id, card_code, invoice_type,
         if obj and (obj.invnt_item or 'N').strip().upper() != 'Y':
             continue
 
-        avg_price = float(obj.avg_price) if obj and obj.avg_price is not None else 0.0
-        item_name = (obj.item_name or item_code) if obj else item_code
+        avg_price  = float(obj.avg_price) if obj and obj.avg_price is not None else 0.0
+        price_cost = float(it.get('price_cost') or 0)
+        item_name  = (obj.item_name or item_code) if obj else item_code
 
         wh = (it.get('warehouse_code') or it.get('WarehouseCode') or invoice_wh or '').strip()
         qty_mov  = -abs(qty)
@@ -48,25 +49,26 @@ def registrar_movimientos_venta(invoice_id, card_code, invoice_type,
         db.session.execute(text("""
             INSERT INTO movimientos_almacen
                 (invoice_id, card_code, invoice_type, id_tipo, doc_date,
-                 item_code, item_name, quantity, avg_price, subtotal,
+                 item_code, item_name, quantity, avg_price, price_cost, subtotal,
                  almacen, tipo_movimiento, origen, user_code)
             VALUES
                 (:inv_id, :card, :inv_type, :id_tipo, CAST(:doc_date AS DATE),
-                 :item_code, :item_name, :qty, :avg_price, :subtotal,
+                 :item_code, :item_name, :qty, :avg_price, :price_cost, :subtotal,
                  :almacen, 'SAL', 'VENTA', :user_code)
         """), {
-            'inv_id':    invoice_id,
-            'card':      card_code,
-            'inv_type':  invoice_type,
-            'id_tipo':   id_tipo,
-            'doc_date':  doc_date,
-            'item_code': item_code,
-            'item_name': item_name,
-            'qty':       qty_mov,
-            'avg_price': avg_price,
-            'subtotal':  subtotal,
-            'almacen':   wh,
-            'user_code': str(user_code),
+            'inv_id':     invoice_id,
+            'card':       card_code,
+            'inv_type':   invoice_type,
+            'id_tipo':    id_tipo,
+            'doc_date':   doc_date,
+            'item_code':  item_code,
+            'item_name':  item_name,
+            'qty':        qty_mov,
+            'avg_price':  avg_price,
+            'price_cost': price_cost,
+            'subtotal':   subtotal,
+            'almacen':    wh,
+            'user_code':  str(user_code),
         })
 
 
@@ -114,25 +116,26 @@ def registrar_movimientos_compra(invoice_id, card_code, invoice_type,
         db.session.execute(text("""
             INSERT INTO movimientos_almacen
                 (invoice_id, card_code, invoice_type, id_tipo, doc_date,
-                 item_code, item_name, quantity, avg_price, subtotal,
+                 item_code, item_name, quantity, avg_price, price_cost, subtotal,
                  almacen, tipo_movimiento, origen, user_code)
             VALUES
                 (:inv_id, :card, :inv_type, :id_tipo, CAST(:doc_date AS DATE),
-                 :item_code, :item_name, :qty, :avg_price, :subtotal,
+                 :item_code, :item_name, :qty, :avg_price, :price_cost, :subtotal,
                  :almacen, 'ENT', 'COMPRA', :user_code)
         """), {
-            'inv_id':    invoice_id,
-            'card':      card_code,
-            'inv_type':  invoice_type,
-            'id_tipo':   id_tipo,
-            'doc_date':  doc_date,
-            'item_code': item_code,
-            'item_name': item_name,
-            'qty':       qty_mov,
-            'avg_price': avg_price,
-            'subtotal':  subtotal,
-            'almacen':   (invoice_wh or '').strip(),
-            'user_code': str(user_code),
+            'inv_id':     invoice_id,
+            'card':       card_code,
+            'inv_type':   invoice_type,
+            'id_tipo':    id_tipo,
+            'doc_date':   doc_date,
+            'item_code':  item_code,
+            'item_name':  item_name,
+            'qty':        qty_mov,
+            'avg_price':  avg_price,
+            'price_cost': avg_price,
+            'subtotal':   subtotal,
+            'almacen':    (invoice_wh or '').strip(),
+            'user_code':  str(user_code),
         })
 
 
@@ -179,10 +182,11 @@ def _row_to_dict(r):
         'almacen_nombre':  m.get('almacen_nombre') or '',
         'origen':          m.get('origen') or '',
         'tipo_movimiento': m.get('tipo_movimiento') or 'SAL',
-        'quantity':        float(m['quantity'])   if m.get('quantity')   is not None else 0.0,
-        'avg_price':       float(m['avg_price'])  if m.get('avg_price')  is not None else 0.0,
-        'subtotal':        float(m['subtotal'])   if m.get('subtotal')   is not None else 0.0,
-        'stock_acum':      float(m['stock_acum']) if m.get('stock_acum') is not None else 0.0,
+        'quantity':        float(m['quantity'])    if m.get('quantity')    is not None else 0.0,
+        'avg_price':       float(m['avg_price'])   if m.get('avg_price')   is not None else 0.0,
+        'price_cost':      float(m['price_cost'])  if m.get('price_cost')  is not None else 0.0,
+        'subtotal':        float(m['subtotal'])    if m.get('subtotal')    is not None else 0.0,
+        'stock_acum':      float(m['stock_acum'])  if m.get('stock_acum')  is not None else 0.0,
     }
 
 

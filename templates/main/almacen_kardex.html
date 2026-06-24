@@ -77,8 +77,8 @@
           <th class="text-center" style="width:70px;">Origen</th>
           <th class="text-center" style="width:65px;">Tipo</th>
           <th class="text-end" style="width:90px;">Cantidad</th>
-          <th class="text-end" style="width:100px;">P.Unit (S/IGV)</th>
-          <th class="text-end" style="width:110px;">Subtotal</th>
+          <th class="text-end" style="width:100px;">P. Costo</th>
+          <th class="text-end" style="width:110px;">Costo Total</th>
           <th class="text-end" style="width:110px;">Stock Acum.</th>
         </tr>
       </thead>
@@ -92,7 +92,7 @@
       <span>Cant. Entradas: <strong class="text-success" id="sumaQtyEnt">0.0000</strong></span>
       <span>Cant. Salidas: <strong class="text-danger" id="sumaQtySal">0.0000</strong></span>
       <span>|</span>
-      <span>Subtotal: <strong class="text-dark" id="sumaSubtotal">0.00</strong></span>
+      <span>Costo Total: <strong class="text-dark" id="sumaSubtotal">0.00</strong></span>
     </span>
   </div>
 </div>
@@ -202,8 +202,8 @@ function renderTabla() {
       </td>
       <td class="text-center">${tipoBadge}</td>
       <td class="text-end ${qtyClass}">${m.quantity.toFixed(4)}</td>
-      <td class="text-end font-monospace text-muted">${m.avg_price.toFixed(4)}</td>
-      <td class="text-end font-monospace">${m.subtotal.toFixed(2)}</td>
+      <td class="text-end font-monospace text-muted">${m.price_cost.toFixed(4)}</td>
+      <td class="text-end font-monospace">${(m.quantity * m.price_cost).toFixed(2)}</td>
       <td class="text-end fw-semibold ${stockClass}">${m.stock_acum.toFixed(4)}</td>`;
     tbody.appendChild(tr);
   });
@@ -215,7 +215,7 @@ function renderTabla() {
   MOV_DATA.forEach(m => {
     if (m.tipo_movimiento === 'ENT') sumaQtyEnt += (m.quantity || 0);
     else                             sumaQtySal += Math.abs(m.quantity || 0);
-    sumaSubtotal += (m.subtotal || 0);
+    sumaSubtotal += (m.quantity || 0) * (m.price_cost || 0);
   });
   document.getElementById('sumaQtyEnt').textContent   = sumaQtyEnt.toFixed(4);
   document.getElementById('sumaQtySal').textContent   = sumaQtySal.toFixed(4);
@@ -225,14 +225,14 @@ function renderTabla() {
 /* ── Excel ───────────────────────────────────────────────── */
 function exportarExcel() {
   const filas = [['#','Fecha','Comprob.','Cod. Socio','Socio','Artículo','Descripción',
-                   'Almacén','Origen','Tipo','Cantidad','P.Unit','Subtotal','Stock Acum.']];
+                   'Almacén','Origen','Tipo','Cantidad','P.Costo','Costo Total','Stock Acum.']];
   MOV_DATA.forEach(m => filas.push([
     m.id, m.doc_date, m.invoice_type,
     m.card_code, m.bp_name,
     m.item_code, m.item_name, m.almacen_nombre || m.almacen,
     m.origen, m.tipo_movimiento,
-    m.quantity.toFixed(4), m.avg_price.toFixed(4),
-    m.subtotal.toFixed(2), m.stock_acum.toFixed(4),
+    m.quantity.toFixed(4), m.price_cost.toFixed(4),
+    (m.quantity * m.price_cost).toFixed(2), m.stock_acum.toFixed(4),
   ]));
   const ws = XLSX.utils.aoa_to_sheet(filas);
   const wb = XLSX.utils.book_new();

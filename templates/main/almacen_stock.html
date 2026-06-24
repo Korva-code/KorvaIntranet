@@ -71,7 +71,7 @@
           <th style="min-width:140px;">Almacén</th>
           <th class="text-end" style="width:110px;">Stock</th>
           <th class="text-end" style="width:110px;">P. Unit. (s/IGV)</th>
-          <th class="text-end" style="width:120px;">Valor Total</th>
+          <th class="text-end" style="width:120px;">Costo Total</th>
         </tr>
       </thead>
       <tbody id="tbodyStock"></tbody>
@@ -83,7 +83,7 @@
       Total: <strong id="footerContador">{{ total }}</strong> artículos
     </span>
     <span class="ms-auto fw-semibold text-success small">
-      Valor total: S/ <strong id="footerValor">0.00</strong>
+      Costo total: S/ <strong id="footerValor">0.00</strong>
     </span>
   </div>
 </div>
@@ -94,9 +94,9 @@
 {% block extra_css %}
 <style>
 .form-label-sm { font-size: .75rem; font-weight: 600; color: #475569; }
-.stock-neg  { color: #ef4444; font-weight: 600; }
-.stock-zero { color: #94a3b8; }
-.stock-pos  { color: #16a34a; font-weight: 600; }
+.stock-rojo { color: #ef4444; font-weight: 600; }
+.stock-azul { color: #2563eb; font-weight: 600; }
+.stock-verde{ color: #16a34a; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -139,7 +139,7 @@ function renderTabla() {
   filas.forEach((r, idx) => {
     sumaValor += r.valor_total;
 
-    const stockClass = r.stock < 0 ? 'stock-neg' : r.stock === 0 ? 'stock-zero' : 'stock-pos';
+    const stockClass = r.stock <= 0 ? 'stock-rojo' : r.stock <= 10 ? 'stock-azul' : 'stock-verde';
     const stockSign  = r.stock > 0 ? '+' : '';
 
     const tr = document.createElement('tr');
@@ -160,7 +160,7 @@ function renderTabla() {
 }
 
 function exportarExcel() {
-  const filas = [['#','Código','Descripción','Almacén','Stock','P.Unit s/IGV','Valor Total']];
+  const filas = [['#','Código','Descripción','Almacén','Stock','P.Unit s/IGV','Costo Total']];
   STOCK_DATA.forEach((r, i) => filas.push([
     i + 1, r.item_code, r.item_name, r.whs_name,
     r.stock.toFixed(4), r.avg_price.toFixed(4), r.valor_total.toFixed(2),

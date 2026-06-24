@@ -51,6 +51,7 @@ RETURNS TABLE (
     "tipo_movimiento" TEXT,
     "quantity"        NUMERIC,
     "avg_price"       NUMERIC,
+    "price_cost"      NUMERIC,
     "subtotal"        NUMERIC,
     "stock_acum"      NUMERIC
 ) AS $$
@@ -71,6 +72,7 @@ BEGIN
         COALESCE(m.tipo_movimiento, 'SAL')                  ::TEXT,
         COALESCE(m.quantity, 0),
         COALESCE(m.avg_price, 0),
+        COALESCE(m.price_cost, 0),
         COALESCE(m.subtotal, 0),
         SUM(COALESCE(m.quantity, 0)) OVER (
             PARTITION BY m.item_code, m.almacen

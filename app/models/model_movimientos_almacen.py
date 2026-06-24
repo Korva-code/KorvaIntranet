@@ -15,6 +15,7 @@ class MovimientoAlmacen(db.Model):
     item_name       = db.Column(db.Text)
     quantity        = db.Column(db.Numeric(18, 4))
     avg_price       = db.Column(db.Numeric(18, 4))
+    price_cost      = db.Column(db.Numeric(18, 4))
     subtotal        = db.Column(db.Numeric(18, 2))
     almacen         = db.Column(db.Text)
     tipo_movimiento = db.Column(db.Text, default='SAL')

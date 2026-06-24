@@ -25,7 +25,7 @@ RETURNS TABLE (
         COALESCE(TRIM(w.whs_name), TRIM(m.almacen))::TEXT AS whs_name,
         SUM(m.quantity)                                  AS stock,
         AVG(m.avg_price)                                 AS avg_price,
-        SUM(m.quantity * m.avg_price)                    AS valor_total
+        SUM(m.quantity * COALESCE(m.price_cost, m.avg_price, 0)) AS valor_total
     FROM   movimientos_almacen m
     LEFT JOIN warehouses w ON TRIM(w.whs_code) = TRIM(m.almacen)
     WHERE  (p_almacen IS NULL OR p_almacen = ''
