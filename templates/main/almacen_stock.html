@@ -69,9 +69,9 @@
           <th style="width:110px;">Código</th>
           <th style="min-width:200px;">Descripción</th>
           <th style="min-width:140px;">Almacén</th>
-          <th class="text-end" style="width:110px;">Stock</th>
+          <th class="text-end sortable" data-col="stock" style="width:110px;">Stock <span class="sort-icon text-muted">↕</span></th>
           <th class="text-end" style="width:110px;">P. Unit. (s/IGV)</th>
-          <th class="text-end" style="width:120px;">Costo Total</th>
+          <th class="text-end sortable" data-col="valor_total" style="width:120px;">Costo Total <span class="sort-icon text-muted">↕</span></th>
         </tr>
       </thead>
       <tbody id="tbodyStock"></tbody>
@@ -97,19 +97,36 @@
 .stock-rojo { color: #ef4444 !important; font-weight: 700 !important; }
 .stock-azul { color: #2563eb !important; font-weight: 700 !important; }
 .stock-verde{ color: #16a34a !important; font-weight: 700 !important; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { background: #f1f5f9; }
+th.sortable .sort-icon { font-size: .7rem; vertical-align: middle; }
 </style>
 {% endblock %}
 
 
 {% block extra_js %}
 <script>
-const STOCK_DATA    = JSON.parse(document.getElementById('stockData').textContent);
-let busqueda = '';
+const STOCK_DATA = JSON.parse(document.getElementById('stockData').textContent);
+let busqueda = '', _sortCol = null, _sortDir = 1;
 
 document.getElementById('buscarInput').addEventListener('input', function() {
   busqueda = this.value.toLowerCase();
   renderTabla();
 });
+
+function _actualizarIconosSort() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const icon = th.querySelector('.sort-icon');
+    if (!icon) return;
+    if (th.dataset.col === _sortCol) {
+      icon.textContent = _sortDir === 1 ? '↑' : '↓';
+      icon.className = 'sort-icon text-warning';
+    } else {
+      icon.textContent = '↕';
+      icon.className = 'sort-icon text-muted';
+    }
+  });
+}
 
 function escHtml(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -118,12 +135,16 @@ function escHtml(s) {
 function renderTabla() {
   const tbody = document.getElementById('tbodyStock');
 
-  const filas = STOCK_DATA.filter(r => {
+  let filas = STOCK_DATA.filter(r => {
     if (!busqueda) return true;
     return r.item_code.toLowerCase().includes(busqueda) ||
            r.item_name.toLowerCase().includes(busqueda) ||
            r.whs_name.toLowerCase().includes(busqueda);
   });
+
+  if (_sortCol) {
+    filas = filas.slice().sort((a, b) => _sortDir * (a[_sortCol] - b[_sortCol]));
+  }
 
   if (!filas.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">Sin resultados.</td></tr>';
@@ -170,6 +191,18 @@ function exportarExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Stock');
   XLSX.writeFile(wb, 'stock_almacen.xlsx');
 }
+
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    if (_sortCol === th.dataset.col) {
+      _sortDir = _sortDir === 1 ? -1 : 1;
+    } else {
+      _sortCol = th.dataset.col; _sortDir = 1;
+    }
+    _actualizarIconosSort();
+    renderTabla();
+  });
+});
 
 renderTabla();
 </script>

@@ -526,9 +526,9 @@ function onClienteSelect(inp) {
 
 /* ── Render tabla listado ───────────────────────────────── */
 function estadoBadge(id) {
-  return id === 0
-    ? '<span class="badge bg-danger-subtle text-danger border" style="font-size:.63rem;">Anulada</span>'
-    : '<span class="badge bg-success-subtle text-success border" style="font-size:.63rem;">Activa</span>';
+  if (id === 0) return '<span class="badge bg-danger-subtle text-danger border" style="font-size:.63rem;">Anulada</span>';
+  if (id === 2) return '<span class="badge bg-info-subtle text-info border" style="font-size:.63rem;">Facturado</span>';
+  return '<span class="badge bg-success-subtle text-success border" style="font-size:.63rem;">Activa</span>';
 }
 function simMoneda(m) { return m === 'USD' ? '$' : 'S/'; }
 
@@ -613,7 +613,7 @@ function toggleFiltro(key, e) {
     <div class="filtro-opciones">` +
     vals.map(v => `<label class="filtro-opcion ${filtroEstado.has(v)?'selected':''}">
       <i class="bi ${filtroEstado.has(v)?'bi-check-square-fill':'bi-square'} filtro-chk"></i>
-      <span>${v === 1 ? 'Activa' : 'Anulada'}</span>
+      <span>${v === 0 ? 'Anulada' : v === 2 ? 'Facturado' : 'Activa'}</span>
       <input type="checkbox" style="display:none" value="${v}"
              ${filtroEstado.has(v)?'checked':''}
              onchange="onChkEstado(this)">

@@ -1,0 +1,1002 @@
+{% extends 'maestras/base.html' %}
+
+{% block breadcrumb_actions %}
+  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+    {{ total }} ingreso{{ 's' if total != 1 else '' }}
+  </span>
+{% endblock %}
+
+{% block content %}
+
+<script id="ingresosData"  type="application/json">{{ ingresos_json  | safe }}</script>
+<script id="warehousesData" type="application/json">{{ warehouses_json | safe }}</script>
+<script id="itemsData"     type="application/json">{{ items_json     | safe }}</script>
+<script id="tiposData"     type="application/json">{{ tipos_json     | safe }}</script>
+<script id="usuariosData"  type="application/json">{{ usuarios_json  | safe }}</script>
+<script id="currentUser"   type="application/json">"{{ current_user_code }}"</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     LISTA
+     ══════════════════════════════════════════════════════════ -->
+<div class="card border-0 shadow-sm">
+
+  <div class="card-header bg-white border-bottom py-2 px-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h6 class="mb-0 fw-semibold text-nowrap me-auto">
+        <i class="bi bi-box-arrow-in-down text-primary me-1"></i> Ingresos de Mercadería
+      </h6>
+      <div class="input-group input-group-sm" style="min-width:160px; max-width:260px;">
+        <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+        <input type="search" class="form-control" id="buscarIngreso" placeholder="Tipo, orden, almacén…">
+      </div>
+      <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer(null)">
+        <i class="bi bi-plus-lg me-1"></i><span class="d-none d-sm-inline">Nuevo Ingreso</span><span class="d-sm-none">Nuevo</span>
+      </button>
+      <button class="btn btn-sm btn-success text-nowrap" onclick="exportarExcel()">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </button>
+    </div>
+  </div>
+
+  <div class="table-responsive" style="min-height:400px;">
+    <table class="table table-hover align-middle mb-0" style="font-size:.75rem;">
+      <thead class="table-light" style="font-size:.72rem;">
+        <tr>
+          <th class="ps-3" style="width:55px;">#</th>
+          <th style="width:110px; position:relative; white-space:nowrap;">
+            Tipo
+            <button type="button" class="btn-col-filtro" id="btnFiltroTipo"
+                    onclick="toggleFiltro('tipo',event)" title="Filtrar por tipo">
+              <i class="bi bi-funnel" id="iconFiltroTipo"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:105px; position:relative; white-space:nowrap;">
+            Fecha
+            <button type="button" class="btn-col-filtro" id="btnFiltroFecha"
+                    onclick="toggleFiltroFecha(event)" title="Filtrar por fecha">
+              <i class="bi bi-funnel" id="iconFiltroFecha"></i>
+            </button>
+            <div class="col-filtro-panel filtro-fecha-panel" id="panelFiltroFecha"
+                 style="display:none;" onclick="event.stopPropagation()">
+              <div class="filtro-panel-header">
+                <span style="font-size:.72rem; font-weight:600; color:#475569;">Rango de fechas</span>
+                <span class="filtro-action danger" onclick="limpiarFiltroFecha(event)">Limpiar</span>
+              </div>
+              <div style="padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Desde</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaDesde"
+                         oninput="onFiltroFechaChange()">
+                </div>
+                <div>
+                  <div style="font-size:.68rem; color:#64748b; margin-bottom:2px;">Hasta</div>
+                  <input type="date" class="form-control form-control-sm" id="filtroFechaHasta"
+                         oninput="onFiltroFechaChange()">
+                </div>
+              </div>
+              <div class="filtro-panel-footer">
+                <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+                        style="font-size:.73rem;" onclick="cerrarTodosFiltros()">Aplicar</button>
+              </div>
+            </div>
+          </th>
+          <th style="width:70px; position:relative; white-space:nowrap;">
+            Almacén
+            <button type="button" class="btn-col-filtro" id="btnFiltroAlmacen"
+                    onclick="toggleFiltro('almacen',event)" title="Filtrar por almacén">
+              <i class="bi bi-funnel" id="iconFiltroAlmacen"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroAlmacen" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:130px;">Nro. Orden</th>
+          <th style="width:70px;" class="text-center">Ítems</th>
+          <th style="width:120px;" class="text-end">Costo Total</th>
+          <th style="width:80px; position:relative; white-space:nowrap;" class="text-center">
+            Estado
+            <button type="button" class="btn-col-filtro" id="btnFiltroEstado"
+                    onclick="toggleFiltro('estado',event)" title="Filtrar por estado">
+              <i class="bi bi-funnel" id="iconFiltroEstado"></i>
+            </button>
+            <div class="col-filtro-panel" id="panelFiltroEstado" style="display:none;"
+                 onclick="event.stopPropagation()"></div>
+          </th>
+          <th style="width:60px;" class="text-center">Ver</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyIngresos"></tbody>
+    </table>
+  </div>
+
+  <div class="card-footer bg-white py-2 px-3 d-flex align-items-center gap-4">
+    <span class="text-muted small">Total: <strong id="countLabel">{{ total }}</strong> ingresos</span>
+    <span class="ms-auto fw-semibold text-primary small">
+      Costo total: S/ <strong id="footerCosto">0.00</strong>
+    </span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     OVERLAY
+     ══════════════════════════════════════════════════════════ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="cerrarDrawer()"></div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     DRAWER  (desliza de izquierda a derecha)
+     ══════════════════════════════════════════════════════════ -->
+<aside class="ingreso-drawer" id="ingresoDrawer">
+
+  <!-- Visor de imagen (overlay absoluto centrado sobre el drawer) -->
+  <div id="visorImagen" style="display:none; position:absolute; inset:0; z-index:1030;
+       background:rgba(0,0,0,.65); backdrop-filter:blur(4px);
+       align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:10px; padding:1rem 1.2rem; max-width:80%;
+                max-height:82%; display:flex; flex-direction:column;
+                box-shadow:0 12px 40px rgba(0,0,0,.35);">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <span class="fw-semibold" style="font-size:.83rem; color:#475569;">
+          <i class="bi bi-image me-1 text-primary"></i>Imagen adjunta
+        </span>
+        <button onclick="cerrarVisor()" class="btn btn-sm btn-outline-secondary py-0 px-2">
+          <i class="bi bi-x-lg" style="font-size:.7rem;"></i>
+        </button>
+      </div>
+      <div style="overflow:auto; flex:1;">
+        <img id="imgVisor" src="" alt="Imagen"
+             style="max-width:100%; max-height:65vh; object-fit:contain; border-radius:6px; display:block; margin:auto;">
+      </div>
+    </div>
+  </div>
+
+  <!-- Cabecera drawer -->
+  <div class="drawer-header">
+    <span id="drawerBadge" class="badge bg-primary">NUEVO</span>
+    <h6 class="mb-0 fw-bold ms-2" id="drawerTitle">Nuevo Ingreso de Mercadería</h6>
+    <input type="file" id="f_imagen_file" accept="image/*" style="display:none"
+           onchange="cargarImagenLocal(this)">
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('f_imagen_file').click()">
+        <i class="bi bi-image me-1"></i>Subir imagen
+      </button>
+      <button class="btn btn-sm btn-outline-info" id="btnVerImagen" onclick="verImagen()" disabled>
+        <i class="bi bi-eye me-1"></i>Ver
+      </button>
+      <button class="btn btn-sm btn-outline-secondary" onclick="cerrarDrawer()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Cuerpo drawer -->
+  <div class="drawer-body">
+    <input type="hidden" id="f_ingreso_id" value="0">
+
+    <!-- Campos cabecera -->
+    <div class="drawer-fields">
+      <div class="row g-2 mb-2">
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Tipo de Ingreso <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" id="f_tipo_ingreso">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Fecha <span class="text-danger">*</span></label>
+          <input type="date" class="form-control form-control-sm" id="f_fecha_ingreso">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Almacén <span class="text-danger">*</span></label>
+          <select class="form-select form-select-sm" id="f_almacen">
+            <option value="">— Seleccione —</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Nro. Orden de Compra</label>
+          <input type="text" class="form-control form-control-sm" id="f_nro_orden_compra"
+                 placeholder="OC-001" maxlength="50">
+        </div>
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-5">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Observaciones</label>
+          <input type="text" class="form-control form-control-sm" id="f_observaciones"
+                 placeholder="Opcional…" maxlength="200">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Usuario</label>
+          <select class="form-select form-select-sm" id="f_user_code"></select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Fecha Registro</label>
+          <input type="text" class="form-control form-control-sm bg-light" id="f_fecha_registro"
+                 readonly tabindex="-1" placeholder="—">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label fw-semibold" style="font-size:.8rem;">Fecha Modificación</label>
+          <input type="text" class="form-control form-control-sm bg-light" id="f_fecha_modificacion"
+                 readonly tabindex="-1" placeholder="—">
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de ítems -->
+    <div class="drawer-grid">
+    <div class="d-flex align-items-center justify-content-between mb-2">
+      <span class="fw-semibold" style="font-size:.82rem;"><i class="bi bi-list-ul me-1"></i>Detalle de Artículos</span>
+      <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2" onclick="agregarFila()">
+        <i class="bi bi-plus-lg me-1"></i>Agregar ítem
+      </button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered align-middle mb-0" style="font-size:.75rem;" id="tablaItems">
+        <thead class="table-light sticky-top" style="font-size:.72rem;">
+          <tr>
+            <th style="width:130px;">Código</th>
+            <th>Descripción</th>
+            <th class="text-end" style="width:90px;">Cantidad</th>
+            <th style="width:80px;">UoM</th>
+            <th class="text-end" style="width:100px;">P. Costo</th>
+            <th class="text-end" style="width:100px;">Subtotal</th>
+            <th style="width:40px;"></th>
+          </tr>
+        </thead>
+        <tbody id="tbodyItems"></tbody>
+        <tfoot>
+          <tr class="table-light fw-semibold">
+            <td colspan="5" class="text-end pe-2" style="font-size:.75rem;">Total:</td>
+            <td class="text-end font-monospace" id="totalCostoDrawer">S/ 0.00</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    </div><!-- /drawer-grid -->
+
+  <!-- Pie drawer -->
+  <div class="drawer-footer">
+    <button type="button" class="btn btn-outline-danger btn-sm" id="btnAnular"
+            style="display:none;" onclick="anularIngreso()">
+      <i class="bi bi-x-circle me-1"></i>Anular
+    </button>
+    <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" onclick="cerrarDrawer()">
+      <i class="bi bi-x me-1"></i>Cancelar
+    </button>
+    <button type="button" class="btn btn-primary btn-sm px-3" id="btnGuardar" onclick="guardarIngreso()">
+      <i class="bi bi-floppy me-1"></i>Guardar
+    </button>
+  </div>
+
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL CONFIRMACIÓN ANULACIÓN
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalConfirmarAnular" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header bg-danger text-white py-2 px-3">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+          <h6 class="modal-title mb-0 fw-bold">Confirmar Anulación</h6>
+        </div>
+        <button type="button" class="btn-close btn-close-white btn-sm" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4 py-3">
+        <p class="mb-1" style="font-size:.88rem;">
+          ¿Está seguro de que desea <strong>anular</strong> este ingreso?
+        </p>
+        <p class="text-danger mb-0" style="font-size:.8rem;">
+          <i class="bi bi-info-circle me-1"></i>
+          Esta acción eliminará los movimientos de almacén asociados y no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer py-2 px-3 gap-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+          <i class="bi bi-x me-1"></i>Cancelar
+        </button>
+        <button type="button" class="btn btn-danger btn-sm px-3" id="btnConfirmarAnular"
+                onclick="confirmarAnulacion()">
+          <i class="bi bi-x-circle me-1"></i>Sí, anular
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_css %}
+<style>
+/* ── Overlay ──────────────────────────────────────────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,23,42,.45); backdrop-filter: blur(2px); z-index: 1090;
+}
+
+/* ── Modal de confirmación por encima del drawer ──────── */
+#modalConfirmarAnular { z-index: 1200; }
+#modalConfirmarAnular + .modal-backdrop,
+.modal-backdrop       { z-index: 1195; }
+.drawer-overlay.active { display: block; }
+
+/* ── Drawer desde la derecha ─────────────────────────── */
+.ingreso-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 72vw; max-width: 960px;
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  z-index: 1100; display: flex; flex-direction: column;
+  transform: translateX(100%);
+  transition: transform .3s cubic-bezier(.4,0,.2,1);
+}
+.ingreso-drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: flex; align-items: center;
+  padding: .75rem 1.1rem; border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc; flex-shrink: 0;
+}
+.drawer-body   { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: .9rem 1.1rem .5rem; min-height: 0; }
+.drawer-fields { flex-shrink: 0; }
+.drawer-grid   { flex: 1; display: flex; flex-direction: column; min-height: 0; margin-top: .5rem; }
+.drawer-grid .table-responsive { flex: 1; overflow-y: auto; min-height: calc(100vh - 260px); }
+.drawer-footer {
+  padding: .85rem 1.25rem; border-top: 1px solid #e2e8f0;
+  background: #f8fafc; display: flex; align-items: center; gap: .5rem;
+  flex-shrink: 0;
+}
+
+/* ── Autocomplete ────────────────────────────────────── */
+.autocomplete-wrapper { position: relative; }
+.autocomplete-list {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #fff; border: 1px solid #cbd5e1;
+  border-radius: 4px; max-height: 180px; overflow-y: auto;
+  z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,.12);
+  display: none;
+}
+.autocomplete-list .ac-item {
+  padding: .35rem .6rem; cursor: pointer; font-size: .73rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+.autocomplete-list .ac-item:hover,
+.autocomplete-list .ac-item.active { background: #eff6ff; }
+
+/* ── Badges estado ───────────────────────────────────── */
+.badge-activo  { background:#dcfce7; color:#16a34a; font-size:.65rem; }
+.badge-anulado { background:#fee2e2; color:#dc2626; font-size:.65rem; }
+
+/* ── Filtros de columna ──────────────────────────────── */
+.btn-col-filtro {
+  background: none; border: none; padding: 0 2px;
+  cursor: pointer; color: #94a3b8; font-size: .72rem;
+  vertical-align: middle; line-height: 1;
+}
+.btn-col-filtro.active { color: #2563eb; }
+.col-filtro-panel {
+  position: absolute; top: 100%; left: 0; z-index: 300;
+  background: #fff; border: 1px solid #e2e8f0;
+  border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.14);
+  min-width: 170px; font-size: .75rem;
+  font-weight: 400; text-transform: none; letter-spacing: 0;
+  overflow: hidden;
+}
+.filtro-panel-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; border-bottom: 1px solid #f1f5f9; background: #f8fafc;
+}
+.filtro-action { cursor: pointer; font-size: .7rem; color: #64748b; }
+.filtro-action:hover { color: #2563eb; text-decoration: underline; }
+.filtro-action.danger:hover { color: #ef4444; }
+.filtro-opciones { max-height: 220px; overflow-y: auto; padding: 4px 0; }
+.filtro-opcion {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px; cursor: pointer; white-space: nowrap;
+  color: #334155; user-select: none;
+}
+.filtro-opcion:hover { background: #eff6ff; }
+.filtro-opcion.selected { color: #2563eb; }
+.filtro-opcion .filtro-chk { font-size: .8rem; flex-shrink: 0; }
+.filtro-panel-footer { padding: 6px 10px; border-top: 1px solid #f1f5f9; background: #f8fafc; }
+.filtro-fecha-panel { min-width: 210px; }
+</style>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+const INGRESOS_DATA  = JSON.parse(document.getElementById('ingresosData').textContent);
+const WAREHOUSES     = JSON.parse(document.getElementById('warehousesData').textContent);
+const ITEMS_DATA     = JSON.parse(document.getElementById('itemsData').textContent);
+const TIPOS_INGRESO  = JSON.parse(document.getElementById('tiposData').textContent);
+const USUARIOS       = JSON.parse(document.getElementById('usuariosData').textContent);
+const CURRENT_USER   = JSON.parse(document.getElementById('currentUser').textContent);
+
+/* ── Poblar selects globales ─────────────────────────── */
+(function() {
+  const selTipo = document.getElementById('f_tipo_ingreso');
+  TIPOS_INGRESO.forEach(t => {
+    const o = document.createElement('option'); o.value = t; o.textContent = t;
+    selTipo.appendChild(o);
+  });
+
+  const selAlm = document.getElementById('f_almacen');
+  WAREHOUSES.forEach(w => {
+    const o = document.createElement('option');
+    o.value = w.whs_code; o.textContent = w.whs_name;
+    selAlm.appendChild(o);
+  });
+
+  const selUser = document.getElementById('f_user_code');
+  USUARIOS.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id_usuario; o.textContent = u.nombres;
+    if (u.id_usuario === CURRENT_USER) o.selected = true;
+    selUser.appendChild(o);
+  });
+})();
+
+/* ── Helpers ─────────────────────────────────────────── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function mostrarToast(tipo, msg) {
+  let cont = document.getElementById('toastCont');
+  if (!cont) {
+    cont = document.createElement('div'); cont.id = 'toastCont';
+    cont.style.cssText = 'position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;';
+    document.body.appendChild(cont);
+  }
+  const t = document.createElement('div');
+  t.className = `alert alert-${tipo} alert-dismissible shadow-sm mb-0`;
+  t.style.minWidth = '260px';
+  t.innerHTML = escHtml(msg) + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+  cont.appendChild(t);
+  setTimeout(() => t.remove(), 4500);
+}
+
+/* ── Render tabla lista ──────────────────────────────── */
+/* ── Sistema de filtros de columna ───────────────────── */
+const filtroActivo = { tipo: new Set(), almacen: new Set(), estado: new Set() };
+const filtroFecha  = { desde: '', hasta: '' };
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function toggleFiltro(key, e) {
+  e.stopPropagation();
+  const panel  = document.getElementById('panelFiltro' + cap(key));
+  const abierto= panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) { construirPanel(key); panel.style.display = 'block'; }
+}
+
+function construirPanel(key) {
+  const panel   = document.getElementById('panelFiltro' + cap(key));
+  const activos = filtroActivo[key];
+  const vals    = new Set();
+  INGRESOS_DATA.forEach(d => {
+    let v = '';
+    if (key === 'tipo')    v = d.tipo_ingreso || '';
+    if (key === 'almacen') v = d.whs_name || d.almacen || '';
+    if (key === 'estado')  v = d.id_estado === 1 ? 'Activo' : 'Anulado';
+    if (v) vals.add(v);
+  });
+  panel.innerHTML = `
+    <div class="filtro-panel-header">
+      <span class="filtro-action" onclick="selTodo('${key}',event)">Seleccionar todo</span>
+      <span class="filtro-action danger" onclick="limpiarFiltro('${key}',event)">Limpiar</span>
+    </div>
+    <div class="filtro-opciones" id="opcionesFiltro${cap(key)}"></div>
+    <div class="filtro-panel-footer">
+      <button type="button" class="btn btn-sm btn-primary w-100 py-0"
+              style="font-size:.73rem;" onclick="cerrarTodosFiltros()">Aplicar</button>
+    </div>`;
+  const cont = document.getElementById('opcionesFiltro' + cap(key));
+  [...vals].sort().forEach(v => cont.appendChild(crearOpcion(key, v, activos.has(v))));
+}
+
+function crearOpcion(key, valor, checked) {
+  const div = document.createElement('div');
+  div.className = 'filtro-opcion' + (checked ? ' selected' : '');
+  div.innerHTML = `<i class="bi ${checked ? 'bi-check-square-fill' : 'bi-square'} filtro-chk"></i><span>${valor}</span>`;
+  div.onclick = e => { e.stopPropagation(); toggleValor(key, valor, div); };
+  return div;
+}
+
+function toggleValor(key, valor, el) {
+  const set = filtroActivo[key];
+  const chk = el.querySelector('.filtro-chk');
+  if (set.has(valor)) {
+    set.delete(valor); el.classList.remove('selected');
+    chk.className = 'bi bi-square filtro-chk';
+  } else {
+    set.add(valor); el.classList.add('selected');
+    chk.className = 'bi bi-check-square-fill filtro-chk';
+  }
+  actualizarIcono(key); renderTabla();
+}
+
+function selTodo(key, e) {
+  e.stopPropagation();
+  const set = filtroActivo[key];
+  INGRESOS_DATA.forEach(d => {
+    let v = '';
+    if (key === 'tipo')    v = d.tipo_ingreso || '';
+    if (key === 'almacen') v = d.whs_name || d.almacen || '';
+    if (key === 'estado')  v = d.id_estado === 1 ? 'Activo' : 'Anulado';
+    if (v) set.add(v);
+  });
+  construirPanel(key); actualizarIcono(key); renderTabla();
+}
+
+function limpiarFiltro(key, e) {
+  e.stopPropagation();
+  filtroActivo[key].clear();
+  construirPanel(key); actualizarIcono(key); renderTabla();
+}
+
+function actualizarIcono(key) {
+  const activo = filtroActivo[key].size > 0;
+  const icon   = document.getElementById('iconFiltro' + cap(key));
+  const btn    = document.getElementById('btnFiltro'  + cap(key));
+  if (icon) icon.className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  if (btn)  btn.classList.toggle('active', activo);
+}
+
+function cerrarTodosFiltros() {
+  document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
+}
+document.addEventListener('click', cerrarTodosFiltros);
+
+/* ── Filtro fecha ────────────────────────────────────── */
+function toggleFiltroFecha(e) {
+  e.stopPropagation();
+  const panel  = document.getElementById('panelFiltroFecha');
+  const abierto= panel.style.display !== 'none';
+  cerrarTodosFiltros();
+  if (!abierto) panel.style.display = 'block';
+}
+
+function onFiltroFechaChange() {
+  filtroFecha.desde = document.getElementById('filtroFechaDesde').value;
+  filtroFecha.hasta = document.getElementById('filtroFechaHasta').value;
+  const activo = filtroFecha.desde || filtroFecha.hasta;
+  document.getElementById('iconFiltroFecha').className = activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroFecha').classList.toggle('active', !!activo);
+  renderTabla();
+}
+
+function limpiarFiltroFecha(e) {
+  e.stopPropagation();
+  filtroFecha.desde = filtroFecha.hasta = '';
+  document.getElementById('filtroFechaDesde').value = '';
+  document.getElementById('filtroFechaHasta').value = '';
+  document.getElementById('iconFiltroFecha').className = 'bi bi-funnel';
+  document.getElementById('btnFiltroFecha').classList.remove('active');
+  renderTabla();
+}
+
+/* ── Render tabla ────────────────────────────────────── */
+function renderTabla() {
+  const q     = (document.getElementById('buscarIngreso').value || '').toLowerCase().trim();
+  const tbody = document.getElementById('tbodyIngresos');
+  let html = '', cnt = 0, sumaCosto = 0;
+
+  INGRESOS_DATA.forEach(d => {
+    const tipoV = d.tipo_ingreso || '';
+    const almV  = d.whs_name || d.almacen || '';
+    const estV  = d.id_estado === 1 ? 'Activo' : 'Anulado';
+
+    if (filtroActivo.tipo.size    && !filtroActivo.tipo.has(tipoV))   return;
+    if (filtroActivo.almacen.size && !filtroActivo.almacen.has(almV)) return;
+    if (filtroActivo.estado.size  && !filtroActivo.estado.has(estV))  return;
+    if (filtroFecha.desde && d.fecha_ingreso < filtroFecha.desde)     return;
+    if (filtroFecha.hasta && d.fecha_ingreso > filtroFecha.hasta)     return;
+    if (q) {
+      const txt = [d.tipo_ingreso, d.whs_name, d.almacen, d.nro_orden_compra, d.observaciones]
+                    .join(' ').toLowerCase();
+      if (!txt.includes(q)) return;
+    }
+    cnt++;
+    sumaCosto += d.total_costo;
+    const est = d.id_estado === 1
+      ? '<span class="badge badge-activo">Activo</span>'
+      : '<span class="badge badge-anulado">Anulado</span>';
+    html += `<tr style="font-size:.74rem;">
+      <td class="ps-3 text-muted">${d.id}</td>
+      <td><span class="badge bg-primary-subtle text-primary">${escHtml(d.tipo_ingreso)}</span></td>
+      <td class="font-monospace">${d.fecha_ingreso || '—'}</td>
+      <td>${escHtml(d.whs_name || d.almacen)}</td>
+      <td class="font-monospace text-muted">${escHtml(d.nro_orden_compra) || '—'}</td>
+      <td class="text-center">${d.total_items}</td>
+      <td class="text-end fw-semibold">S/ ${d.total_costo.toFixed(2)}</td>
+      <td class="text-center">${est}</td>
+      <td class="text-center">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:.7rem;"
+                onclick="abrirDrawer(${d.id})">
+          <i class="bi bi-eye-fill me-1"></i>Ver
+        </button>
+      </td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = html || '<tr><td colspan="9" class="text-center text-muted py-5">Sin ingresos registrados.</td></tr>';
+  document.getElementById('countLabel').textContent  = cnt;
+  document.getElementById('footerCosto').textContent = sumaCosto.toFixed(2);
+}
+document.getElementById('buscarIngreso').addEventListener('input', renderTabla);
+renderTabla();
+
+/* ══════════════════════════════════════════════════════
+   DRAWER
+   ══════════════════════════════════════════════════════ */
+function abrirDrawer(id) {
+  limpiarForm();
+  const drawer = document.getElementById('ingresoDrawer');
+  document.getElementById('drawerOverlay').classList.add('active');
+  drawer.classList.add('open');
+
+  if (id) {
+    document.getElementById('f_ingreso_id').value = id;
+    const d = INGRESOS_DATA.find(x => x.id === id);
+    if (d) {
+      document.getElementById('f_tipo_ingreso').value     = d.tipo_ingreso;
+      document.getElementById('f_fecha_ingreso').value    = d.fecha_ingreso;
+      document.getElementById('f_almacen').value          = d.almacen;
+      document.getElementById('f_nro_orden_compra').value = d.nro_orden_compra;
+      document.getElementById('f_observaciones').value    = d.observaciones;
+      document.getElementById('f_user_code').value        = d.user_code;
+      document.getElementById('f_fecha_registro').value    = _fmtTs(d.fecha_registro);
+      document.getElementById('f_fecha_modificacion').value = _fmtTs(d.fecha_modificacion);
+      document.getElementById('drawerBadge').textContent  = 'EDITAR';
+      document.getElementById('drawerBadge').className    = 'badge bg-warning text-dark';
+      document.getElementById('drawerTitle').textContent  = `Ingreso #${d.id} — ${d.tipo_ingreso}`;
+      document.getElementById('btnAnular').style.display  = d.id_estado === 1 ? '' : 'none';
+      document.getElementById('btnGuardar').style.display = d.id_estado === 1 ? '' : 'none';
+    }
+    cargarItems(id);
+    cargarTimestamps(id);
+    cargarImagen(id);
+  } else {
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('f_fecha_ingreso').value = hoy;
+    agregarFila();
+  }
+}
+
+function cerrarDrawer() {
+  document.getElementById('ingresoDrawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('active');
+}
+
+function limpiarForm() {
+  document.getElementById('f_ingreso_id').value         = '0';
+  document.getElementById('f_tipo_ingreso').value       = '';
+  document.getElementById('f_fecha_ingreso').value      = '';
+  document.getElementById('f_almacen').value            = '';
+  document.getElementById('f_nro_orden_compra').value   = '';
+  document.getElementById('f_observaciones').value      = '';
+  document.getElementById('f_user_code').value          = CURRENT_USER;
+  const _ahora = new Date();
+  const _pad   = n => String(n).padStart(2,'0');
+  const _hoy   = `${_pad(_ahora.getDate())}/${_pad(_ahora.getMonth()+1)}/${_ahora.getFullYear()} ${_pad(_ahora.getHours())}:${_pad(_ahora.getMinutes())}`;
+  document.getElementById('f_fecha_registro').value     = _hoy;
+  document.getElementById('f_fecha_modificacion').value = '';
+  document.getElementById('drawerBadge').textContent    = 'NUEVO';
+  document.getElementById('drawerBadge').className      = 'badge bg-primary';
+  document.getElementById('drawerTitle').textContent    = 'Nuevo Ingreso de Mercadería';
+  document.getElementById('btnAnular').style.display    = 'none';
+  document.getElementById('btnGuardar').style.display   = '';
+  document.getElementById('tbodyItems').innerHTML       = '';
+  _imagenBase64 = '';
+  document.getElementById('f_imagen_file').value = '';
+  document.getElementById('btnVerImagen').disabled = true;
+  document.getElementById('imgVisor').src = '';
+  actualizarTotalDrawer();
+}
+
+function _fmtTs(iso) {
+  if (!iso || iso === '—') return '—';
+  // Forzar interpretación UTC y convertir a hora local del navegador
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  if (isNaN(d.getTime())) return '—';
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function cargarTimestamps(id) {
+  try {
+    const r = await fetch(`/almacen/ingresos/${id}/timestamps`);
+    const d = await r.json();
+    if (d.success) {
+      document.getElementById('f_fecha_registro').value    = _fmtTs(d.fecha_registro);
+      document.getElementById('f_fecha_modificacion').value= _fmtTs(d.fecha_modificacion);
+      if (d.user_code) document.getElementById('f_user_code').value = d.user_code;
+    }
+  } catch(e) {}
+}
+
+async function cargarItems(id) {
+  try {
+    const r = await fetch(`/almacen/ingresos/items/${id}`);
+    const d = await r.json();
+    if (d.success) {
+      document.getElementById('tbodyItems').innerHTML = '';
+      d.items.forEach(it => agregarFila(it));
+    }
+  } catch(e) { mostrarToast('danger', 'Error al cargar ítems.'); }
+}
+
+/* ══════════════════════════════════════════════════════
+   GRILLA DE ÍTEMS
+   ══════════════════════════════════════════════════════ */
+let _rowIdx = 0;
+
+function agregarFila(item) {
+  const idx  = _rowIdx++;
+  const tbody= document.getElementById('tbodyItems');
+  const tr   = document.createElement('tr');
+  tr.dataset.rowIdx = idx;
+
+  const code  = item ? escHtml(item.item_code)  : '';
+  const name  = item ? escHtml(item.item_name)  : '';
+  const qty   = item ? item.quantity.toFixed(4)  : '1.0000';
+  const uom   = item ? escHtml(item.uom)         : '';
+  const pc    = item ? item.price_cost.toFixed(4): '0.0000';
+
+  tr.innerHTML = `
+    <td class="p-1 autocomplete-wrapper">
+      <input type="text" class="form-control form-control-sm font-monospace inp-code"
+             value="${code}" placeholder="Código" autocomplete="off"
+             oninput="filtrarItems(this)" onblur="ocultarLista(this,200)">
+      <div class="autocomplete-list"></div>
+    </td>
+    <td class="p-1">
+      <input type="text" class="form-control form-control-sm inp-name"
+             value="${name}" placeholder="Descripción" readonly tabindex="-1">
+    </td>
+    <td class="p-1">
+      <input type="number" class="form-control form-control-sm text-end inp-qty"
+             value="${qty}" min="0" step="any"
+             oninput="recalcularFila(this)">
+    </td>
+    <td class="p-1">
+      <input type="text" class="form-control form-control-sm inp-uom"
+             value="${uom}" placeholder="UND" maxlength="20">
+    </td>
+    <td class="p-1">
+      <input type="number" class="form-control form-control-sm text-end inp-pc"
+             value="${pc}" min="0" step="any"
+             oninput="recalcularFila(this)">
+    </td>
+    <td class="p-1 text-end">
+      <span class="inp-sub fw-semibold font-monospace" style="font-size:.74rem;">
+        S/ ${(parseFloat(qty) * parseFloat(pc)).toFixed(2)}
+      </span>
+    </td>
+    <td class="p-1 text-center">
+      <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+              onclick="eliminarFila(this)" title="Eliminar">
+        <i class="bi bi-trash3" style="font-size:.7rem;"></i>
+      </button>
+    </td>`;
+  tbody.appendChild(tr);
+  if (!item) tr.querySelector('.inp-code').focus();
+}
+
+function eliminarFila(btn) {
+  btn.closest('tr').remove();
+  actualizarTotalDrawer();
+}
+
+function recalcularFila(inp) {
+  const tr  = inp.closest('tr');
+  const qty = parseFloat(tr.querySelector('.inp-qty').value) || 0;
+  const pc  = parseFloat(tr.querySelector('.inp-pc').value)  || 0;
+  tr.querySelector('.inp-sub').textContent = `S/ ${(qty * pc).toFixed(2)}`;
+  actualizarTotalDrawer();
+}
+
+function actualizarTotalDrawer() {
+  let total = 0;
+  document.querySelectorAll('#tbodyItems tr').forEach(tr => {
+    const qty = parseFloat(tr.querySelector('.inp-qty')?.value) || 0;
+    const pc  = parseFloat(tr.querySelector('.inp-pc')?.value)  || 0;
+    total += qty * pc;
+  });
+  document.getElementById('totalCostoDrawer').textContent = `S/ ${total.toFixed(2)}`;
+}
+
+/* ── Autocomplete ────────────────────────────────────── */
+function filtrarItems(inp) {
+  const q    = (inp.value || '').trim().toLowerCase();
+  const list = inp.closest('.autocomplete-wrapper').querySelector('.autocomplete-list');
+
+  if (!q) { list.style.display = 'none'; return; }
+
+  const matches = ITEMS_DATA.filter(it =>
+    it.item_code.toLowerCase().includes(q) || it.item_name.toLowerCase().includes(q)
+  ).slice(0, 30);
+
+  if (!matches.length) { list.style.display = 'none'; return; }
+
+  list.innerHTML = '';
+  matches.forEach(it => {
+    const div = document.createElement('div');
+    div.className = 'ac-item';
+    div.innerHTML = `<strong>${escHtml(it.item_code)}</strong> — ${escHtml(it.item_name)}`;
+    div.addEventListener('mousedown', () => seleccionarItem(inp, it));
+    list.appendChild(div);
+  });
+  list.style.display = 'block';
+}
+
+function seleccionarItem(inp, it) {
+  const tr = inp.closest('tr');
+  tr.querySelector('.inp-code').value = it.item_code;
+  tr.querySelector('.inp-name').value = it.item_name;
+  tr.querySelector('.inp-uom').value  = it.uom || '';
+  tr.querySelector('.inp-pc').value   = it.price_cost.toFixed(4);
+  inp.closest('.autocomplete-wrapper').querySelector('.autocomplete-list').style.display = 'none';
+  recalcularFila(inp);
+  tr.querySelector('.inp-qty').focus();
+  tr.querySelector('.inp-qty').select();
+}
+
+function ocultarLista(inp, delay) {
+  setTimeout(() => {
+    const list = inp.closest('.autocomplete-wrapper')?.querySelector('.autocomplete-list');
+    if (list) list.style.display = 'none';
+  }, delay);
+}
+
+/* ── Guardar ─────────────────────────────────────────── */
+async function guardarIngreso() {
+  const ingreso_id   = parseInt(document.getElementById('f_ingreso_id').value) || 0;
+  const tipo_ingreso = document.getElementById('f_tipo_ingreso').value;
+  const fecha_ingreso= document.getElementById('f_fecha_ingreso').value;
+  const almacen      = document.getElementById('f_almacen').value;
+  const nro_oc       = document.getElementById('f_nro_orden_compra').value.trim();
+  const observaciones= document.getElementById('f_observaciones').value.trim();
+
+  if (!tipo_ingreso) return mostrarToast('warning', 'Seleccione el tipo de ingreso.');
+  if (!fecha_ingreso)return mostrarToast('warning', 'Ingrese la fecha de ingreso.');
+  if (!almacen)      return mostrarToast('warning', 'Seleccione el almacén.');
+
+  const items = [];
+  let ok = true;
+  document.querySelectorAll('#tbodyItems tr').forEach(tr => {
+    const code = (tr.querySelector('.inp-code')?.value || '').trim();
+    if (!code) { ok = false; return; }
+    items.push({
+      item_code:  code,
+      item_name:  (tr.querySelector('.inp-name')?.value || '').trim(),
+      quantity:   parseFloat(tr.querySelector('.inp-qty')?.value) || 0,
+      uom:        (tr.querySelector('.inp-uom')?.value || '').trim(),
+      price_cost: parseFloat(tr.querySelector('.inp-pc')?.value)  || 0,
+    });
+  });
+  if (!ok)           return mostrarToast('warning', 'Complete el código de artículo en todas las filas.');
+  if (!items.length) return mostrarToast('warning', 'Agregue al menos un artículo.');
+
+  const btn = document.getElementById('btnGuardar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
+
+  try {
+    const res  = await fetch('/almacen/ingresos/guardar', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ingreso_id, tipo_ingreso, fecha_ingreso, almacen,
+                             nro_orden_compra: nro_oc, observaciones, items,
+                             user_code: document.getElementById('f_user_code').value,
+                             imagen: _imagenBase64 }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      mostrarToast('success', data.message);
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      mostrarToast('danger', data.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-floppy me-1"></i>Guardar';
+  }
+}
+
+/* ── Imagen ──────────────────────────────────────────── */
+let _imagenBase64 = '';
+
+function cargarImagenLocal(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _imagenBase64 = e.target.result;
+    document.getElementById('imgVisor').src = _imagenBase64;
+    document.getElementById('btnVerImagen').disabled = false;
+    mostrarToast('success', 'Imagen cargada. Haz clic en "Ver" para previsualizarla.');
+  };
+  reader.readAsDataURL(file);
+}
+
+function verImagen() {
+  if (!_imagenBase64) return;
+  const visor = document.getElementById('visorImagen');
+  visor.style.display = 'flex';
+}
+
+function cerrarVisor() {
+  document.getElementById('visorImagen').style.display = 'none';
+}
+
+async function cargarImagen(id) {
+  try {
+    const r = await fetch(`/almacen/ingresos/${id}/imagen`);
+    const d = await r.json();
+    if (d.imagen) {
+      _imagenBase64 = d.imagen;
+      document.getElementById('imgVisor').src = _imagenBase64;
+      document.getElementById('btnVerImagen').disabled = false;
+    }
+  } catch(_) {}
+}
+
+/* ── Anular ──────────────────────────────────────────── */
+function anularIngreso() {
+  const id = parseInt(document.getElementById('f_ingreso_id').value) || 0;
+  if (!id) return;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('modalConfirmarAnular')).show();
+}
+
+async function confirmarAnulacion() {
+  const id  = parseInt(document.getElementById('f_ingreso_id').value) || 0;
+  const btn = document.getElementById('btnConfirmarAnular');
+  bootstrap.Modal.getInstance(document.getElementById('modalConfirmarAnular')).hide();
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Anulando…';
+
+  try {
+    const res  = await fetch(`/almacen/ingresos/${id}/anular`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      mostrarToast('success', data.message);
+      cerrarDrawer();
+      setTimeout(() => location.reload(), 900);
+    } else {
+      mostrarToast('danger', data.message);
+    }
+  } catch(e) {
+    mostrarToast('danger', 'Error de conexión: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Sí, anular';
+  }
+}
+
+/* ── Excel ───────────────────────────────────────────── */
+function exportarExcel() {
+  const filas = [['#','Tipo','Fecha','Almacén','Nro. Orden','Ítems','Costo Total','Estado']];
+  INGRESOS_DATA.forEach(d => filas.push([
+    d.id, d.tipo_ingreso, d.fecha_ingreso, d.whs_name || d.almacen,
+    d.nro_orden_compra, d.total_items, d.total_costo.toFixed(2),
+    d.id_estado === 1 ? 'Activo' : 'Anulado',
+  ]));
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Ingresos');
+  XLSX.writeFile(wb, 'ingresos_mercaderia.xlsx');
+}
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+{% endblock %}

@@ -47,7 +47,8 @@ def ventas_facturas():
             COALESCE(i.doc_status, 1)         AS doc_status,
             COALESCE(i.nota_credito_serie, '') AS nota_credito_serie,
             i.nota_credito_numero,
-            i.nota_credito_total
+            i.nota_credito_total,
+            i.cot_id
         FROM invoice i
         LEFT JOIN business_partners bp ON bp.card_code = i.card_code
         LEFT JOIN warehouses w ON TRIM(w.whs_code) = TRIM(i.invoice_wh)
@@ -111,6 +112,7 @@ def ventas_facturas():
         'nota_credito_serie':   r[26] or '',
         'nota_credito_numero':  int(r[27])   if r[27] is not None else None,
         'nota_credito_total':   float(r[28]) if r[28] is not None else None,
+        'cot_id':               int(r[29])   if r[29] is not None else None,
         'items':          det_by_inv.get(r[0], []),
     } for r in fact_rows]
 
@@ -319,6 +321,66 @@ def ventas_facturas_imprimir(invoice_id):
     )
 
 
+@main.route('/ventas/cotizaciones-pendientes')
+@login_required
+def ventas_cotizaciones_pendientes():
+    card_code         = request.args.get('card_code', '').strip()
+    incluir_facturadas = request.args.get('incluir_facturadas', '0') == '1'
+    if not card_code:
+        return jsonify([])
+    rows = db.session.execute(text("""
+        SELECT cot_id, doc_date, doc_total, COALESCE(id_estado, 1) AS id_estado
+        FROM invoice_cotizaciones
+        WHERE TRIM(card_code) = :cc
+          AND COALESCE(id_estado, 1) = ANY(:estados)
+        ORDER BY cot_id DESC
+        LIMIT 50
+    """), {'cc': card_code, 'estados': [1, 2] if incluir_facturadas else [1]}).fetchall()
+    return jsonify([{
+        'cot_id':    r[0],
+        'doc_date':  r[1].isoformat() if r[1] else '',
+        'doc_total': float(r[2]) if r[2] is not None else 0.0,
+        'id_estado': r[3],
+    } for r in rows])
+
+
+@main.route('/ventas/cotizaciones/<int:cot_id>/cabecera')
+@login_required
+def ventas_cotizacion_cabecera(cot_id):
+    row = db.session.execute(text("""
+        SELECT cot_id, doc_date, doc_total
+        FROM invoice_cotizaciones
+        WHERE cot_id = :id
+    """), {'id': cot_id}).fetchone()
+    if not row:
+        return jsonify({'success': False}), 404
+    return jsonify({
+        'success':   True,
+        'cot_id':    row[0],
+        'doc_date':  row[1].isoformat() if row[1] else '',
+        'doc_total': float(row[2]) if row[2] is not None else 0.0,
+    })
+
+
+@main.route('/ventas/cotizaciones-items/<int:cot_id>')
+@login_required
+def ventas_cotizacion_items(cot_id):
+    rows = db.session.execute(text("""
+        SELECT item_code, item_name, quantity, price_after_vat, tax_code, warehouse_code
+        FROM invoice_item_cotizaciones
+        WHERE cot_id = :id
+        ORDER BY item_cot_id
+    """), {'id': cot_id}).fetchall()
+    return jsonify({'items': [{
+        'item_code':      (r[0] or '').strip(),
+        'item_name':      (r[1] or '').strip(),
+        'quantity':       float(r[2]) if r[2] is not None else 0.0,
+        'price_after_vat':float(r[3]) if r[3] is not None else 0.0,
+        'tax_code':       (r[4] or 'I18').strip(),
+        'warehouse_code': (r[5] or '').strip(),
+    } for r in rows]})
+
+
 @main.route('/ventas/facturas/nueva', methods=['GET', 'POST'])
 @login_required
 def ventas_facturas_nueva():
@@ -346,6 +408,8 @@ def ventas_facturas_nueva():
         inv_idt_str    = request.form.get('invoice_idtype', invoice_type).strip()
         invoice_idtype = int(inv_idt_str) if inv_idt_str.isdigit() else None
         p_user        = str(request.form.get('invoice_user', '').strip() or current_user.id_usuario)
+        cot_id_str    = request.form.get('cot_id', '').strip()
+        cot_id        = int(cot_id_str) if cot_id_str.isdigit() else None
         items_str     = request.form.get('items_json', '[]').strip()
 
         try:
@@ -419,8 +483,20 @@ def ventas_facturas_nueva():
 
             if row and row[0]:
                 db.session.commit()
-                # Guardar price y price_cost en invoice_item (el SP no los maneja)
                 new_inv_id = row[3]
+                # Guardar cot_id en invoice y marcar cotización como Facturada
+                if cot_id:
+                    try:
+                        db.session.execute(text(
+                            "UPDATE invoice SET cot_id = :cot WHERE invoice_id = :id"
+                        ), {'cot': cot_id, 'id': new_inv_id})
+                        db.session.execute(text(
+                            "UPDATE invoice_cotizaciones SET id_estado = 2 WHERE cot_id = :cot"
+                        ), {'cot': cot_id})
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                # Guardar price y price_cost en invoice_item (el SP no los maneja)
                 for it in items_list:
                     code = (it.get('item_code') or '').strip()
                     if not code:
@@ -500,6 +576,10 @@ def ventas_facturas_editar(invoice_id):
     journal_memo = request.form.get('journal_memo', '').strip()
     invoice_wh   = request.form.get('invoice_wh',   '').strip()
     p_user       = str(request.form.get('invoice_user', '').strip() or current_user.id_usuario)
+    cot_id_str        = request.form.get('cot_id', '').strip()
+    cot_id            = int(cot_id_str) if cot_id_str.isdigit() else None
+    cot_id_quitar_str = request.form.get('cot_id_quitar', '').strip()
+    cot_id_quitar     = int(cot_id_quitar_str) if cot_id_quitar_str.isdigit() else None
     items_str    = request.form.get('items_json', '[]').strip()
 
     try:
@@ -578,6 +658,22 @@ def ventas_facturas_editar(invoice_id):
                 'price':           float(it.get('price', 0) or 0),
                 'price_cost':      float(it.get('price_cost', 0) or 0),
             })
+
+        # Guardar/limpiar cot_id en invoice y actualizar estado de la cotización
+        if cot_id:
+            db.session.execute(text(
+                "UPDATE invoice SET cot_id = :cot WHERE invoice_id = :id"
+            ), {'cot': cot_id, 'id': invoice_id})
+            db.session.execute(text(
+                "UPDATE invoice_cotizaciones SET id_estado = 2 WHERE cot_id = :cot"
+            ), {'cot': cot_id})
+        elif cot_id_quitar:
+            db.session.execute(text(
+                "UPDATE invoice SET cot_id = NULL WHERE invoice_id = :id"
+            ), {'id': invoice_id})
+            db.session.execute(text(
+                "UPDATE invoice_cotizaciones SET id_estado = 1 WHERE cot_id = :cot"
+            ), {'cot': cot_id_quitar})
 
         db.session.commit()
 
