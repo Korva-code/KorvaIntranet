@@ -27,6 +27,15 @@
       <input type="search" class="form-control" id="buscarGasto"
              placeholder="Buscar concepto, documento…">
     </div>
+    <div class="d-flex align-items-center gap-1">
+      <label class="form-label mb-0 text-nowrap" style="font-size:.78rem;">Desde</label>
+      <input type="date" class="form-control form-control-sm" id="hFechaDesde" style="width:140px;">
+      <label class="form-label mb-0 text-nowrap" style="font-size:.78rem;">Hasta</label>
+      <input type="date" class="form-control form-control-sm" id="hFechaHasta" style="width:140px;">
+      <button class="btn btn-sm btn-outline-primary text-nowrap" onclick="aplicarFiltroHeader()">
+        <i class="bi bi-funnel" id="iconFiltroFecha"></i> Filtrar
+      </button>
+    </div>
     <div class="d-flex gap-2 ms-auto">
       <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
         <i class="bi bi-plus-lg me-1"></i>Nuevo Gasto
@@ -464,6 +473,15 @@ function sortColumna(key, e) {
 /* ── Filtros ────────────────────────────────────────────── */
 const filtros = { tipo: new Set(), moneda: new Set(), banco: new Set(), usuario: new Set(), estado: new Set() };
 let busqueda = '';
+let filtroFecha = { desde: '', hasta: '' };
+
+function aplicarFiltroHeader() {
+  filtroFecha.desde = document.getElementById('hFechaDesde').value;
+  filtroFecha.hasta = document.getElementById('hFechaHasta').value;
+  const icon = document.getElementById('iconFiltroFecha');
+  if (icon) icon.className = (filtroFecha.desde || filtroFecha.hasta) ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  renderTabla();
+}
 
 function toggleFiltro(col, e) {
   e.stopPropagation();
@@ -538,6 +556,8 @@ function renderTabla() {
     if (filtros.banco.size   && !filtros.banco.has(g.banco_nombre || ''))         return false;
     if (filtros.usuario.size && !filtros.usuario.has(g.user_nombre || ''))         return false;
     if (filtros.estado.size  && !filtros.estado.has(String(g.id_estado)))          return false;
+    if (filtroFecha.desde && g.doc_date < filtroFecha.desde) return false;
+    if (filtroFecha.hasta && g.doc_date > filtroFecha.hasta) return false;
     if (q && !g.concepto.toLowerCase().includes(q) &&
              !g.nro_documento.toLowerCase().includes(q) &&
              !(g.bp_name || '').toLowerCase().includes(q) &&
@@ -957,6 +977,15 @@ function exportarExcel() {
 }
 
 /* ── Init ───────────────────────────────────────────────── */
+(function () {
+  const hoy = new Date();
+  const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const fmt = d => d.toISOString().split('T')[0];
+  document.getElementById('hFechaDesde').value = fmt(primerDia);
+  document.getElementById('hFechaHasta').value = fmt(hoy);
+  filtroFecha.desde = fmt(primerDia);
+  filtroFecha.hasta = fmt(hoy);
+})();
 renderTabla();
 </script>
 {% endblock %}

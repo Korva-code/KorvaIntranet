@@ -21,9 +21,19 @@
     <h6 class="mb-0 fw-semibold text-nowrap">
       <i class="bi bi-receipt text-primary me-1"></i> Facturas de Venta
     </h6>
-    <div class="input-group input-group-sm flex-grow-1" style="min-width:150px; max-width:260px;">
+    <div class="input-group input-group-sm" style="min-width:150px; max-width:220px;">
       <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
-      <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar N° doc, socio…">
+      <input type="search" class="form-control" id="buscarFactura" placeholder="Buscar N° doc, socio…"
+             oninput="aplicarFiltros()">
+    </div>
+    <div class="d-flex align-items-center gap-1 flex-wrap">
+      <span class="text-muted small text-nowrap">Desde</span>
+      <input type="date" class="form-control form-control-sm" id="filtroHeaderDesde" style="width:130px;">
+      <span class="text-muted small text-nowrap">Hasta</span>
+      <input type="date" class="form-control form-control-sm" id="filtroHeaderHasta" style="width:130px;">
+      <button class="btn btn-sm btn-outline-primary text-nowrap" onclick="aplicarFiltroHeader()">
+        <i class="bi bi-funnel me-1"></i>Filtrar
+      </button>
     </div>
     <div class="d-flex gap-2 ms-auto">
       <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
@@ -39,14 +49,14 @@
     <table class="table table-hover align-middle mb-0" id="tablaFacturas">
       <thead class="table-light" style="font-size:.73rem;">
         <tr>
-          <th class="ps-3" style="width:70px; position:relative; white-space:nowrap;">
+          <th class="ps-3" style="min-width:70px; position:relative; white-space:nowrap;">
             ID
             <button type="button" class="btn-col-filtro" id="btnSort_id"
                     onclick="sortColumna(event, 0, 'num', 'id')" title="Ordenar">
               <i class="bi bi-arrow-down-up" id="iconSort_id"></i>
             </button>
           </th>
-          <th style="width:100px;">Cód. Socio</th>
+          <th style="min-width:100px;">Cód. Socio</th>
           <th style="min-width:160px; position:relative; white-space:nowrap;">
             Socio de Negocio
             <button type="button" class="btn-col-filtro" id="btnSort_socio"
@@ -54,7 +64,7 @@
               <i class="bi bi-arrow-down-up" id="iconSort_socio"></i>
             </button>
           </th>
-          <th style="width:90px; position:relative; white-space:nowrap;">
+          <th style="min-width:90px; position:relative; white-space:nowrap;">
             Tipo
             <button type="button" class="btn-col-filtro" id="btnSort_tipo"
                     onclick="sortColumna(event, 3, 'text', 'tipo')" title="Ordenar">
@@ -67,21 +77,21 @@
             <div class="col-filtro-panel" id="panelFiltroTipo" style="display:none;"
                  onclick="event.stopPropagation()"></div>
           </th>
-          <th style="width:80px; position:relative; white-space:nowrap;">
+          <th style="min-width:80px; position:relative; white-space:nowrap;">
             Serie
             <button type="button" class="btn-col-filtro" id="btnSort_serie"
                     onclick="sortColumna(event, 4, 'text', 'serie')" title="Ordenar">
               <i class="bi bi-arrow-down-up" id="iconSort_serie"></i>
             </button>
           </th>
-          <th style="width:120px; position:relative; white-space:nowrap;">
+          <th style="min-width:120px; position:relative; white-space:nowrap;">
             N° Factura
             <button type="button" class="btn-col-filtro" id="btnSort_nfactura"
                     onclick="sortColumna(event, 5, 'text', 'nfactura')" title="Ordenar">
               <i class="bi bi-arrow-down-up" id="iconSort_nfactura"></i>
             </button>
           </th>
-          <th style="width:100px; position:relative; white-space:nowrap;">
+          <th style="min-width:100px; position:relative; white-space:nowrap;">
             Fecha Doc.
             <button type="button" class="btn-col-filtro" id="btnSort_fechaDoc"
                     onclick="sortColumna(event, 6, 'date', 'fechaDoc')" title="Ordenar por fecha">
@@ -117,8 +127,8 @@
               </div>
             </div>
           </th>
-          <th style="width:90px;">Fecha Imp.</th>
-          <th style="width:100px; position:relative; white-space:nowrap;">
+          <th style="min-width:90px;">Fecha Imp.</th>
+          <th style="min-width:100px; position:relative; white-space:nowrap;">
             Vencimiento
             <button type="button" class="btn-col-filtro" id="btnSort_venc"
                     onclick="sortColumna(event, 8, 'date', 'venc')" title="Ordenar">
@@ -154,9 +164,9 @@
               </div>
             </div>
           </th>
-          <th style="width:50px;">Mon.</th>
-          <th class="text-end" style="width:105px;">Total</th>
-          <th class="text-end" style="width:105px;">Aplicado</th>
+          <th style="min-width:50px;">Mon.</th>
+          <th class="text-end" style="min-width:105px;">Total</th>
+          <th class="text-end" style="min-width:105px;">Aplicado</th>
           <th style="min-width:120px; position:relative; white-space:nowrap;">
             Almacén
             <button type="button" class="btn-col-filtro" id="btnFiltroAlmacen"
@@ -166,8 +176,8 @@
             <div class="col-filtro-panel" id="panelFiltroAlmacen" style="display:none;"
                  onclick="event.stopPropagation()"></div>
           </th>
-          <th style="width:140px;">Referencia</th>
-          <th style="width:80px; position:relative; white-space:nowrap;">
+          <th style="min-width:140px;">Referencia</th>
+          <th style="min-width:80px; position:relative; white-space:nowrap;">
             Usuario
             <button type="button" class="btn-col-filtro" id="btnFiltroUsuario"
                     onclick="toggleFiltro('usuario', event)" title="Filtrar por usuario">
@@ -176,10 +186,10 @@
             <div class="col-filtro-panel" id="panelFiltroUsuario" style="display:none;"
                  onclick="event.stopPropagation()"></div>
           </th>
-          <th class="text-center" style="width:90px;">Estado</th>
-          <th class="text-center" style="width:110px;">N° Nota Créd.</th>
-          <th class="text-end"   style="width:95px;">Total NC</th>
-          <th class="text-center" style="width:90px; position:relative; white-space:nowrap;">
+          <th class="text-center" style="min-width:90px;">Estado</th>
+          <th class="text-center" style="min-width:110px;">N° Nota Créd.</th>
+          <th class="text-end"   style="min-width:95px;">Total NC</th>
+          <th class="text-center" style="min-width:90px; position:relative; white-space:nowrap;">
             SUNAT
             <button type="button" class="btn-col-filtro" id="btnFiltroSunat"
                     onclick="toggleFiltro('sunat', event)" title="Filtrar por estado SUNAT">
@@ -188,7 +198,7 @@
             <div class="col-filtro-panel" id="panelFiltroSunat" style="display:none;"
                  onclick="event.stopPropagation()"></div>
           </th>
-          <th class="text-center" style="width:70px;">Ver</th>
+          <th class="text-center" style="min-width:70px;">Ver</th>
         </tr>
       </thead>
       <tbody id="tbodyFacturas">
@@ -762,6 +772,15 @@ const facturasMap = {};
 FACTURAS_DATA.forEach(d => facturasMap[d.invoice_id] = d);
 let itemsMap = {};
 let _currentFactura = null;
+
+/* ── Inicializar fechas del filtro header ────────────────── */
+(function () {
+  const hoy   = new Date();
+  const fmt   = d => d.toISOString().split('T')[0];
+  const prime = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  document.getElementById('filtroHeaderDesde').value = fmt(prime);
+  document.getElementById('filtroHeaderHasta').value  = fmt(hoy);
+})();
 const sociosMap = {};
 SOCIOS_DATA.forEach(d => sociosMap[d.card_code] = d);
 
@@ -917,6 +936,22 @@ function cerrarTodosFiltros() {
   document.querySelectorAll('.col-filtro-panel').forEach(p => p.style.display = 'none');
 }
 document.addEventListener('click', cerrarTodosFiltros);
+
+/* ── Filtro header: rango de fecha (fecha doc) ───────────── */
+function aplicarFiltroHeader() {
+  const desde = document.getElementById('filtroHeaderDesde').value;
+  const hasta  = document.getElementById('filtroHeaderHasta').value;
+  filtroFechaDoc.desde = desde;
+  filtroFechaDoc.hasta  = hasta;
+  // sincronizar con el filtro de columna
+  document.getElementById('filtroFechaDocDesde').value = desde;
+  document.getElementById('filtroFechaDocHasta').value = hasta;
+  const activo = desde || hasta;
+  document.getElementById('iconFiltroFechaDoc').className =
+    activo ? 'bi bi-funnel-fill' : 'bi bi-funnel';
+  document.getElementById('btnFiltroFechaDoc').classList.toggle('active', !!activo);
+  aplicarFiltros();
+}
 
 /* ── Filtro rango de fecha documento ─────────────────────── */
 const filtroFechaDoc = { desde: '', hasta: '' };
@@ -1143,7 +1178,7 @@ function exportarExcel() {
 
 /* ── Búsqueda en lista ────────────────────────────────────── */
 document.getElementById('buscarFactura').addEventListener('input', aplicarFiltros);
-aplicarFiltros(); // inicializa contador y sumas al cargar
+aplicarFiltroHeader(); // aplica fechas por defecto y renderiza
 
 /* ── Abrir drawer ─────────────────────────────────────────── */
 function abrirDrawer(mode, id, docStatus) {

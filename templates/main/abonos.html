@@ -15,14 +15,23 @@
      ══════════════════════════════════════════════════════════ -->
 <div class="card border-0 shadow-sm">
 
-  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2">
+  <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 flex-wrap">
     <h6 class="mb-0 fw-semibold text-nowrap">
       <i class="bi bi-cash-coin text-primary me-1"></i> Abonos
     </h6>
-    <div class="input-group input-group-sm" style="max-width:260px;">
+    <div class="input-group input-group-sm" style="min-width:150px; max-width:220px;">
       <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
       <input type="search" class="form-control" id="buscarAbono"
              placeholder="Buscar referencia, concepto, socio…">
+    </div>
+    <div class="d-flex align-items-center gap-1 flex-wrap">
+      <span class="text-muted small text-nowrap">Desde</span>
+      <input type="date" class="form-control form-control-sm" id="filtroHeaderDesde" style="width:130px;">
+      <span class="text-muted small text-nowrap">Hasta</span>
+      <input type="date" class="form-control form-control-sm" id="filtroHeaderHasta" style="width:130px;">
+      <button class="btn btn-sm btn-outline-primary text-nowrap" onclick="aplicarFiltroHeader()">
+        <i class="bi bi-funnel me-1"></i>Filtrar
+      </button>
     </div>
     <div class="d-flex gap-2 ms-auto">
       <button class="btn btn-sm btn-primary text-nowrap" onclick="abrirDrawer('new')">
@@ -336,8 +345,15 @@ function escHtml(s) {
 }
 
 /* ── Filtros ─────────────────────────────────────────────── */
-const filtros = { banco: new Set(), moneda: new Set(), estado: new Set() };
+const filtros     = { banco: new Set(), moneda: new Set(), estado: new Set() };
+const filtroFecha = { desde: '', hasta: '' };
 let busqueda = '';
+
+function aplicarFiltroHeader() {
+  filtroFecha.desde = document.getElementById('filtroHeaderDesde').value;
+  filtroFecha.hasta  = document.getElementById('filtroHeaderHasta').value;
+  renderTabla();
+}
 
 function renderTabla() {
   const q     = busqueda.toLowerCase();
@@ -346,6 +362,8 @@ function renderTabla() {
     if (filtros.banco.size  && !filtros.banco.has(String(a.id_banco)))   return false;
     if (filtros.moneda.size && !filtros.moneda.has(a.moneda))            return false;
     if (filtros.estado.size && !filtros.estado.has(String(a.id_estado))) return false;
+    if (filtroFecha.desde && (a.fecha || '') < filtroFecha.desde)         return false;
+    if (filtroFecha.hasta  && (a.fecha || '') > filtroFecha.hasta)        return false;
     if (q && !a.referencia.toLowerCase().includes(q) &&
              !a.concepto.toLowerCase().includes(q)   &&
              !a.bp_name.toLowerCase().includes(q)    &&
@@ -659,6 +677,15 @@ function exportarExcel() {
 }
 
 /* ── Init ────────────────────────────────────────────────── */
+(function () {
+  const hoy   = new Date();
+  const fmt   = d => d.toISOString().split('T')[0];
+  const prime = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  document.getElementById('filtroHeaderDesde').value = fmt(prime);
+  document.getElementById('filtroHeaderHasta').value  = fmt(hoy);
+  filtroFecha.desde = fmt(prime);
+  filtroFecha.hasta  = fmt(hoy);
+})();
 renderTabla();
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
